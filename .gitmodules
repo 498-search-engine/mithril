@@ -1,0 +1,3 @@
+[submodule "lib"]
+	path = lib
+	url = https://github.com/498-search-engine/lib.git
