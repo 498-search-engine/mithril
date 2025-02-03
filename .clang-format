@@ -1,0 +1,78 @@
+Language: Cpp
+Standard: c++20
+
+# Basic Layout
+IndentWidth: 4
+ColumnLimit: 120
+UseTab: Never
+MaxEmptyLinesToKeep: 2
+UseCRLF: false
+
+# Indentation and alignment
+AlignArrayOfStructures: Right
+AlignEscapedNewlines: Left
+IndentAccessModifiers: false
+IndentCaseBlocks: true
+IndentCaseLabels: false
+IndentPPDirectives: AfterHash
+
+# Namespaces
+NamespaceIndentation: None
+CompactNamespaces: true
+
+# Templates
+AlwaysBreakTemplateDeclarations: Yes
+AlignAfterOpenBracket: Align
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+
+# Braces and Spacing
+BreakBeforeBraces: Attach
+SpaceAfterTemplateKeyword: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesInAngles: Never
+SpacesInCStyleCastParentheses: false
+SpacesInContainerLiterals: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Pointer Alignment
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+
+# Function Declaration Style
+BinPackParameters: false
+BinPackArguments: false
+AllowAllParametersOfDeclarationOnNextLine: true
+ExperimentalAutoDetectBinPacking: false
+
+# Class Layout
+AccessModifierOffset: -4
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+
+# Comments
+AlignTrailingComments: true
+ReflowComments: true
+SpacesBeforeTrailingComments: 2
+
+# Includes
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^\"' # "quotes"
+    Priority: 10
+  - Regex: "^<[^/>]*>" # < no / >
+    Priority: 20
+    SortPriority: 100
+  - Regex: "^<[^>]*/" # < has / >
+    Priority: 20
+    SortPriority: 200
