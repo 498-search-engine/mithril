@@ -22,33 +22,6 @@ constexpr const char* TransferEncodingHeader = "Transfer-Encoding: chunked";
 constexpr const char* HeaderDelimiter = "\r\n\r\n";
 constexpr const char* CRLF = "\r\n";
 
-constexpr const char* UserAgentHeader = "User-Agent: crawler-test/0.1\r\n";
-constexpr const char* AcceptAllHeader = "Accept: */*\r\n";
-constexpr const char* AcceptEncodingHeader = "Accept-Encoding: identity\r\n";
-constexpr const char* ConnectionCloseHeader = "Connection: close\r\n";
-
-std::string BuildRawRequestString(const Request& req) {
-    std::string rawRequest;
-
-    switch (req.Method()) {
-    case Method::GET:
-        rawRequest.append("GET ");
-        break;
-    }
-
-    rawRequest.append(req.Url().path);
-    rawRequest.append(" HTTP/1.1\r\nHost: ");
-    rawRequest.append(req.Url().host);
-    rawRequest.append(CRLF);
-    rawRequest.append(UserAgentHeader);
-    rawRequest.append(AcceptAllHeader);
-    rawRequest.append(AcceptEncodingHeader);
-    rawRequest.append(ConnectionCloseHeader);
-    rawRequest.append(CRLF);
-
-    return rawRequest;
-}
-
 }  // namespace
 
 Connection Connection::NewWithRequest(const Request& req) {

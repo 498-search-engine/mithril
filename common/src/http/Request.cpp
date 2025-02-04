@@ -6,6 +6,16 @@
 
 namespace mithril::http {
 
+namespace {
+
+constexpr const char* CRLF = "\r\n";
+constexpr const char* UserAgentHeader = "User-Agent: crawler-test/0.1\r\n";
+constexpr const char* AcceptAllHeader = "Accept: */*\r\n";
+constexpr const char* AcceptEncodingHeader = "Accept-Encoding: identity\r\n";
+constexpr const char* ConnectionCloseHeader = "Connection: close\r\n";
+
+}  // namespace
+
 Request Request::GET(std::string url, uint64_t id) {
     auto parsed = ParseURL(std::move(url));
     return Request{Method::GET, std::move(parsed), id};
@@ -23,6 +33,34 @@ const ParsedUrl& Request::Url() const {
 
 uint64_t Request::Id() const {
     return id_;
+}
+
+std::string BuildRawRequestString(const Request& req) {
+    std::string rawRequest;
+    rawRequest.reserve(256);
+
+    switch (req.Method()) {
+    case Method::GET:
+        rawRequest.append("GET ");
+        break;
+    }
+
+    if (req.Url().path.empty()) {
+        rawRequest.append("/");
+    } else {
+        rawRequest.append(req.Url().path);
+    }
+
+    rawRequest.append(" HTTP/1.1\r\nHost: ");
+    rawRequest.append(req.Url().host);
+    rawRequest.append(CRLF);
+    rawRequest.append(UserAgentHeader);
+    rawRequest.append(AcceptAllHeader);
+    rawRequest.append(AcceptEncodingHeader);
+    rawRequest.append(ConnectionCloseHeader);
+    rawRequest.append(CRLF);
+
+    return rawRequest;
 }
 
 }  // namespace mithril::http

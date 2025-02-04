@@ -26,6 +26,8 @@ private:
     uint64_t id_;
 };
 
+std::string BuildRawRequestString(const Request& req);
+
 }  // namespace mithril::http
 
 #endif
