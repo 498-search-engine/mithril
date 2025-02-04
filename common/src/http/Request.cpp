@@ -21,7 +21,7 @@ Request Request::GET(std::string url) {
 
 Request::Request(enum Method method, ParsedUrl url) : method_(method), url_(std::move(url)) {}
 
-Method Request::Method() const {
+Method Request::GetMethod() const {
     return method_;
 }
 
@@ -33,7 +33,7 @@ std::string BuildRawRequestString(const Request& req) {
     std::string rawRequest;
     rawRequest.reserve(256);
 
-    switch (req.Method()) {
+    switch (req.GetMethod()) {
     case Method::GET:
         rawRequest.append("GET ");
         break;

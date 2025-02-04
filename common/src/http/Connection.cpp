@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <cstring>
+#include <iterator>
 #include <netdb.h>
 #include <stdexcept>
 #include <unistd.h>
@@ -18,9 +20,21 @@ namespace {
 
 constexpr size_t BufferSize = 8192;
 constexpr const char* ContentLengthHeader = "Content-Length: ";
-constexpr const char* TransferEncodingHeader = "Transfer-Encoding: chunked";
+constexpr const char* TransferEncodingChunkedHeader = "Transfer-Encoding: chunked";
 constexpr const char* HeaderDelimiter = "\r\n\r\n";
 constexpr const char* CRLF = "\r\n";
+
+size_t FindCaseInsensitive(const std::string& s, const char* q) {
+    auto len = std::strlen(q);
+    auto it = std::search(s.begin(), s.end(), q, q + len, [](unsigned char a, unsigned char b) -> bool {
+        return std::tolower(a) == std::tolower(b);
+    });
+    if (it == s.end()) {
+        return std::string::npos;
+    } else {
+        return std::distance(s.begin(), it);
+    }
+}
 
 }  // namespace
 
@@ -94,6 +108,8 @@ Connection& Connection::operator=(Connection&& other) noexcept {
 
     other.fd_ = -1;
     other.state_ = State::Consumed;
+
+    return *this;
 }
 
 int Connection::SocketDescriptor() const {
@@ -145,7 +161,7 @@ bool Connection::ReadFromSocket() {
 }
 
 void Connection::Process(bool gotEof) {
-    if (state_ == State::Complete) {
+    if (state_ == State::Complete || state_ == State::Consumed || state_ == State::Closed) {
         return;
     }
 
@@ -183,6 +199,7 @@ void Connection::Process(bool gotEof) {
         } else {
             state_ = State::Complete;
         }
+        Close();
     }
 }
 
@@ -199,7 +216,7 @@ void Connection::ProcessHeaders() {
     auto headers = std::string{buffer_.begin(), headerEnd};
 
     // Check for chunked encoding
-    if (headers.find(TransferEncodingHeader) != std::string::npos) {
+    if (FindCaseInsensitive(headers, TransferEncodingChunkedHeader) != std::string::npos) {
         isChunked_ = true;
         state_ = State::ReadingChunks;
         ProcessChunks();
@@ -207,7 +224,7 @@ void Connection::ProcessHeaders() {
     }
 
     // Look for Content-Length header
-    auto contentLengthPos = headers.find(ContentLengthHeader);
+    auto contentLengthPos = FindCaseInsensitive(headers, ContentLengthHeader);
     if (contentLengthPos != std::string::npos) {
         contentLengthPos += strlen(ContentLengthHeader);
         auto lengthEnd = headers.find(CRLF, contentLengthPos);

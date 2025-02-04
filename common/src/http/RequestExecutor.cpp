@@ -3,6 +3,7 @@
 #include "http/Connection.h"
 #include "http/Request.h"
 
+#include <cassert>
 #include <cstddef>
 #include <cstdio>
 #include <unistd.h>
@@ -36,18 +37,22 @@ RequestExecutor::~RequestExecutor() {
 #if defined(USE_EPOLL)
     if (epoll_ != -1) {
         close(epoll_);
+        epoll_ = -1;
     }
 #elif defined(USE_KQUEUE)
     if (kq_ != -1) {
         close(kq_);
+        kq_ = -1;
     }
 #endif
 }
 
 void RequestExecutor::Add(Request req) {
+    assert(events_.size() == connections_.size());
     auto conn = Connection::NewWithRequest(req);
     int fd = conn.SocketDescriptor();
     connections_.emplace(fd, ReqConn{.req = std::move(req), .conn = std::move(conn)});
+    events_.push_back({});  // add additional space for reading this event in ProcessConnections
 
 #if defined(USE_EPOLL)
     // TODO: untested, unchecked epoll code written by 4o
@@ -64,7 +69,6 @@ void RequestExecutor::Add(Request req) {
     // Create new kevent and configure to notify on reads
     struct kevent ev {};
     EV_SET(&ev, fd, EVFILT_READ, EV_ADD, 0, 0, 0);
-    events_.push_back({});  // add additional space for reading this event
 
     // Add kevent to kqueue
     int status = kevent(kq_, &ev, 1, nullptr, 0, nullptr);
@@ -77,8 +81,12 @@ void RequestExecutor::Add(Request req) {
 }
 
 void RequestExecutor::ProcessConnections() {
-    size_t nRemoved = 0;
+    assert(events_.size() == connections_.size());
+    if (connections_.size() == 0) {
+        return;
+    }
 
+    size_t nRemoved = 0;
 #if defined(USE_EPOLL)
     // TODO: untested, unchecked epoll code written by 4o
     int nev = epoll_wait(epoll_, events_.data(), events_.size(), -1);
@@ -105,12 +113,8 @@ void RequestExecutor::ProcessConnections() {
         }
 
         if (removed) {
-            // Note: ev is not actually used for EPOLL_CTL_DEL
-            struct epoll_event ev {};
-            int result = epoll_ctl(epoll_, EPOLL_CTL_DEL, fd, &ev);
-            if (result == -1) {
-                perror("epoll_ctl");
-            }
+            // Note: connection is already closed, we don't need to manually
+            // remove from epoll
             ++nRemoved;
         }
     }

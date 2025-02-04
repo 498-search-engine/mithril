@@ -14,13 +14,13 @@ class Request {
 public:
     static Request GET(std::string url);
 
-    Method Method() const;
+    Method GetMethod() const;
     const ParsedUrl& Url() const;
 
 private:
-    Request(enum Method method, ParsedUrl url);
+    Request(Method method, ParsedUrl url);
 
-    enum Method method_;
+    Method method_;
     ParsedUrl url_;
 };
 
