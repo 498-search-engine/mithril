@@ -12,18 +12,16 @@ enum class Method : uint8_t { GET };
 
 class Request {
 public:
-    static Request GET(std::string url, uint64_t id);
+    static Request GET(std::string url);
 
     Method Method() const;
     const ParsedUrl& Url() const;
-    uint64_t Id() const;
 
 private:
-    Request(enum Method method, ParsedUrl url, uint64_t id);
+    Request(enum Method method, ParsedUrl url);
 
     enum Method method_;
     ParsedUrl url_;
-    uint64_t id_;
 };
 
 std::string BuildRawRequestString(const Request& req);

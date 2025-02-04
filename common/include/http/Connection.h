@@ -4,7 +4,6 @@
 #include "http/Request.h"
 #include "http/Response.h"
 
-#include <string>
 #include <vector>
 
 namespace mithril::http {

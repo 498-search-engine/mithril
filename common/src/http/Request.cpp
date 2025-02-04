@@ -2,8 +2,6 @@
 
 #include "http/ParsedUrl.h"
 
-#include <cstdint>
-
 namespace mithril::http {
 
 namespace {
@@ -16,12 +14,12 @@ constexpr const char* ConnectionCloseHeader = "Connection: close\r\n";
 
 }  // namespace
 
-Request Request::GET(std::string url, uint64_t id) {
+Request Request::GET(std::string url) {
     auto parsed = ParseURL(std::move(url));
-    return Request{Method::GET, std::move(parsed), id};
+    return Request{Method::GET, std::move(parsed)};
 }
 
-Request::Request(enum Method method, ParsedUrl url, uint64_t id) : method_(method), url_(std::move(url)), id_(id) {}
+Request::Request(enum Method method, ParsedUrl url) : method_(method), url_(std::move(url)) {}
 
 Method Request::Method() const {
     return method_;
@@ -29,10 +27,6 @@ Method Request::Method() const {
 
 const ParsedUrl& Request::Url() const {
     return url_;
-}
-
-uint64_t Request::Id() const {
-    return id_;
 }
 
 std::string BuildRawRequestString(const Request& req) {
