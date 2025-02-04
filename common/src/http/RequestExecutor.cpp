@@ -1,6 +1,7 @@
 #include "http/RequestExecutor.h"
 
 #include "http/Connection.h"
+#include "http/Request.h"
 
 #include <cstddef>
 #include <cstdio>
@@ -43,9 +44,10 @@ RequestExecutor::~RequestExecutor() {
 #endif
 }
 
-void RequestExecutor::Add(Connection conn) {
+void RequestExecutor::Add(Request req) {
+    auto conn = Connection::NewWithRequest(req);
     int fd = conn.SocketDescriptor();
-    connections_.emplace(fd, std::move(conn));
+    connections_.emplace(fd, ReqConn{.req = std::move(req), .conn = std::move(conn)});
 
 #if defined(USE_EPOLL)
     // TODO: untested, unchecked epoll code written by 4o
@@ -120,14 +122,27 @@ void RequestExecutor::ProcessConnections() {
             // Socket has been closed, mark as failed
             // TODO: does this always indicate failure? Or does natural closing also triggering this?
             auto extracted = connections_.extract(connIt);
-            failedConnections_.push_back(std::move(extracted.mapped()));
+            extracted.mapped().conn.Process();
+            if (extracted.mapped().conn.Ready()) {
+                // TODO: copy this branch for epoll
+                readyResponses_.push_back({
+                    .req = std::move(extracted.mapped().req),
+                    .res = extracted.mapped().conn.GetResponse(),
+                });
+            } else {
+                extracted.mapped().conn.Close();
+                failedConnections_.push_back(std::move(extracted.mapped()));
+            }
         } else if (ev.filter == EVFILT_READ) {
             // Socket ready to be read from
-            connIt->second.Process();
-            if (connIt->second.Ready()) {
+            connIt->second.conn.Process();
+            if (connIt->second.conn.Ready()) {
                 // Connection finished receiving HTTP response
                 auto extracted = connections_.extract(connIt);
-                readyConnections_.push_back(std::move(extracted.mapped()));
+                readyResponses_.push_back({
+                    .req = std::move(extracted.mapped().req),
+                    .res = extracted.mapped().conn.GetResponse(),
+                });
             }
         }
     }
@@ -138,11 +153,11 @@ size_t RequestExecutor::PendingConnections() const {
     return connections_.size();
 }
 
-std::vector<Connection>& RequestExecutor::ReadyConnections() {
-    return readyConnections_;
+std::vector<ReqRes>& RequestExecutor::ReadyResponses() {
+    return readyResponses_;
 }
 
-std::vector<Connection>& RequestExecutor::FailedConnections() {
+std::vector<ReqConn>& RequestExecutor::FailedConnections() {
     return failedConnections_;
 }
 

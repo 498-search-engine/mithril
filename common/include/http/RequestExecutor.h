@@ -2,6 +2,7 @@
 #define COMMON_HTTP_REQUESTEXECUTOR_H
 
 #include "http/Connection.h"
+#include "http/Request.h"
 
 #include <unordered_map>
 #include <vector>
@@ -22,6 +23,16 @@
 
 namespace mithril::http {
 
+struct ReqConn {
+    Request req;
+    Connection conn;
+};
+
+struct ReqRes {
+    Request req;
+    Response res;
+};
+
 /**
  * @brief RequestExecutor processes many HTTP Connection instances concurrently,
  * processing them until the response has been fully read from the server.
@@ -32,11 +43,11 @@ public:
     ~RequestExecutor();
 
     /**
-     * @brief Adds a new HTTP Connection instance to process.
+     * @brief Adds a new HTTP request to execute.
      *
-     * @param conn Connection to add.
+     * @param req Request to add.
      */
-    void Add(Connection conn);
+    void Add(Request req);
 
     /**
      * @brief Processes events from all managed connections.
@@ -49,15 +60,15 @@ public:
     size_t PendingConnections() const;
 
     /**
-     * @brief Returns vector containing HTTP connections with ready responses.
+     * @brief Returns vector containing complete HTTP responses.
      */
-    std::vector<Connection>& ReadyConnections();
+    std::vector<ReqRes>& ReadyResponses();
 
     /**
      * @brief Returns vector containing HTTP connections that failed to
      * completely receive a response.
      */
-    std::vector<Connection>& FailedConnections();
+    std::vector<ReqConn>& FailedConnections();
 
 private:
 #if defined(USE_EPOLL)
@@ -68,9 +79,10 @@ private:
     std::vector<struct kevent> events_;
 #endif
 
-    std::unordered_map<int, Connection> connections_;
-    std::vector<Connection> readyConnections_;
-    std::vector<Connection> failedConnections_;
+
+    std::unordered_map<int, ReqConn> connections_;
+    std::vector<ReqRes> readyResponses_;
+    std::vector<ReqConn> failedConnections_;
 };
 
 }  // namespace mithril::http

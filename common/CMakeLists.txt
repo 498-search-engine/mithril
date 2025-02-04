@@ -1,4 +1,7 @@
 add_library(common STATIC
+    src/http/Connection.cpp
+    src/http/ParsedUrl.cpp
+    src/http/Request.cpp
     src/http/RequestExecutor.cpp
 )
 

@@ -24,10 +24,8 @@ enum StatusCode : uint16_t {
 };
 
 struct Response {
-    std::vector<char> raw;
-
-    std::string_view headers;
-    std::string_view body;
+    std::vector<char> header;
+    std::vector<char> body;
 };
 
 struct Header {
@@ -36,11 +34,11 @@ struct Header {
 };
 
 struct ParsedResponse {
-    std::vector<char> raw;
-
     StatusCode status;
     std::vector<Header> headers;
-    std::string_view body;
+
+    std::vector<char> rawHeader;
+    std::vector<char> body;
 };
 
 std::optional<ParsedResponse> ParseResponse(Response res);
