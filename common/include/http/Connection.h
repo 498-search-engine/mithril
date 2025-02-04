@@ -34,7 +34,7 @@ public:
     /**
      * @brief Processes data from the connection.
      */
-    void Process();
+    void Process(bool gotEof);
 
     Response GetResponse();
 
@@ -43,6 +43,7 @@ private:
 
     Connection(int fd);
 
+    bool ReadFromSocket();
     void ProcessHeaders();
     void ProcessBody();
     void ProcessChunks();

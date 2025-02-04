@@ -77,6 +77,8 @@ void RequestExecutor::Add(Request req) {
 }
 
 void RequestExecutor::ProcessConnections() {
+    size_t nRemoved = 0;
+
 #if defined(USE_EPOLL)
     // TODO: untested, unchecked epoll code written by 4o
     int nev = epoll_wait(epoll_, events_.data(), events_.size(), -1);
@@ -89,21 +91,27 @@ void RequestExecutor::ProcessConnections() {
         auto& ev = events_[i];
         int fd = ev.data.fd;
 
+        bool removed = false;
         auto connIt = connections_.find(fd);
-        if (connIt == connections_.end()) {
-            // TODO: unclear if this can ever happen. Do we care?
-            continue;
+        if (connIt != connections_.end()) {
+            if ((ev.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0) {
+                HandleConnEOF(connIt);
+                removed = true;
+            } else if ((ev.events & EPOLLIN) != 0) {
+                removed = HandleConnRead(connIt);
+            }
+        } else {
+            removed = true;
         }
 
-        if ((ev.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0) {
-            auto extracted = connections_.extract(connIt);
-            failedConnections_.push_back(std::move(extracted.mapped()));
-        } else if ((ev.events & EPOLLIN) != 0) {
-            connIt->second.Process();
-            if (connIt->second.Ready()) {
-                auto extracted = connections_.extract(connIt);
-                readyConnections_.push_back(std::move(extracted.mapped()));
+        if (removed) {
+            // Note: ev is not actually used for EPOLL_CTL_DEL
+            struct epoll_event ev {};
+            int result = epoll_ctl(epoll_, EPOLL_CTL_DEL, fd, &ev);
+            if (result == -1) {
+                perror("epoll_ctl");
             }
+            ++nRemoved;
         }
     }
 #elif defined(USE_KQUEUE)
@@ -112,41 +120,74 @@ void RequestExecutor::ProcessConnections() {
         auto& ev = events_[i];
         auto fd = static_cast<int>(ev.ident);
 
+        bool removed = false;
         auto connIt = connections_.find(fd);
-        if (connIt == connections_.end()) {
-            // TODO: unclear if this can ever happen. Do we care?
+        if (connIt != connections_.end()) {
+            if ((ev.flags & EV_EOF) != 0) {
+                HandleConnEOF(connIt);
+                removed = true;
+            } else if (ev.filter == EVFILT_READ) {
+                removed = HandleConnRead(connIt);
+            }
             continue;
+        } else {
+            removed = true;
         }
 
-        if ((ev.flags & EV_EOF) != 0) {
-            // Socket has been closed, mark as failed
-            // TODO: does this always indicate failure? Or does natural closing also triggering this?
-            auto extracted = connections_.extract(connIt);
-            extracted.mapped().conn.Process();
-            if (extracted.mapped().conn.Ready()) {
-                // TODO: copy this branch for epoll
-                readyResponses_.push_back({
-                    .req = std::move(extracted.mapped().req),
-                    .res = extracted.mapped().conn.GetResponse(),
-                });
-            } else {
-                extracted.mapped().conn.Close();
-                failedConnections_.push_back(std::move(extracted.mapped()));
-            }
-        } else if (ev.filter == EVFILT_READ) {
-            // Socket ready to be read from
-            connIt->second.conn.Process();
-            if (connIt->second.conn.Ready()) {
-                // Connection finished receiving HTTP response
-                auto extracted = connections_.extract(connIt);
-                readyResponses_.push_back({
-                    .req = std::move(extracted.mapped().req),
-                    .res = extracted.mapped().conn.GetResponse(),
-                });
-            }
+        if (removed) {
+            struct kevent ke {};
+            EV_SET(&ke, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+            kevent(kq_, &ke, 1, nullptr, 0, nullptr);
+            ++nRemoved;
         }
     }
 #endif
+
+    for (size_t i = 0; i < nRemoved; ++i) {
+        events_.pop_back();
+    }
+}
+
+void RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt) {
+    auto& conn = connIt->second.conn;
+    auto& req = connIt->second.req;
+
+    // Attempt to process any data that may still be in the socket
+    conn.Process(true);
+
+    if (conn.Ready()) {
+        // Socket got EOF but we were able to read rest of response from socket
+        readyResponses_.push_back({
+            .req = std::move(req),
+            .res = conn.GetResponse(),
+        });
+    } else {
+        // Socket has been closed without finishing response, mark as failed
+        conn.Close();
+        failedConnections_.push_back(std::move(connIt->second));
+    }
+
+    connections_.erase(connIt);
+}
+
+bool RequestExecutor::HandleConnRead(std::unordered_map<int, ReqConn>::iterator connIt) {
+    auto& conn = connIt->second.conn;
+    auto& req = connIt->second.req;
+
+    // Process additional received data
+    conn.Process(false);
+
+    if (conn.Ready()) {
+        // Connection finished receiving HTTP response
+        readyResponses_.push_back({
+            .req = std::move(req),
+            .res = conn.GetResponse(),
+        });
+        connections_.erase(connIt);
+        return true;
+    }
+
+    return false;
 }
 
 size_t RequestExecutor::PendingConnections() const {

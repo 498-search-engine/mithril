@@ -149,29 +149,35 @@ Response Connection::GetResponse() {
     };
 }
 
-void Connection::Process() {
+bool Connection::ReadFromSocket() {
+    char tempBuffer[BufferSize];
+    ssize_t bytesRead;
+    do {
+        bytesRead = recv(fd_, tempBuffer, BufferSize, MSG_DONTWAIT);
+        if (bytesRead > 0) {
+            buffer_.insert(buffer_.end(), tempBuffer, tempBuffer + bytesRead);
+        } else if (bytesRead == 0) {
+            // Got EOF
+            return true;
+        } else if (bytesRead == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // No more data available right now
+                return false;
+            }
+            // TODO: error handling strategy
+            throw std::runtime_error("Error reading from socket");
+        }
+    } while (bytesRead > 0);
+    return false;
+}
+
+void Connection::Process(bool gotEof) {
     if (state_ == State::Complete) {
         return;
     }
 
     // Read data from socket
-    char tempBuffer[BufferSize];
-    ssize_t bytesRead = recv(fd_, tempBuffer, BufferSize, 0);
-
-    if (bytesRead <= 0) {
-        if (bytesRead == 0) {  // Connection closed
-            if (state_ == State::ReadingBody && bodyBytesRead_ == contentLength_) {
-                state_ = State::Complete;
-            } else {
-                state_ = State::Closed;
-            }
-            return;
-        }
-        throw std::runtime_error("Error reading from socket");  // TODO: error handling strategy
-    }
-
-    // Append new data to buffer
-    buffer_.insert(buffer_.end(), tempBuffer, tempBuffer + bytesRead);
+    gotEof |= ReadFromSocket();
 
     // Process based on current state
     switch (state_) {
@@ -193,6 +199,17 @@ void Connection::Process() {
 
     default:
         break;
+    }
+
+    if (gotEof) {
+        if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
+            (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
+            state_ = State::Closed;
+            // TODO: error handling strategy
+            throw std::runtime_error("Connection closed before receiving complete response");
+        } else {
+            state_ = State::Complete;
+        }
     }
 }
 

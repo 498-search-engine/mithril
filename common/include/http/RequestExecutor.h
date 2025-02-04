@@ -71,6 +71,9 @@ public:
     std::vector<ReqConn>& FailedConnections();
 
 private:
+    void HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt);
+    bool HandleConnRead(std::unordered_map<int, ReqConn>::iterator connIt);
+
 #if defined(USE_EPOLL)
     int epoll_;
     std::vector<struct epoll_event> events_;
