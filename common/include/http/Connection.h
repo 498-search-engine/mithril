@@ -10,6 +10,8 @@ namespace mithril::http {
 
 enum class Scheme : uint8_t { HTTP, HTTPS };
 
+class RequestExecutor;
+
 class Connection {
 public:
     static Connection NewWithRequest(const Request& req);
@@ -21,34 +23,48 @@ public:
     Connection(Connection&&) noexcept;
     Connection& operator=(Connection&&) noexcept;
 
-    int SocketDescriptor() const;
+    /**
+     * @brief Processes data from the connection.
+     */
+    void Process(bool gotEof);
 
     /**
      * @brief Returns whether the HTTP response is ready to be consumed.
      */
     bool Ready() const;
 
-    void Close();
-
     /**
-     * @brief Processes data from the connection.
+     * @brief Extract the ready response from the connection. The connection
+     * must be ready, as determined by Ready(). Subsequent calls are undefined.
      */
-    void Process(bool gotEof);
-
     Response GetResponse();
 
 private:
-    enum class State : uint8_t { Pending, ReadingHeaders, ReadingChunks, ReadingBody, Complete, Consumed, Closed };
+    friend class RequestExecutor;
 
-    Connection(int fd);
+    enum class State : uint8_t { Sending, ReadingHeaders, ReadingChunks, ReadingBody, Complete, Consumed, Closed };
+
+    Connection(int fd, std::string rawRequest);
+
+    void Close();
+
+    bool ProcessSend();
+    bool ProcessReceive();
 
     bool ReadFromSocket();
     void ProcessHeaders();
     void ProcessBody();
     void ProcessChunks();
 
+    int SocketDescriptor() const;
+    bool IsWriting() const;
+    bool IsReading() const;
+
     int fd_;
     State state_;
+
+    std::string rawRequest_;
+    size_t requestBytesSent_;
 
     size_t contentLength_;
     size_t headersLength_;

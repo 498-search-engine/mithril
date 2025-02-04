@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <iterator>
 #include <netdb.h>
@@ -57,15 +58,14 @@ Connection Connection::NewWithRequest(const Request& req) {
     assert(status != -1);
     freeaddrinfo(address);
 
-    // Construct request
-    std::string rawRequest = BuildRawRequestString(req);
-    send(fd, rawRequest.c_str(), rawRequest.length(), 0);
-    return Connection{fd};
+    return Connection{fd, BuildRawRequestString(req)};
 }
 
-Connection::Connection(int fd)
+Connection::Connection(int fd, std::string rawRequest)
     : fd_(fd),
-      state_(State::Pending),
+      state_(State::Sending),
+      rawRequest_(std::move(rawRequest)),
+      requestBytesSent_(0),
       contentLength_(0),
       headersLength_(0),
       bodyBytesRead_(0),
@@ -80,6 +80,8 @@ Connection::~Connection() {
 Connection::Connection(Connection&& other) noexcept
     : fd_(other.fd_),
       state_(other.state_),
+      rawRequest_(std::move(other.rawRequest_)),
+      requestBytesSent_(other.requestBytesSent_),
       contentLength_(other.contentLength_),
       headersLength_(other.headersLength_),
       bodyBytesRead_(other.bodyBytesRead_),
@@ -97,6 +99,8 @@ Connection& Connection::operator=(Connection&& other) noexcept {
 
     fd_ = other.fd_;
     state_ = other.state_;
+    rawRequest_ = std::move(other.rawRequest_);
+    requestBytesSent_ = other.requestBytesSent_;
     contentLength_ = other.contentLength_;
     headersLength_ = other.headersLength_;
     bodyBytesRead_ = other.bodyBytesRead_;
@@ -165,15 +169,59 @@ void Connection::Process(bool gotEof) {
         return;
     }
 
-    // Read data from socket
-    gotEof |= ReadFromSocket();
+    if (IsWriting()) {
+        // Write request data to socket
+        gotEof |= ProcessSend();
+    }
+
+    if (IsReading()) {
+        // Read response data from socket
+        gotEof |= ProcessReceive();
+    }
+
+    if (gotEof) {
+        if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
+            (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
+            state_ = State::Closed;
+            // TODO: error handling strategy
+            throw std::runtime_error("Connection closed before receiving complete response");
+        } else {
+            state_ = State::Complete;
+        }
+        Close();
+    }
+}
+
+bool Connection::ProcessSend() {
+    ssize_t bytesSent;
+    do {
+        bytesSent = send(fd_, rawRequest_.data(), rawRequest_.size() - requestBytesSent_, MSG_DONTWAIT);
+        if (bytesSent > 0) {
+            requestBytesSent_ += bytesSent;
+        } else if (bytesSent == 0) {
+            // Got EOF
+            return true;
+        } else if (bytesSent == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // Sending would block, come back later to finish sending
+                return false;
+            }
+            // TODO: error handling strategy
+            perror("HTTP Connection send request data");
+        }
+    } while (requestBytesSent_ < rawRequest_.size());
+
+    // Request fully written, now into reading headers phase
+    state_ = State::ReadingHeaders;
+
+    return false;
+}
+
+bool Connection::ProcessReceive() {
+    bool gotEof = ReadFromSocket();
 
     // Process based on current state
     switch (state_) {
-    case State::Pending:
-        state_ = State::ReadingHeaders;
-        [[fallthrough]];
-
     case State::ReadingHeaders:
         ProcessHeaders();
         break;
@@ -190,17 +238,15 @@ void Connection::Process(bool gotEof) {
         break;
     }
 
-    if (gotEof) {
-        if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
-            (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
-            state_ = State::Closed;
-            // TODO: error handling strategy
-            throw std::runtime_error("Connection closed before receiving complete response");
-        } else {
-            state_ = State::Complete;
-        }
-        Close();
-    }
+    return gotEof;
+}
+
+bool Connection::IsWriting() const {
+    return state_ == State::Sending;
+}
+
+bool Connection::IsReading() const {
+    return state_ == State::ReadingHeaders || state_ == State::ReadingBody || state_ == State::ReadingChunks;
 }
 
 void Connection::ProcessHeaders() {

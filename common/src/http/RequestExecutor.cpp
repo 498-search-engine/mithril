@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
+#include <iostream>
 #include <unistd.h>
 #include <utility>
 
@@ -55,9 +56,12 @@ void RequestExecutor::Add(Request req) {
     events_.push_back({});  // add additional space for reading this event in ProcessConnections
 
 #if defined(USE_EPOLL)
-    // TODO: untested, unchecked epoll code written by 4o
+    // Create new epoll_event and configure to notify on writes (for sending
+    // request). We pass EPOLLONESHOT to only trigger the event filter once
+    // after each write so we can transition to filtering on reads only once the
+    // request is fully sent.
     struct epoll_event ev {};
-    ev.events = EPOLLIN;
+    ev.events = EPOLLOUT | EPOLLONESHOT;
     ev.data.fd = fd;
 
     int status = epoll_ctl(epoll_, EPOLL_CTL_ADD, fd, &ev);
@@ -66,9 +70,12 @@ void RequestExecutor::Add(Request req) {
         exit(1);
     }
 #elif defined(USE_KQUEUE)
-    // Create new kevent and configure to notify on reads
+    // Create new kevent and configure to notify on writes (for sending
+    // request). We pass EV_CLEAR to clear the event filter after each write so
+    // we can transition to filtering on reads only once the request is fully
+    // sent.
     struct kevent ev {};
-    EV_SET(&ev, fd, EVFILT_READ, EV_ADD, 0, 0, 0);
+    EV_SET(&ev, fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, 0);
 
     // Add kevent to kqueue
     int status = kevent(kq_, &ev, 1, nullptr, 0, nullptr);
@@ -102,14 +109,45 @@ void RequestExecutor::ProcessConnections() {
         bool removed = false;
         auto connIt = connections_.find(fd);
         if (connIt != connections_.end()) {
+            bool writingBefore = connIt->second.conn.IsWriting();
+
             if ((ev.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0) {
                 HandleConnEOF(connIt);
                 removed = true;
-            } else if ((ev.events & EPOLLIN) != 0) {
-                removed = HandleConnRead(connIt);
+            } else if ((ev.events & (EPOLLIN | EPOLLOUT)) != 0) {
+                removed = HandleConnReady(connIt);
+            }
+
+            if (!removed) {
+                if (connIt->second.conn.IsWriting()) {
+                    // Still writing, only filter on writes available (resetting
+                    // on every event)
+                    struct epoll_event ev {};
+                    ev.data.fd = fd;
+                    ev.events = EPOLLOUT | EPOLLONESHOT;
+                    int status = epoll_ctl(epoll_, EPOLL_CTL_MOD, fd, &ev);
+                    if (status == -1) {
+                        perror("RequestExecutor epoll_ctl");  // TODO: error handling strategy
+                        exit(1);
+                    }
+                } else if (writingBefore && connIt->second.conn.IsReading()) {
+                    // Transitioned from writing -> reading, only filter on
+                    // reads (and don't clear on retrieving subsequent events)
+                    struct epoll_event ev {};
+                    ev.data.fd = fd;
+                    ev.events = EPOLLIN;
+                    int status = epoll_ctl(epoll_, EPOLL_CTL_MOD, fd, &ev);
+                    if (status == -1) {
+                        perror("RequestExecutor epoll_ctl");  // TODO: error handling strategy
+                        exit(1);
+                    }
+                }
             }
         } else {
-            removed = true;
+            // Somehow got an event for an fd we are no longer keeping track of,
+            // remove it from the epoll
+            struct epoll_event ev {};  // Note: ev is not actually used for EPOLL_CTL_DEL
+            epoll_ctl(epoll_, EPOLL_CTL_DEL, fd, &ev);
         }
 
         if (removed) {
@@ -127,21 +165,39 @@ void RequestExecutor::ProcessConnections() {
         bool removed = false;
         auto connIt = connections_.find(fd);
         if (connIt != connections_.end()) {
+            bool writingBefore = connIt->second.conn.IsWriting();
+
             if ((ev.flags & EV_EOF) != 0) {
                 HandleConnEOF(connIt);
                 removed = true;
-            } else if (ev.filter == EVFILT_READ) {
-                removed = HandleConnRead(connIt);
+            } else if (ev.filter == EVFILT_READ || ev.filter == EVFILT_WRITE) {
+                removed = HandleConnReady(connIt);
             }
-            continue;
+
+            if (!removed) {
+                if (connIt->second.conn.IsWriting()) {
+                    // Still writing, only filter on writes available (clearing
+                    // on every event)
+                    struct kevent ke {};
+                    EV_SET(&ke, fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, NULL);
+                    kevent(kq_, &ke, 1, nullptr, 0, nullptr);
+                } else if (writingBefore && connIt->second.conn.IsReading()) {
+                    // Transitioned from writing -> reading, only filter on
+                    // reads (and don't clear on retrieving subsequent events)
+                    struct kevent ke {};
+                    EV_SET(&ke, fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+                    kevent(kq_, &ke, 1, nullptr, 0, nullptr);
+                }
+            }
         } else {
-            removed = true;
+            // Somehow got an event for an fd we are no longer keeping track of,
+            // remove it from the kqueue
+            struct kevent ke {};
+            EV_SET(&ke, fd, ev.filter, EV_DELETE, 0, 0, NULL);
+            kevent(kq_, &ke, 1, nullptr, 0, nullptr);
         }
 
         if (removed) {
-            struct kevent ke {};
-            EV_SET(&ke, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-            kevent(kq_, &ke, 1, nullptr, 0, nullptr);
             ++nRemoved;
         }
     }
@@ -150,6 +206,8 @@ void RequestExecutor::ProcessConnections() {
     for (size_t i = 0; i < nRemoved; ++i) {
         events_.pop_back();
     }
+
+    assert(events_.size() == connections_.size());
 }
 
 void RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt) {
@@ -174,7 +232,7 @@ void RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator c
     connections_.erase(connIt);
 }
 
-bool RequestExecutor::HandleConnRead(std::unordered_map<int, ReqConn>::iterator connIt) {
+bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator connIt) {
     auto& conn = connIt->second.conn;
     auto& req = connIt->second.req;
 
