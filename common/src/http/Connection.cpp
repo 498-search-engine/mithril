@@ -212,6 +212,7 @@ void Connection::ProcessHeaders() {
         contentLengthPos += strlen(ContentLengthHeader);
         auto lengthEnd = headers.find(CRLF, contentLengthPos);
         contentLength_ = std::stoul(headers.substr(contentLengthPos, lengthEnd - contentLengthPos));
+        body_.reserve(contentLength_);
     }
 
     state_ = State::ReadingBody;
