@@ -33,15 +33,12 @@ struct Header {
     std::string_view value;
 };
 
-struct ParsedResponse {
+struct ResponseHeader {
     StatusCode status;
     std::vector<Header> headers;
-
-    std::vector<char> rawHeader;
-    std::vector<char> body;
 };
 
-std::optional<ParsedResponse> ParseResponse(Response res);
+std::optional<ResponseHeader> ParseResponseHeader(const Response& res);
 
 }  // namespace mithril::http
 
