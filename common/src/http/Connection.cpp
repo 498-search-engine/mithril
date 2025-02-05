@@ -416,7 +416,7 @@ void Connection::ProcessChunks() {
         if (currentChunkSize_ == 0) {
             // Need to read next chunk size
             auto chunkHeaderEnd =
-                std::search(buffer_.begin() + headersLength_ + bodyBytesRead_, buffer_.end(), "\r\n", "\r\n" + 2);
+                std::search(buffer_.begin() + headersLength_ + bodyBytesRead_, buffer_.end(), CRLF, CRLF + 2);
 
             if (chunkHeaderEnd == buffer_.end()) {
                 return;  // Don't have complete chunk header
