@@ -202,6 +202,8 @@ void Connection::InitializeSSL() {
     status = SSL_connect(ssl_);
     if (status != 1) {
         PrintSSLConnectError(ssl_, status);
+        SSL_free(ssl_);
+        ssl_ = nullptr;
         throw std::runtime_error("SSL handshake failed");
     }
 }
