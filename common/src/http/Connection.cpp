@@ -1,17 +1,23 @@
 #include "http/Connection.h"
 
+#include "http/Request.h"
 #include "http/Response.h"
+#include "http/SSL.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <iostream>
 #include <iterator>
 #include <netdb.h>
 #include <stdexcept>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -37,18 +43,52 @@ size_t FindCaseInsensitive(const std::string& s, const char* q) {
     }
 }
 
+void PrintSSLConnectError(SSL* ssl, int status) {
+    int sslErr = SSL_get_error(ssl, status);
+    std::cerr << "SSL_connect failed with error code: " << sslErr << "\n";
+
+    // Print the entire error queue
+    unsigned long err;
+    while ((err = ERR_get_error()) != 0) {
+        char errBuf[256];
+        ERR_error_string_n(err, errBuf, sizeof(errBuf));
+        std::cerr << "SSL Error: " << errBuf << "\n";
+    }
+
+    // Print verification errors if any
+    long verifyResult = SSL_get_verify_result(ssl);
+    if (verifyResult != X509_V_OK) {
+        std::cerr << "Certificate verification error: " << X509_verify_cert_error_string(verifyResult) << "\n";
+    }
+
+    // Print peer certificate info if available
+    X509* cert = SSL_get_peer_certificate(ssl);
+    if (cert != nullptr) {
+        char* subject = X509_NAME_oneline(X509_get_subject_name(cert), nullptr, 0);
+        char* issuer = X509_NAME_oneline(X509_get_issuer_name(cert), nullptr, 0);
+        std::cerr << "Peer certificate:\n";
+        std::cerr << "  Subject: " << subject << "\n";
+        std::cerr << "  Issuer: " << issuer << "\n";
+        OPENSSL_free(subject);
+        OPENSSL_free(issuer);
+        X509_free(cert);
+    }
+}
+
 }  // namespace
 
 Connection Connection::NewWithRequest(const Request& req) {
-    assert(req.Url().service == "http");
-
     struct addrinfo* address;
     struct addrinfo hints {};
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
-    int status = getaddrinfo(req.Url().host.c_str(), req.Url().port.c_str(), &hints, &address);
+
+    bool isSecure = req.Url().service == "https";
+    const char* port = req.Url().port.empty() ? (isSecure ? "443" : "80") : req.Url().port.c_str();
+
+    int status = getaddrinfo(req.Url().host.c_str(), port, &hints, &address);
     assert(status != -1);
 
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -57,21 +97,27 @@ Connection Connection::NewWithRequest(const Request& req) {
     status = connect(fd, address->ai_addr, address->ai_addrlen);
     assert(status != -1);
     freeaddrinfo(address);
-
-    return Connection{fd, BuildRawRequestString(req)};
+    return Connection{fd, req};
 }
 
-Connection::Connection(int fd, std::string rawRequest)
+Connection::Connection(int fd, const Request& req)
     : fd_(fd),
       state_(State::Sending),
-      rawRequest_(std::move(rawRequest)),
+      rawRequest_(BuildRawRequestString(req)),
       requestBytesSent_(0),
       contentLength_(0),
       headersLength_(0),
       bodyBytesRead_(0),
       isChunked_(false),
       currentChunkSize_(0),
-      currentChunkBytesRead_(0) {}
+      currentChunkBytesRead_(0),
+      ssl_(nullptr),
+      isSecure_(req.Url().service == "https"),
+      sni_(req.Url().host) {
+    if (isSecure_) {
+        InitializeSSL();
+    }
+}
 
 Connection::~Connection() {
     Close();
@@ -89,9 +135,13 @@ Connection::Connection(Connection&& other) noexcept
       currentChunkSize_(other.currentChunkSize_),
       currentChunkBytesRead_(other.currentChunkBytesRead_),
       buffer_(std::move(other.buffer_)),
-      body_(std::move(other.body_)) {
+      body_(std::move(other.body_)),
+      ssl_(other.ssl_),
+      isSecure_(other.isSecure_),
+      sni_(std::move(other.sni_)) {
     other.fd_ = -1;
     other.state_ = State::Consumed;
+    other.ssl_ = nullptr;
 }
 
 Connection& Connection::operator=(Connection&& other) noexcept {
@@ -109,9 +159,13 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     currentChunkBytesRead_ = other.currentChunkBytesRead_;
     buffer_ = std::move(other.buffer_);
     body_ = std::move(other.body_);
+    ssl_ = other.ssl_;
+    isSecure_ = other.isSecure_;
+    sni_ = std::move(other.sni_);
 
     other.fd_ = -1;
     other.state_ = State::Consumed;
+    other.ssl_ = nullptr;
 
     return *this;
 }
@@ -124,7 +178,40 @@ bool Connection::Ready() const {
     return state_ == State::Complete;
 }
 
+void Connection::InitializeSSL() {
+    auto* ctx = http::internal::SSLCtx;
+    assert(ctx != nullptr);
+
+    ssl_ = SSL_new(ctx);
+    if (ssl_ == nullptr) {
+        // TODO: error handling strategy
+        throw std::runtime_error("Failed to create SSL object");
+    }
+
+    int status = SSL_set_fd(ssl_, fd_);
+    if (status != 1) {
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+        // TODO: error handling strategy
+        throw std::runtime_error("Failed to set SSL file descriptor");
+    }
+
+    // Set Server Name Indication (SNI)
+    SSL_set_tlsext_host_name(ssl_, sni_.c_str());
+
+    status = SSL_connect(ssl_);
+    if (status != 1) {
+        PrintSSLConnectError(ssl_, status);
+        throw std::runtime_error("SSL handshake failed");
+    }
+}
+
 void Connection::Close() {
+    if (isSecure_ && ssl_ != nullptr) {
+        SSL_shutdown(ssl_);
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+    }
     if (fd_ != -1) {
         close(fd_);
         fd_ = -1;
@@ -146,14 +233,25 @@ bool Connection::ReadFromSocket() {
     char tempBuffer[BufferSize];
     ssize_t bytesRead;
     do {
-        bytesRead = recv(fd_, tempBuffer, BufferSize, MSG_DONTWAIT);
+        if (isSecure_) {
+            bytesRead = SSL_read(ssl_, tempBuffer, BufferSize);
+        } else {
+            bytesRead = recv(fd_, tempBuffer, BufferSize, MSG_DONTWAIT);
+        }
+
         if (bytesRead > 0) {
             buffer_.insert(buffer_.end(), tempBuffer, tempBuffer + bytesRead);
         } else if (bytesRead == 0) {
             // Got EOF
             return true;
-        } else if (bytesRead == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        } else if (bytesRead < 0) {
+            if (isSecure_) {
+                int err = SSL_get_error(ssl_, bytesRead);
+                if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+                    // No more data available right now
+                    return false;
+                }
+            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // No more data available right now
                 return false;
             }
@@ -195,15 +293,24 @@ void Connection::Process(bool gotEof) {
 bool Connection::ProcessSend() {
     ssize_t bytesSent;
     do {
-        bytesSent = send(fd_, rawRequest_.data(), rawRequest_.size() - requestBytesSent_, MSG_DONTWAIT);
+        if (isSecure_) {
+            bytesSent = SSL_write(ssl_, rawRequest_.data() + requestBytesSent_, rawRequest_.size() - requestBytesSent_);
+        } else {
+            bytesSent = send(fd_, rawRequest_.data(), rawRequest_.size() - requestBytesSent_, MSG_DONTWAIT);
+        }
+
         if (bytesSent > 0) {
             requestBytesSent_ += bytesSent;
         } else if (bytesSent == 0) {
             // Got EOF
             return true;
-        } else if (bytesSent == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // Sending would block, come back later to finish sending
+        } else if (bytesSent < 0) {
+            if (isSecure_) {
+                int err = SSL_get_error(ssl_, bytesSent);
+                if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+                    return false;
+                }
+            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 return false;
             }
             // TODO: error handling strategy
@@ -239,6 +346,10 @@ bool Connection::ProcessReceive() {
     }
 
     return gotEof;
+}
+
+bool Connection::IsSecure() const {
+    return isSecure_;
 }
 
 bool Connection::IsWriting() const {

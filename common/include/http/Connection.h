@@ -5,6 +5,7 @@
 #include "http/Response.h"
 
 #include <vector>
+#include <openssl/ssl.h>
 
 namespace mithril::http {
 
@@ -44,7 +45,9 @@ private:
 
     enum class State : uint8_t { Sending, ReadingHeaders, ReadingChunks, ReadingBody, Complete, Consumed, Closed };
 
-    Connection(int fd, std::string rawRequest);
+    Connection(int fd, const Request& req);
+
+    void InitializeSSL();
 
     void Close();
 
@@ -57,6 +60,7 @@ private:
     void ProcessChunks();
 
     int SocketDescriptor() const;
+    bool IsSecure() const;
     bool IsWriting() const;
     bool IsReading() const;
 
@@ -75,6 +79,10 @@ private:
 
     std::vector<char> buffer_;
     std::vector<char> body_;
+
+    SSL* ssl_;
+    bool isSecure_;
+    std::string sni_;
 };
 
 }  // namespace mithril::http
