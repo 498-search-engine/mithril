@@ -41,14 +41,32 @@ std::vector<std::string> UrlFrontier::GetURLs(size_t max) {
     return res;
 }
 
-void UrlFrontier::PutURL(std::string u) {
+int UrlFrontier::PutURL(std::string u) {
     std::unique_lock lock(mu_);
-    if (seen_.contains(u)) {
-        return;
+    if (seen_.Contains(u)) {
+        return 0;
     }
-    seen_.insert(u);
+    seen_.Put(u);
     urls_.push(std::move(u));
     cv_.notify_one();
+    return 1;
+}
+
+int UrlFrontier::PutURLs(std::vector<std::string> urls) {
+    std::unique_lock lock(mu_);
+
+    int i = 0;
+    for (auto& u : urls) {
+        if (seen_.Contains(u)) {
+            continue;
+        }
+        seen_.Put(u);
+        urls_.push(std::move(u));
+        ++i;
+    }
+
+    cv_.notify_all();
+    return i;
 }
 
 }  // namespace mithril
