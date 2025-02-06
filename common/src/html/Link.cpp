@@ -72,7 +72,7 @@ static_assert(ResolvePath("/a/././././") == "/a/");
 }  // namespace
 
 std::optional<std::string>
-MakeAbsoluteLink(const http::ParsedUrl& currentUrl, const std::string& base, const std::string& href) {
+MakeAbsoluteLink(const http::URL& currentUrl, const std::string& base, const std::string& href) {
     // If href is empty, return nullopt
     if (href.empty()) {
         return std::nullopt;

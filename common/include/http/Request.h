@@ -1,7 +1,7 @@
 #ifndef COMMON_HTTP_REQUEST_H
 #define COMMON_HTTP_REQUEST_H
 
-#include "http/ParsedUrl.h"
+#include "http/URL.h"
 
 #include <cstdint>
 #include <string>
@@ -12,16 +12,16 @@ enum class Method : uint8_t { GET };
 
 class Request {
 public:
-    static Request GET(ParsedUrl url);
+    static Request GET(URL url);
 
     Method GetMethod() const;
-    const ParsedUrl& Url() const;
+    const URL& Url() const;
 
 private:
-    Request(Method method, ParsedUrl url);
+    Request(Method method, URL url);
 
     Method method_;
-    ParsedUrl url_;
+    URL url_;
 };
 
 std::string BuildRawRequestString(const Request& req);

@@ -1,6 +1,6 @@
 #include "http/Request.h"
 
-#include "http/ParsedUrl.h"
+#include "http/URL.h"
 
 namespace mithril::http {
 
@@ -14,17 +14,17 @@ constexpr const char* ConnectionCloseHeader = "Connection: close\r\n";
 
 }  // namespace
 
-Request Request::GET(ParsedUrl url) {
+Request Request::GET(URL url) {
     return Request{Method::GET, std::move(url)};
 }
 
-Request::Request(enum Method method, ParsedUrl url) : method_(method), url_(std::move(url)) {}
+Request::Request(enum Method method, URL url) : method_(method), url_(std::move(url)) {}
 
 Method Request::GetMethod() const {
     return method_;
 }
 
-const ParsedUrl& Request::Url() const {
+const URL& Request::Url() const {
     return url_;
 }
 

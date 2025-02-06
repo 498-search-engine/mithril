@@ -1,12 +1,21 @@
-#include "http/ParsedUrl.h"
+#ifndef COMMON_HTTP_PARSEDURL_H
+#define COMMON_HTTP_PARSEDURL_H
 
+#include <cstring>
 #include <string>
-#include <string_view>
 
 namespace mithril::http {
 
-constexpr ParsedUrl ParseURL(std::string url) {
-    ParsedUrl u{};
+struct URL {
+    std::string url;
+    std::string service;
+    std::string host;
+    std::string port;
+    std::string path;
+};
+
+constexpr URL ParseURL(std::string url) {
+    URL u{};
     u.url = std::move(url);
     auto uv = std::string_view{u.url};
     size_t size = u.url.size();
@@ -71,3 +80,5 @@ static_assert(ParseURL("https://docs.github.com?123").host == "docs.github.com")
 static_assert(ParseURL("https://docs.github.com?123").path == "?123");
 
 }  // namespace mithril::http
+
+#endif

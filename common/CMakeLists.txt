@@ -6,7 +6,6 @@ add_library(common STATIC
     src/html/Tags.cpp
 
     src/http/Connection.cpp
-    src/http/ParsedUrl.cpp
     src/http/Request.cpp
     src/http/RequestExecutor.cpp
     src/http/Response.cpp

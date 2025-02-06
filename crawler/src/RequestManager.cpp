@@ -1,9 +1,9 @@
 #include "RequestManager.h"
 
 #include "DocumentQueue.h"
-#include "http/ParsedUrl.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
+#include "http/URL.h"
 
 #include <atomic>
 #include <iostream>
