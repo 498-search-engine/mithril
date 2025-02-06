@@ -1,6 +1,12 @@
 find_package(OpenSSL REQUIRED)
 
 add_executable(crawler
+    src/Coordinator.cpp
+    src/DocumentQueue.cpp
+    src/RequestManager.cpp
+    src/UrlFrontier.cpp
+    src/Worker.cpp
+
     src/main.cpp
 )
 
