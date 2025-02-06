@@ -1,6 +1,7 @@
 find_package(OpenSSL REQUIRED)
 
 add_library(common STATIC
+    src/html/Link.cpp
     src/html/Parser.cpp
     src/html/Tags.cpp
 
