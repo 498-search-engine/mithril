@@ -4,6 +4,7 @@
 #include "http/Request.h"
 #include "http/Response.h"
 
+#include <optional>
 #include <vector>
 #include <openssl/ssl.h>
 
@@ -15,7 +16,7 @@ class RequestExecutor;
 
 class Connection {
 public:
-    static Connection NewWithRequest(const Request& req);
+    static std::optional<Connection> NewWithRequest(const Request& req);
 
     ~Connection();
 

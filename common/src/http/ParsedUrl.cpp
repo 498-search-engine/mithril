@@ -5,7 +5,7 @@
 
 namespace mithril::http {
 
-ParsedUrl ParseURL(std::string url) {
+constexpr ParsedUrl ParseURL(std::string url) {
     ParsedUrl u{};
     u.url = std::move(url);
     auto uv = std::string_view{u.url};
@@ -38,7 +38,7 @@ ParsedUrl ParseURL(std::string url) {
 
     start = i;
     // Advance until : for port or / for path
-    while (i < size && uv[i] != ':' && uv[i] != '/') {
+    while (i < size && uv[i] != ':' && uv[i] != '/' && uv[i] != '?') {
         ++i;
     }
 
@@ -61,5 +61,13 @@ ParsedUrl ParseURL(std::string url) {
 
     return u;
 }
+
+static_assert(ParseURL("https://docs.github.com/hello/world.txt").service == "https");
+static_assert(ParseURL("https://docs.github.com/hello/world.txt").port == "");
+static_assert(ParseURL("https://docs.github.com/hello/world.txt").path == "/hello/world.txt");
+
+// Yes, links like this exist
+static_assert(ParseURL("https://docs.github.com?123").host == "docs.github.com");
+static_assert(ParseURL("https://docs.github.com?123").path == "?123");
 
 }  // namespace mithril::http

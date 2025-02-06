@@ -14,7 +14,7 @@ struct ParsedUrl {
     std::string path;
 };
 
-ParsedUrl ParseURL(std::string url);
+constexpr ParsedUrl ParseURL(std::string url);
 
 }  // namespace mithril::http
 

@@ -14,9 +14,8 @@ constexpr const char* ConnectionCloseHeader = "Connection: close\r\n";
 
 }  // namespace
 
-Request Request::GET(std::string url) {
-    auto parsed = ParseURL(std::move(url));
-    return Request{Method::GET, std::move(parsed)};
+Request Request::GET(ParsedUrl url) {
+    return Request{Method::GET, std::move(url)};
 }
 
 Request::Request(enum Method method, ParsedUrl url) : method_(method), url_(std::move(url)) {}

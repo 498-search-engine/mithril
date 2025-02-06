@@ -12,7 +12,7 @@ enum class Method : uint8_t { GET };
 
 class Request {
 public:
-    static Request GET(std::string url);
+    static Request GET(ParsedUrl url);
 
     Method GetMethod() const;
     const ParsedUrl& Url() const;

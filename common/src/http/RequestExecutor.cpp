@@ -50,9 +50,14 @@ RequestExecutor::~RequestExecutor() {
 
 void RequestExecutor::Add(Request req) {
     assert(events_.size() == connections_.size());
+
     auto conn = Connection::NewWithRequest(req);
-    int fd = conn.SocketDescriptor();
-    connections_.emplace(fd, ReqConn{.req = std::move(req), .conn = std::move(conn)});
+    if (!conn) {
+        return;
+    }
+
+    int fd = conn->SocketDescriptor();
+    connections_.emplace(fd, ReqConn{.req = std::move(req), .conn = std::move(*conn)});
     events_.push_back({});  // add additional space for reading this event in ProcessConnections
 
 #if defined(USE_EPOLL)

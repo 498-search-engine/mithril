@@ -77,7 +77,7 @@ void PrintSSLConnectError(SSL* ssl, int status) {
 
 }  // namespace
 
-Connection Connection::NewWithRequest(const Request& req) {
+std::optional<Connection> Connection::NewWithRequest(const Request& req) {
     struct addrinfo* address;
     struct addrinfo hints {};
     memset(&hints, 0, sizeof(hints));
@@ -89,13 +89,28 @@ Connection Connection::NewWithRequest(const Request& req) {
     const char* port = req.Url().port.empty() ? (isSecure ? "443" : "80") : req.Url().port.c_str();
 
     int status = getaddrinfo(req.Url().host.c_str(), port, &hints, &address);
-    assert(status != -1);
+    if (status == -1 || address == nullptr) {
+        // TODO: better logging
+        std::cerr << "failed to get addr for " << req.Url().host << ":" << port << std::endl;
+        return std::nullopt;
+    }
 
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    assert(fd != -1);
+    if (fd == -1) {
+        freeaddrinfo(address);
+        // TODO: better logging
+        std::cerr << "failed to create socket" << std::endl;
+        return std::nullopt;
+    }
 
     status = connect(fd, address->ai_addr, address->ai_addrlen);
-    assert(status != -1);
+    if (status == -1) {
+        freeaddrinfo(address);
+        // TODO: better logging
+        std::cerr << "failed to connect to " << req.Url().host << ":" << port << std::endl;
+        return std::nullopt;
+    }
+
     freeaddrinfo(address);
     return Connection{fd, req};
 }
