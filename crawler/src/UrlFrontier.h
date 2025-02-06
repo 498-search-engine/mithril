@@ -5,7 +5,6 @@
 
 #include <condition_variable>
 #include <mutex>
-#include <optional>
 #include <queue>
 #include <string>
 #include <unordered_set>
@@ -19,15 +18,13 @@ public:
 
     bool Empty() const;
 
-    std::optional<std::string> GetURL();
-
     /**
      * @brief Gets at least one URL from the frontier, up to max
      *
-     * @param max Max URLs to return
-     * @return std::vector<std::string>
+     * @param max Max URLs to get
+     * @param out Output vector to put URLs into
      */
-    std::vector<std::string> GetURLs(size_t max);
+    void GetURLs(size_t max, std::vector<std::string>& out);
 
     /**
      * @brief Puts a url onto the frontier (if not already visited).

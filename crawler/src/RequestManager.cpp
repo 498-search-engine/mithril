@@ -7,6 +7,8 @@
 
 #include <atomic>
 #include <iostream>
+#include <string>
+#include <vector>
 
 namespace mithril {
 
@@ -14,11 +16,16 @@ RequestManager::RequestManager(size_t targetConcurrentReqs, UrlFrontier* frontie
     : targetConcurrentReqs_(targetConcurrentReqs), frontier_(frontier), docQueue_(docQueue) {}
 
 void RequestManager::Run() {
+    std::vector<std::string> urls;
+    urls.reserve(targetConcurrentReqs_);
+
     while (!stopped_.load(std::memory_order_acquire)) {
         // Get more URLs to execute, up to targetSize_ concurrently executing
         if (requestExecutor_.PendingConnections() < targetConcurrentReqs_) {
             size_t toAdd = targetConcurrentReqs_ - requestExecutor_.PendingConnections();
-            auto urls = frontier_->GetURLs(toAdd);
+            urls.clear();
+            frontier_->GetURLs(toAdd, urls);
+
             for (const auto& url : urls) {
                 auto parsed = http::ParseURL(url);
                 if (parsed.host.empty()) {

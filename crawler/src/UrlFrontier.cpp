@@ -1,6 +1,5 @@
 #include "UrlFrontier.h"
 
-#include <optional>
 
 namespace mithril {
 
@@ -11,34 +10,20 @@ bool UrlFrontier::Empty() const {
     return urls_.empty();
 }
 
-std::optional<std::string> UrlFrontier::GetURL() {
-    std::unique_lock lock(mu_);
-
-    if (urls_.empty()) {
-        return std::nullopt;
-    }
-
-    auto u = std::move(urls_.front());
-    urls_.pop();
-    return u;
-}
-
-std::vector<std::string> UrlFrontier::GetURLs(size_t max) {
+void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out) {
     if (max == 0) {
-        return {};
+        return;
     }
 
     std::unique_lock lock(mu_);
     cv_.wait(lock, [this]() { return !urls_.empty(); });
 
-    std::vector<std::string> res;
-    res.reserve(std::min(max, urls_.size()));
+    out.reserve(std::min(max, urls_.size()));
     while (!urls_.empty() && max != 0) {
-        res.push_back(std::move(urls_.front()));
+        out.push_back(std::move(urls_.front()));
         urls_.pop();
         --max;
     }
-    return res;
 }
 
 int UrlFrontier::PutURL(std::string u) {
