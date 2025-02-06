@@ -1,6 +1,15 @@
-#include <iostream>
+#include "Coordinator.h"
+#include "http/SSL.h"
 
-int main() {
-    std::cout << "Hello, world" << std::endl;
+#include <cassert>
+
+int main(int argc, char* argv[]) {
+    mithril::http::InitializeSSL();
+
+    mithril::Coordinator c;
+    c.Run();
+
+    mithril::http::DeinitializeSSL();
+
     return 0;
 }
