@@ -49,15 +49,22 @@ RequestExecutor::~RequestExecutor() {
 }
 
 void RequestExecutor::Add(Request req) {
-    assert(events_.size() == connections_.size());
+    assert(events_.size() == activeConnections_.size());
 
     auto conn = Connection::NewWithRequest(req);
     if (!conn) {
         return;
     }
 
-    int fd = conn->SocketDescriptor();
-    connections_.emplace(fd, ReqConn{.req = std::move(req), .conn = std::move(*conn)});
+    pendingConnection_.push_back(ReqConn{
+        .req = std::move(req),
+        .conn = std::move(*conn),
+    });
+}
+
+void RequestExecutor::SetupActiveConnection(ReqConn reqConn) {
+    int fd = reqConn.conn.SocketDescriptor();
+    activeConnections_.emplace(fd, std::move(reqConn));
     events_.push_back({});  // add additional space for reading this event in ProcessConnections
 
 #if defined(USE_EPOLL)
@@ -93,8 +100,10 @@ void RequestExecutor::Add(Request req) {
 }
 
 void RequestExecutor::ProcessConnections() {
-    assert(events_.size() == connections_.size());
-    if (connections_.size() == 0) {
+    ProcessPendingConnections();
+
+    assert(events_.size() == activeConnections_.size());
+    if (activeConnections_.size() == 0) {
         return;
     }
 
@@ -112,8 +121,8 @@ void RequestExecutor::ProcessConnections() {
         int fd = ev.data.fd;
 
         bool removed = false;
-        auto connIt = connections_.find(fd);
-        if (connIt != connections_.end()) {
+        auto connIt = activeConnections_.find(fd);
+        if (connIt != activeConnections_.end()) {
             bool writingBefore = connIt->second.conn.IsWriting();
 
             if ((ev.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0) {
@@ -168,8 +177,8 @@ void RequestExecutor::ProcessConnections() {
         auto fd = static_cast<int>(ev.ident);
 
         bool removed = false;
-        auto connIt = connections_.find(fd);
-        if (connIt != connections_.end()) {
+        auto connIt = activeConnections_.find(fd);
+        if (connIt != activeConnections_.end()) {
             bool writingBefore = connIt->second.conn.IsWriting();
 
             if ((ev.flags & EV_EOF) != 0) {
@@ -212,7 +221,32 @@ void RequestExecutor::ProcessConnections() {
         events_.pop_back();
     }
 
-    assert(events_.size() == connections_.size());
+    assert(events_.size() == activeConnections_.size());
+}
+
+void RequestExecutor::ProcessPendingConnections() {
+    if (pendingConnection_.empty()) {
+        return;
+    }
+
+    auto it = pendingConnection_.begin();
+    while (it != pendingConnection_.end()) {
+        assert(it->conn.IsConnecting());
+        it->conn.Connect();
+
+        if (it->conn.IsError()) {
+            // Connection failed in some way
+            failedConnections_.push_back(std::move(*it));
+            it = pendingConnection_.erase(it);
+        } else if (it->conn.IsActive()) {
+            // Now connected
+            SetupActiveConnection(std::move(*it));
+            it = pendingConnection_.erase(it);
+        } else {
+            // Still connecting, check back later
+            ++it;
+        }
+    }
 }
 
 void RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt) {
@@ -222,7 +256,7 @@ void RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator c
     // Attempt to process any data that may still be in the socket
     conn.Process(true);
 
-    if (conn.Ready()) {
+    if (conn.IsComplete()) {
         // Socket got EOF but we were able to read rest of response from socket
         readyResponses_.push_back({
             .req = std::move(req),
@@ -234,7 +268,7 @@ void RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator c
         failedConnections_.push_back(std::move(connIt->second));
     }
 
-    connections_.erase(connIt);
+    activeConnections_.erase(connIt);
 }
 
 bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator connIt) {
@@ -244,21 +278,26 @@ bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator
     // Process additional received data
     conn.Process(false);
 
-    if (conn.Ready()) {
+    if (conn.IsComplete()) {
         // Connection finished receiving HTTP response
         readyResponses_.push_back({
             .req = std::move(req),
             .res = conn.GetResponse(),
         });
-        connections_.erase(connIt);
+        activeConnections_.erase(connIt);
+        return true;
+    } else if (conn.IsError()) {
+        conn.Close();
+        failedConnections_.push_back(std::move(connIt->second));
+        activeConnections_.erase(connIt);
         return true;
     }
 
     return false;
 }
 
-size_t RequestExecutor::PendingConnections() const {
-    return connections_.size();
+size_t RequestExecutor::InFlightRequests() const {
+    return pendingConnection_.size() + activeConnections_.size();
 }
 
 std::vector<ReqRes>& RequestExecutor::ReadyResponses() {

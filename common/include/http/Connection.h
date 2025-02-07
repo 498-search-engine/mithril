@@ -4,6 +4,7 @@
 #include "http/Request.h"
 #include "http/Response.h"
 
+#include <netdb.h>
 #include <optional>
 #include <vector>
 #include <openssl/ssl.h>
@@ -26,27 +27,69 @@ public:
     Connection& operator=(Connection&&) noexcept;
 
     /**
+     * @brief Attempt to stablish the connection. Never blocks, but connection
+     * is not guaranteed to be established until IsActive() returns true.
+     */
+    void Connect();
+
+    /**
      * @brief Processes data from the connection.
      */
     void Process(bool gotEof);
 
     /**
+     * @brief Returns whether the connection is being established.
+     */
+    bool IsConnecting() const;
+
+    /**
+     * @brief Returns whether the connection is actively sending/receiveing data
+     * from the remote server.
+     */
+    bool IsActive() const;
+
+    /**
+     * @brief Returns whether the connection encountered an error and is no
+     * longer active.
+     */
+    bool IsError() const;
+
+    /**
      * @brief Returns whether the HTTP response is ready to be consumed.
      */
-    bool Ready() const;
+    bool IsComplete() const;
 
     /**
      * @brief Extract the ready response from the connection. The connection
-     * must be ready, as determined by Ready(). Subsequent calls are undefined.
+     * must be complete, as determined by IsComplete(). Subsequent calls are
+     * invalid.
      */
     Response GetResponse();
 
 private:
     friend class RequestExecutor;
 
-    enum class State : uint8_t { Sending, ReadingHeaders, ReadingChunks, ReadingBody, Complete, Consumed, Closed };
+    enum class State : uint8_t {
+        TCPConnecting,   // Establishing connection with connect syscall
+        SSLConnecting,   // Establishing SSL connection with SSL_connect
+        Sending,         // Writing HTTP request to network
+        ReadingHeaders,  // Reading HTTP response headers
+        ReadingChunks,   // Reading HTTP response body (chunked encoding)
+        ReadingBody,     // Reading HTTP response body (not chunked)
+        Complete,        // HTTP response complete
+        Closed,          // Socket closed
+        Error            // Request encountered error
+    };
 
-    Connection(int fd, const Request& req);
+    /**
+     * @brief Construct a new connection to be executed.
+     *
+     * @param fd Socket fd
+     * @param address Address to connect to. Connection takes ownership of this
+     * addrinfo and will call freeaddrinfo when appropriate.
+     * @param req Request to be executed on the connection
+     */
+    Connection(int fd, struct addrinfo* address, const Request& req);
 
     void InitializeSSL();
 
@@ -66,6 +109,7 @@ private:
     bool IsReading() const;
 
     int fd_;
+    struct addrinfo* address_;
     State state_;
 
     std::string rawRequest_;
@@ -74,7 +118,6 @@ private:
     size_t contentLength_;
     size_t headersLength_;
     size_t bodyBytesRead_;
-    bool isChunked_;
     size_t currentChunkSize_;
     size_t currentChunkBytesRead_;
 

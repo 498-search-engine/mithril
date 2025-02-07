@@ -4,6 +4,7 @@
 #include "http/Connection.h"
 #include "http/Request.h"
 
+#include <list>
 #include <unordered_map>
 #include <vector>
 
@@ -55,9 +56,9 @@ public:
     void ProcessConnections();
 
     /**
-     * @brief Returns the number of connections currently pending.
+     * @brief Returns the number of requests currently in-flight.
      */
-    size_t PendingConnections() const;
+    size_t InFlightRequests() const;
 
     /**
      * @brief Returns vector containing complete HTTP responses.
@@ -74,6 +75,9 @@ private:
     void HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt);
     bool HandleConnReady(std::unordered_map<int, ReqConn>::iterator connIt);
 
+    void ProcessPendingConnections();
+    void SetupActiveConnection(ReqConn reqConn);
+
 #if defined(USE_EPOLL)
     int epoll_;
     std::vector<struct epoll_event> events_;
@@ -82,8 +86,8 @@ private:
     std::vector<struct kevent> events_;
 #endif
 
-
-    std::unordered_map<int, ReqConn> connections_;
+    std::list<ReqConn> pendingConnection_;
+    std::unordered_map<int, ReqConn> activeConnections_;
     std::vector<ReqRes> readyResponses_;
     std::vector<ReqConn> failedConnections_;
 };

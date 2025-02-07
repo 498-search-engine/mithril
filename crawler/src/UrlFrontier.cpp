@@ -10,15 +10,17 @@ bool UrlFrontier::Empty() const {
     return urls_.empty();
 }
 
-void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out) {
+void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out, bool atLeastOne) {
     if (max == 0) {
         return;
     }
 
     std::unique_lock lock(mu_);
-    // TODO: should we always block for at least one URL to be ready? In theory
-    // we will always have at least one URL after crawling the first page...
-    cv_.wait(lock, [this]() { return !urls_.empty(); });
+    if (atLeastOne) {
+        cv_.wait(lock, [this]() { return !urls_.empty(); });
+    } else if (urls_.empty()) {
+        return;
+    }
 
     out.reserve(std::min(max, urls_.size()));
     while (!urls_.empty() && max != 0) {

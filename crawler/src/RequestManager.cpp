@@ -6,6 +6,7 @@
 #include "http/URL.h"
 
 #include <atomic>
+#include <cassert>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -21,10 +22,14 @@ void RequestManager::Run() {
 
     while (!stopped_.load(std::memory_order_acquire)) {
         // Get more URLs to execute, up to targetSize_ concurrently executing
-        if (requestExecutor_.PendingConnections() < targetConcurrentReqs_) {
-            size_t toAdd = targetConcurrentReqs_ - requestExecutor_.PendingConnections();
+        if (requestExecutor_.InFlightRequests() < targetConcurrentReqs_) {
+            // If we have no in-flight requests to process, wait for at least
+            // one URL to become available from the frontier.
+            bool wantAtLeastOne = requestExecutor_.InFlightRequests() == 0;
+
+            size_t toAdd = targetConcurrentReqs_ - requestExecutor_.InFlightRequests();
             urls.clear();
-            frontier_->GetURLs(toAdd, urls);
+            frontier_->GetURLs(toAdd, urls, wantAtLeastOne);
 
             for (const auto& url : urls) {
                 auto parsed = http::ParseURL(url);
@@ -35,6 +40,9 @@ void RequestManager::Run() {
                 requestExecutor_.Add(http::Request::GET(std::move(parsed)));
             }
         }
+
+        // We should have at least one request to execute
+        assert(requestExecutor_.InFlightRequests() > 0);
 
         // Process send/recv for connections
         requestExecutor_.ProcessConnections();
