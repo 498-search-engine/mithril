@@ -14,9 +14,9 @@ struct URL {
     std::string path;
 };
 
-constexpr URL ParseURL(std::string url) {
+constexpr URL ParseURL(std::string_view url) {
     URL u{};
-    u.url = std::move(url);
+    u.url = url;
     auto uv = std::string_view{u.url};
     size_t size = u.url.size();
 
