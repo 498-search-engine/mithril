@@ -1,0 +1,27 @@
+name: Check Changelog
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check_changelog:
+    name: Check Changelog Action
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if CHANGELOG.md is updated
+        id: check_changelog
+        run: |
+          echo "Checking if CHANGELOG.md is updated..."
+          git fetch origin main
+          CHANGELOG_UPDATED=$(git diff --name-only origin/main HEAD | grep -i "CHANGELOG.md")
+          if [ -z "$CHANGELOG_UPDATED" ]; then
+            echo "::warning::CHANGELOG.md is not updated. Consider adding a one-liner about your changes!"
+            exit 0  # Don't fail, just warn
+          else
+            echo "CHANGELOG.md is updated. Nice work!"
+          fi
