@@ -1,6 +1,9 @@
 #include "http/Response.h"
 
 #include <algorithm>
+#include <cctype>
+#include <string>
+#include <string_view>
 
 namespace mithril::http {
 

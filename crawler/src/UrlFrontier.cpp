@@ -1,6 +1,5 @@
 #include "UrlFrontier.h"
 
-
 namespace mithril {
 
 UrlFrontier::UrlFrontier() {}

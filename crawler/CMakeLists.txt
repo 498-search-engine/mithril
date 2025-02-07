@@ -13,4 +13,10 @@ add_executable(crawler
 
 target_include_directories(crawler PRIVATE src)
 
-target_link_libraries(crawler PRIVATE OpenSSL::SSL OpenSSL::Crypto common)
+target_link_libraries(crawler PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+
+    lib::core
+    common
+)

@@ -2,6 +2,7 @@
 #define COMMON_HTTP_RESPONSE_H
 
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace mithril::http {
