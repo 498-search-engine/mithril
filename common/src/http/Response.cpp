@@ -1,6 +1,34 @@
 #include "http/Response.h"
 
+#include <algorithm>
+#include <cctype>
+#include <string>
+#include <string_view>
+
 namespace mithril::http {
+
+namespace {
+
+bool InsensitiveCharEquals(char a, char b) {
+    return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+}
+
+bool InsensitiveStrEquals(std::string_view a, std::string_view b) {
+    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), InsensitiveCharEquals);
+}
+
+void PopulateHeaderFields(ResponseHeader& h) {
+    for (auto& header : h.headers) {
+        if (InsensitiveStrEquals(header.name, "Content-Type")) {
+            h.ContentType = &header;
+        }
+    }
+}
+
+}  // namespace
+
+Response::Response(std::vector<char> header, std::vector<char> body)
+    : header(std::move(header)), body(std::move(body)) {}
 
 std::optional<ResponseHeader> ParseResponseHeader(const Response& res) {
     ResponseHeader parsed;
@@ -65,6 +93,7 @@ std::optional<ResponseHeader> ParseResponseHeader(const Response& res) {
         headerStart = headerEnd + 2;
     }
 
+    PopulateHeaderFields(parsed);
     return parsed;
 }
 

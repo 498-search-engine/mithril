@@ -40,6 +40,21 @@ void Worker::ProcessDocument(http::Request req, http::Response res) {
         return;
     }
 
+    // TODO: better handling of the Content-Type header. mithril#6
+
+    // TODO: extract Content-Type logic out. We can terminate connections early
+    // after reading headers if we see an unsupported Content-Type.
+
+    if (header->ContentType == nullptr) {
+        std::cout << "no content-type header" << std::endl;
+        return;
+    }
+
+    if (!header->ContentType->value.starts_with("text/html")) {
+        std::cout << "unsupported content-type " << header->ContentType->value << std::endl;
+        return;
+    }
+
     html::Parser parser(res.body.data(), res.body.size());
 
     std::cout << req.Url().url << " ";

@@ -2,6 +2,7 @@
 #define COMMON_HTTP_RESPONSE_H
 
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace mithril::http {
@@ -26,6 +27,14 @@ enum StatusCode : uint16_t {
 struct Response {
     std::vector<char> header;
     std::vector<char> body;
+
+    Response(std::vector<char> header, std::vector<char> body);
+
+    Response(const Response&) = delete;
+    Response& operator=(const Response&) = delete;
+
+    Response(Response&&) = default;
+    Response& operator=(Response&&) = default;
 };
 
 struct Header {
@@ -36,6 +45,8 @@ struct Header {
 struct ResponseHeader {
     StatusCode status;
     std::vector<Header> headers;
+
+    Header* ContentType = nullptr;
 };
 
 std::optional<ResponseHeader> ParseResponseHeader(const Response& res);

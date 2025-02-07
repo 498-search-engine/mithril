@@ -10,6 +10,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <fcntl.h>
 #include <iostream>
 #include <iterator>
 #include <netdb.h>
@@ -43,9 +44,9 @@ size_t FindCaseInsensitive(const std::string& s, const char* q) {
     }
 }
 
-void PrintSSLConnectError(SSL* ssl, int status) {
+void PrintSSLError(SSL* ssl, int status) {
     int sslErr = SSL_get_error(ssl, status);
-    std::cerr << "SSL_connect failed with error code: " << sslErr << "\n";
+    std::cerr << "SSL operation failed with error code: " << sslErr << "\n";
 
     // Print the entire error queue
     unsigned long err;
@@ -54,6 +55,10 @@ void PrintSSLConnectError(SSL* ssl, int status) {
         ERR_error_string_n(err, errBuf, sizeof(errBuf));
         std::cerr << "SSL Error: " << errBuf << "\n";
     }
+}
+
+void PrintSSLConnectError(SSL* ssl, int status) {
+    PrintSSLError(ssl, status);
 
     // Print verification errors if any
     long verifyResult = SSL_get_verify_result(ssl);
@@ -103,27 +108,23 @@ std::optional<Connection> Connection::NewWithRequest(const Request& req) {
         return std::nullopt;
     }
 
-    status = connect(fd, address->ai_addr, address->ai_addrlen);
-    if (status == -1) {
-        freeaddrinfo(address);
-        // TODO: better logging
-        std::cerr << "failed to connect to " << req.Url().host << ":" << port << std::endl;
-        return std::nullopt;
+    if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
+        std::cerr << "failed to put socket into non-blocking mode" << std::endl;
+        // continue anyway
     }
 
-    freeaddrinfo(address);
-    return Connection{fd, req};
+    return Connection{fd, address, req};
 }
 
-Connection::Connection(int fd, const Request& req)
+Connection::Connection(int fd, struct addrinfo* address, const Request& req)
     : fd_(fd),
-      state_(State::Sending),
+      address_(address),
+      state_(State::TCPConnecting),
       rawRequest_(BuildRawRequestString(req)),
       requestBytesSent_(0),
       contentLength_(0),
       headersLength_(0),
       bodyBytesRead_(0),
-      isChunked_(false),
       currentChunkSize_(0),
       currentChunkBytesRead_(0),
       ssl_(nullptr),
@@ -140,13 +141,13 @@ Connection::~Connection() {
 
 Connection::Connection(Connection&& other) noexcept
     : fd_(other.fd_),
+      address_(other.address_),
       state_(other.state_),
       rawRequest_(std::move(other.rawRequest_)),
       requestBytesSent_(other.requestBytesSent_),
       contentLength_(other.contentLength_),
       headersLength_(other.headersLength_),
       bodyBytesRead_(other.bodyBytesRead_),
-      isChunked_(other.isChunked_),
       currentChunkSize_(other.currentChunkSize_),
       currentChunkBytesRead_(other.currentChunkBytesRead_),
       buffer_(std::move(other.buffer_)),
@@ -155,7 +156,8 @@ Connection::Connection(Connection&& other) noexcept
       isSecure_(other.isSecure_),
       sni_(std::move(other.sni_)) {
     other.fd_ = -1;
-    other.state_ = State::Consumed;
+    other.address_ = nullptr;
+    other.state_ = State::Closed;
     other.ssl_ = nullptr;
 }
 
@@ -163,13 +165,13 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     Close();
 
     fd_ = other.fd_;
+    address_ = other.address_;
     state_ = other.state_;
     rawRequest_ = std::move(other.rawRequest_);
     requestBytesSent_ = other.requestBytesSent_;
     contentLength_ = other.contentLength_;
     headersLength_ = other.headersLength_;
     bodyBytesRead_ = other.bodyBytesRead_;
-    isChunked_ = other.isChunked_;
     currentChunkSize_ = other.currentChunkSize_;
     currentChunkBytesRead_ = other.currentChunkBytesRead_;
     buffer_ = std::move(other.buffer_);
@@ -179,7 +181,8 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     sni_ = std::move(other.sni_);
 
     other.fd_ = -1;
-    other.state_ = State::Consumed;
+    other.address_ = nullptr;
+    other.state_ = State::Closed;
     other.ssl_ = nullptr;
 
     return *this;
@@ -189,7 +192,7 @@ int Connection::SocketDescriptor() const {
     return fd_;
 }
 
-bool Connection::Ready() const {
+bool Connection::IsComplete() const {
     return state_ == State::Complete;
 }
 
@@ -205,6 +208,8 @@ void Connection::InitializeSSL() {
 
     int status = SSL_set_fd(ssl_, fd_);
     if (status != 1) {
+        PrintSSLError(ssl_, status);
+
         SSL_free(ssl_);
         ssl_ = nullptr;
         // TODO: error handling strategy
@@ -213,14 +218,6 @@ void Connection::InitializeSSL() {
 
     // Set Server Name Indication (SNI)
     SSL_set_tlsext_host_name(ssl_, sni_.c_str());
-
-    status = SSL_connect(ssl_);
-    if (status != 1) {
-        PrintSSLConnectError(ssl_, status);
-        SSL_free(ssl_);
-        ssl_ = nullptr;
-        throw std::runtime_error("SSL handshake failed");
-    }
 }
 
 void Connection::Close() {
@@ -228,6 +225,11 @@ void Connection::Close() {
         SSL_shutdown(ssl_);
         SSL_free(ssl_);
         ssl_ = nullptr;
+    }
+    if (address_ != nullptr) {
+        // TODO(dsage): only do this if we manage the lifetime of address_
+        freeaddrinfo(address_);
+        address_ = nullptr;
     }
     if (fd_ != -1) {
         close(fd_);
@@ -237,12 +239,16 @@ void Connection::Close() {
 
 Response Connection::GetResponse() {
     assert(state_ == State::Complete);
-    state_ = State::Consumed;
+
+    // Close socket and shutdown connection
+    state_ = State::Closed;
+    Close();
+
     auto header = std::vector<char>{buffer_.begin(), buffer_.begin() + headersLength_};
     buffer_.clear();
     return Response{
-        .header = std::move(header),
-        .body = std::move(body_),
+        std::move(header),
+        std::move(body_),
     };
 }
 
@@ -273,14 +279,62 @@ bool Connection::ReadFromSocket() {
                 return false;
             }
             // TODO: error handling strategy
-            throw std::runtime_error("Error reading from socket");
+            if (isSecure_) {
+                PrintSSLError(ssl_, bytesRead);
+            } else {
+                perror("mithril::http::Connection::ReadFromSocket(): read bytes");
+            }
+            // TODO: error handling strategy
+            state_ = State::Error;
+            return false;
         }
     } while (bytesRead > 0);
     return false;
 }
 
+void Connection::Connect() {
+    if (state_ == State::TCPConnecting) {
+        int status = connect(fd_, address_->ai_addr, address_->ai_addrlen);
+        if (status == 0) {
+            state_ = isSecure_ ? State::SSLConnecting : State::Sending;
+        } else if (status < 0) {
+            if (errno == EINPROGRESS || errno == EALREADY) {
+                // Establishing connection in progress
+                return;
+            } else if (errno == EISCONN) {
+                // Already connected
+                state_ = isSecure_ ? State::SSLConnecting : State::Sending;
+            } else {
+                // Some other error occurred
+                perror("mithril::http::Connection::Connect() connect");
+                state_ = State::Error;
+                return;
+            }
+        }
+    }
+
+    if (state_ == State::SSLConnecting) {
+        int status = SSL_connect(ssl_);
+        if (status == 1) {
+            // Transition into sending request state
+            state_ = State::Sending;
+        } else if (status < 0) {
+            int error = SSL_get_error(ssl_, status);
+            if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
+                // Establishing SSL connection in progress
+                return;
+            }
+
+            // Actual SSL error occurred
+            PrintSSLConnectError(ssl_, status);
+            state_ = State::Error;
+            return;
+        }
+    }
+}
+
 void Connection::Process(bool gotEof) {
-    if (state_ == State::Complete || state_ == State::Consumed || state_ == State::Closed) {
+    if (state_ == State::Complete || state_ == State::Closed || state_ == State::Error) {
         return;
     }
 
@@ -297,9 +351,9 @@ void Connection::Process(bool gotEof) {
     if (gotEof) {
         if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
             (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
-            state_ = State::Closed;
+            state_ = State::Error;
             // TODO: error handling strategy
-            throw std::runtime_error("Connection closed before receiving complete response");
+            std::cerr << "conn: closed before receiveing complete response" << std::endl;
         } else {
             state_ = State::Complete;
         }
@@ -365,6 +419,18 @@ bool Connection::ProcessReceive() {
     return gotEof;
 }
 
+bool Connection::IsConnecting() const {
+    return state_ == State::TCPConnecting || state_ == State::SSLConnecting;
+}
+
+bool Connection::IsActive() const {
+    return IsWriting() || IsReading();
+}
+
+bool Connection::IsError() const {
+    return state_ == State::Error;
+}
+
 bool Connection::IsSecure() const {
     return isSecure_;
 }
@@ -391,7 +457,6 @@ void Connection::ProcessHeaders() {
 
     // Check for chunked encoding
     if (FindCaseInsensitive(headers, TransferEncodingChunkedHeader) != std::string::npos) {
-        isChunked_ = true;
         state_ = State::ReadingChunks;
         ProcessChunks();
         return;
@@ -403,6 +468,7 @@ void Connection::ProcessHeaders() {
         contentLengthPos += strlen(ContentLengthHeader);
         auto lengthEnd = headers.find(CRLF, contentLengthPos);
         contentLength_ = std::stoul(headers.substr(contentLengthPos, lengthEnd - contentLengthPos));
+        buffer_.reserve(buffer_.size() + contentLength_);
         body_.reserve(contentLength_);
     }
 

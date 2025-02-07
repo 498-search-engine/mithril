@@ -7,7 +7,6 @@
 #include <mutex>
 #include <queue>
 #include <string>
-#include <unordered_set>
 #include <core/dary_heap.h>
 
 namespace mithril {
@@ -23,8 +22,9 @@ public:
      *
      * @param max Max URLs to get
      * @param out Output vector to put URLs into
+     * @param atLeastOne Wait for at least one URL
      */
-    void GetURLs(size_t max, std::vector<std::string>& out);
+    void GetURLs(size_t max, std::vector<std::string>& out, bool atLeastOne = false);
 
     /**
      * @brief Puts a url onto the frontier (if not already visited).
