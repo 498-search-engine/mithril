@@ -31,6 +31,14 @@ const char* EndingOfTag(const char* start, const char* end) {
     return start < end ? start : nullptr;
 }
 
+const char* AfterEndingOfTag(const char* start, const char* end) {
+    const auto* result = EndingOfTag(start, end);
+    if (result != nullptr) {
+        return result + 1;
+    }
+    return nullptr;
+}
+
 bool CompareTagName(const char* start1, const char* end1, const char* start2, const char* end2) {
     if (!start1 || !end1 || !start2 || !end2)
         return false;
@@ -115,11 +123,11 @@ const char* HandleTagAction(DesiredAction action,
 
     switch (action) {
     case DesiredAction::Discard:
-        return EndingOfTag(nameEnd, bufferEnd) + 1;
+        return AfterEndingOfTag(nameEnd, bufferEnd);
 
     case DesiredAction::Title:
         state.inTitle = !endTag;
-        return EndingOfTag(nameEnd, bufferEnd) + 1;
+        return AfterEndingOfTag(nameEnd, bufferEnd);
 
     case DesiredAction::Comment:
         if (endTag)
@@ -132,11 +140,11 @@ const char* HandleTagAction(DesiredAction action,
 
     case DesiredAction::DiscardSection:
         if (endTag)
-            return EndingOfTag(nameEnd, bufferEnd) + 1;
+            return AfterEndingOfTag(nameEnd, bufferEnd);
         state.discardStart = nameStart;
         state.discardEnd = nameEnd;
         state.discardSection = true;
-        return EndingOfTag(nameEnd, bufferEnd) + 1;
+        return AfterEndingOfTag(nameEnd, bufferEnd);
 
     case DesiredAction::Anchor:
         {
@@ -146,7 +154,7 @@ const char* HandleTagAction(DesiredAction action,
                     currentLink = Link("");
                     state.inAnchor = false;
                 }
-                return EndingOfTag(nameEnd, bufferEnd) + 1;
+                return AfterEndingOfTag(nameEnd, bufferEnd);
             }
 
             std::string href;
@@ -161,35 +169,35 @@ const char* HandleTagAction(DesiredAction action,
                 currentLink = Link(std::move(href));
                 state.inAnchor = true;
             }
-            return EndingOfTag(attrEnd, bufferEnd) + 1;
+            return AfterEndingOfTag(attrEnd, bufferEnd);
         }
 
     case DesiredAction::Base:
         {
             if (endTag)
-                return EndingOfTag(nameEnd, bufferEnd) + 1;
+                return AfterEndingOfTag(nameEnd, bufferEnd);
             if (!state.baseDone) {
                 const char* attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "href=", base);
                 if (!attrEnd)
                     return nullptr;
                 state.baseDone = true;
-                return EndingOfTag(attrEnd, bufferEnd) + 1;
+                return AfterEndingOfTag(attrEnd, bufferEnd);
             }
-            return EndingOfTag(nameEnd, bufferEnd) + 1;
+            return AfterEndingOfTag(nameEnd, bufferEnd);
         }
 
     case DesiredAction::Embed:
         {
             if (endTag)
-                return EndingOfTag(nameEnd, bufferEnd) + 1;
+                return AfterEndingOfTag(nameEnd, bufferEnd);
             std::string src;
             const char* attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "src=", src);
             if (!attrEnd)
                 return nullptr;
             if (!src.empty()) {
-                links.emplace_back(Link(std::move(src)));
+                links.emplace_back(std::move(src));
             }
-            return EndingOfTag(attrEnd, bufferEnd) + 1;
+            return AfterEndingOfTag(attrEnd, bufferEnd);
         }
 
     default:  // OrdinaryText
@@ -256,9 +264,13 @@ Parser::Parser(const char* buffer, size_t length) {
                 }
                 if (discardStartCpy == state.discardEnd && nameStartCpy == nameEnd) {
                     state.discardSection = false;
-                    buffer = EndingOfTag(nameEnd, bufferEnd);
-                    if (buffer)
-                        buffer++;
+                    const auto* end = EndingOfTag(nameEnd, bufferEnd);
+                    if (end) {
+                        buffer = end;
+                    }
+                    // TODO: unsure if this is correct, but probably prevents us
+                    // getting stuck when EndingOfTag returns nullptr?
+                    buffer++;
                 } else {
                     buffer++;
                     while (buffer < bufferEnd && *buffer != '<')
