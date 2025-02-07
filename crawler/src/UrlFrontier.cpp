@@ -1,6 +1,5 @@
 #include "UrlFrontier.h"
 
-#include <optional>
 
 namespace mithril {
 
@@ -11,44 +10,50 @@ bool UrlFrontier::Empty() const {
     return urls_.empty();
 }
 
-std::optional<std::string> UrlFrontier::GetURL() {
-    std::unique_lock lock(mu_);
-
-    if (urls_.empty()) {
-        return std::nullopt;
-    }
-
-    auto u = std::move(urls_.front());
-    urls_.pop();
-    return u;
-}
-
-std::vector<std::string> UrlFrontier::GetURLs(size_t max) {
+void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out) {
     if (max == 0) {
-        return {};
+        return;
     }
 
     std::unique_lock lock(mu_);
+    // TODO: should we always block for at least one URL to be ready? In theory
+    // we will always have at least one URL after crawling the first page...
     cv_.wait(lock, [this]() { return !urls_.empty(); });
 
-    std::vector<std::string> res;
-    res.reserve(std::min(max, urls_.size()));
+    out.reserve(std::min(max, urls_.size()));
     while (!urls_.empty() && max != 0) {
-        res.push_back(std::move(urls_.front()));
+        out.push_back(std::move(urls_.front()));
         urls_.pop();
         --max;
     }
-    return res;
 }
 
-void UrlFrontier::PutURL(std::string u) {
+int UrlFrontier::PutURL(std::string u) {
     std::unique_lock lock(mu_);
-    if (seen_.contains(u)) {
-        return;
+    if (seen_.Contains(u)) {
+        return 0;
     }
-    seen_.insert(u);
+    seen_.Put(u);
     urls_.push(std::move(u));
     cv_.notify_one();
+    return 1;
+}
+
+int UrlFrontier::PutURLs(std::vector<std::string> urls) {
+    std::unique_lock lock(mu_);
+
+    int i = 0;
+    for (auto& u : urls) {
+        if (seen_.Contains(u)) {
+            continue;
+        }
+        seen_.Put(u);
+        urls_.push(std::move(u));
+        ++i;
+    }
+
+    cv_.notify_all();
+    return i;
 }
 
 }  // namespace mithril

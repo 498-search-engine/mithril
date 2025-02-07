@@ -9,6 +9,7 @@
 #include "http/Response.h"
 
 #include <iostream>
+#include <vector>
 
 namespace mithril {
 
@@ -47,18 +48,18 @@ void Worker::ProcessDocument(http::Request req, http::Response res) {
     }
     std::cout << std::endl << std::endl;
 
-    size_t pushed = 0;
+    std::vector<std::string> absoluteURLs;
     for (auto& l : parser.links) {
         auto absoluteLink = html::MakeAbsoluteLink(req.Url(), parser.base, l.URL);
         if (absoluteLink) {
-            std::cout << l.URL << " -> " << *absoluteLink << std::endl;
-            // TODO: efficiency with PutURL
-            frontier_->PutURL(std::move(*absoluteLink));
-            ++pushed;
+            absoluteURLs.push_back(std::move(*absoluteLink));
         }
     }
 
-    // std::cout << "pushed " << pushed << " links to frontier" << std::endl;
+    if (!absoluteURLs.empty()) {
+        auto n = frontier_->PutURLs(std::move(absoluteURLs));
+        std::cout << "pushed " << n << " links to frontier" << std::endl;
+    }
 }
 
 }  // namespace mithril
