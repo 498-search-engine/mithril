@@ -5,7 +5,6 @@
 
 #include "html/Tags.h"
 
-#include <cassert>
 #include <cstring>
 
 namespace mithril::html {
