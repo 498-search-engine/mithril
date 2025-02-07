@@ -7,6 +7,7 @@
 #include <queue>
 #include <string>
 #include <unordered_set>
+#include <core/dary_heap.h>
 
 namespace mithril {
 
@@ -26,6 +27,7 @@ private:
 
     std::queue<std::string> urls_;
     std::unordered_set<std::string> seen_;
+    core::dary_heap<std::string, int> test_heap; 
 };
 
 }  // namespace mithril

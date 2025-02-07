@@ -11,3 +11,5 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_subdirectory(lib)
 add_subdirectory(common)
 add_subdirectory(crawler)
+
+target_link_libraries(crawler PRIVATE lib::core)
