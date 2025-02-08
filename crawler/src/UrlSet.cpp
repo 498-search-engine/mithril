@@ -5,11 +5,15 @@
 namespace mithril {
 
 void UrlSet::Put(const std::string& url) {
-    set_.insert(url);
+    auto parsed = http::ParseURL(url);
+    auto normalized = http::NormalizeURL(parsed);
+    set_.insert(std::move(normalized));
 }
 
 bool UrlSet::Contains(const std::string& url) const {
-    return set_.contains(url);
+    auto parsed = http::ParseURL(url);
+    auto normalized = http::NormalizeURL(parsed);
+    return set_.contains(normalized);
 }
 
 }  // namespace mithril
