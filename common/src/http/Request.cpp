@@ -7,7 +7,7 @@ namespace mithril::http {
 namespace {
 
 constexpr const char* CRLF = "\r\n";
-constexpr const char* UserAgentHeader = "User-Agent: crawler-test/0.1\r\n";
+constexpr const char* UserAgentHeader = "User-Agent: mithril-crawler/1.0 (mithril498@umich.edu)\r\n";
 constexpr const char* AcceptAllHeader = "Accept: */*\r\n";
 constexpr const char* AcceptEncodingHeader = "Accept-Encoding: identity\r\n";
 constexpr const char* ConnectionCloseHeader = "Connection: close\r\n";
