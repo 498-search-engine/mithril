@@ -17,6 +17,7 @@ public:
 
 private:
     void ProcessDocument(http::Request req, http::Response res);
+    void ProcessHTMLDocument(http::Request req, http::Response res);
 
     DocumentQueue* docQueue_;
     UrlFrontier* frontier_;

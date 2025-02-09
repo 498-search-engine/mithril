@@ -28,35 +28,17 @@ void Worker::Run() {
     }
 }
 
-void Worker::ProcessDocument(http::Request req, http::Response res) {
-    auto header = http::ParseResponseHeader(res);
-    if (!header) {
-        std::cout << "failed to parse doc " << req.Url().url << std::endl;
-        return;
-    }
-
-    if (header->status != http::StatusCode::OK) {
-        std::cout << "unhandled status " << header->status << std::endl;
-        return;
-    }
-
-    // TODO: better handling of the Content-Type header. mithril#6
-
-    // TODO: extract Content-Type logic out. We can terminate connections early
-    // after reading headers if we see an unsupported Content-Type.
-
-    if (header->ContentType == nullptr) {
-        std::cout << "no content-type header" << std::endl;
-        return;
-    }
-
-    if (!header->ContentType->value.starts_with("text/html")) {
-        std::cout << "unsupported content-type " << header->ContentType->value << std::endl;
-        return;
-    }
-
+/**
+ * Process an HTML document that's already been validated.
+ * Preconditions:
+ * - Response has valid header
+ * - Status code is 200 OK
+ * - Content-Type is text/html
+ */
+void Worker::ProcessHTMLDocument(http::Request req, http::Response res) {
     html::Parser parser(res.body.data(), res.body.size());
 
+    // TODO: do better logging, tracking
     std::cout << req.Url().url << " ";
     for (auto& w : parser.titleWords) {
         std::cout << w << " ";
@@ -74,6 +56,62 @@ void Worker::ProcessDocument(http::Request req, http::Response res) {
     if (!absoluteURLs.empty()) {
         auto n = frontier_->PutURLs(std::move(absoluteURLs));
         std::cout << "pushed " << n << " links to frontier" << std::endl;
+    }
+}
+
+void Worker::ProcessDocument(http::Request req, http::Response res) {
+    auto header = http::ParseResponseHeader(res);
+    if (!header) {
+        std::cout << "failed to parse doc " << req.Url().url << std::endl;
+        return;
+    }
+
+    switch (header->status) {
+        case http::StatusCode::OK:
+            if (!header->ContentType) {
+                std::cout << "no content-type header" << std::endl;
+                return;
+            }
+            if (header->ContentType->value.starts_with("text/html")) {
+                ProcessHTMLDocument(std::move(req), std::move(res));
+            } else {
+                std::cout << "unsupported content-type: " << header->ContentType->value << std::endl;
+            }
+            break;
+
+        case http::StatusCode::MovedPermanently:
+        case http::StatusCode::Found:
+        case http::StatusCode::TemporaryRedirect:
+        case http::StatusCode::PermanentRedirect: {
+            if (!header->Location) {
+                std::cout << "redirect without Location header: " 
+                         << req.Url().url << std::endl;
+                return;
+            }
+            
+            std::string location{header->Location->value};
+            auto new_url = html::MakeAbsoluteLink(
+                req.Url(),
+                "",  // No base tag for redirects
+                location
+            );
+            
+            if (!new_url) {
+                std::cout << "invalid redirect Location: '" << location << "' from " << req.Url().url << std::endl;
+                return;
+            }
+
+            #ifndef NDEBUG
+            std::cout << "redirect " << header->status << ": " << req.Url().url << " -> " << *new_url << std::endl;
+            #endif
+
+            frontier_->PutURL(std::move(*new_url));
+            break;
+        }
+
+        default:
+            std::cout << "unhandled status " << header->status << std::endl;
+            break;
     }
 }
 

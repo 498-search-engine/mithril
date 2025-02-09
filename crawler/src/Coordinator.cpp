@@ -13,26 +13,27 @@ namespace mithril {
 constexpr size_t NumWorkers = 2;
 constexpr size_t ConcurrentRequests = 10;
 
-Coordinator::Coordinator() {
+Coordinator::Coordinator(const CrawlerConfig& config)
+    : config_(config) {
     frontier_ = std::make_unique<UrlFrontier>();
     docQueue_ = std::make_unique<DocumentQueue>();
-    requestManager_ = std::make_unique<RequestManager>(ConcurrentRequests, frontier_.get(), docQueue_.get());
+    requestManager_ = std::make_unique<RequestManager>(
+        config_.concurrent_requests,
+        frontier_.get(),
+        docQueue_.get()
+    );
 }
 
 void Coordinator::Run() {
-    // frontier_->PutURL("https://en.wikipedia.org/wiki/Kennett_Square,_Pennsylvania");
-    // frontier_->PutURL("https://en.wikipedia.org/wiki/Pennsylvania");
-    // frontier_->PutURL("https://en.wikipedia.org/wiki/California");
-    // frontier_->PutURL("https://en.wikipedia.org/wiki/Florida");
-    // frontier_->PutURL("https://en.wikipedia.org/wiki/Maine");
-    // frontier_->PutURL("https://en.wikipedia.org/wiki/Texas");
-    // frontier_->PutURL("https://en.wikipedia.org/wiki/Ohio");
-    // frontier_->PutURL("https://en.wikipedia.org/wiki/Nebraska");
-    frontier_->PutURL("https://dnsge.org");
-
+    // Add all seed URLs
+    for (const auto& url : config_.seed_urls) {
+        frontier_->PutURL(url);
+    }
+    
     std::vector<std::thread> workerThreads;
-    workerThreads.reserve(NumWorkers);
-    for (size_t i = 0; i < NumWorkers; ++i) {
+    workerThreads.reserve(config_.num_workers);
+    
+    for (size_t i = 0; i < config_.num_workers; ++i) {
         workerThreads.emplace_back([docQueue = docQueue_.get(), frontier = frontier_.get()] {
             Worker w(docQueue, frontier);
             w.Run();
@@ -48,5 +49,4 @@ void Coordinator::Run() {
         t.join();
     }
 }
-
 }  // namespace mithril

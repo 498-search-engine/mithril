@@ -7,7 +7,7 @@ add_executable(crawler
     src/UrlFrontier.cpp
     src/UrlSet.cpp
     src/Worker.cpp
-
+    src/config.cpp
     src/main.cpp
 )
 

@@ -47,6 +47,7 @@ struct ResponseHeader {
     std::vector<Header> headers;
 
     Header* ContentType = nullptr;
+    Header* Location = nullptr;
 };
 
 std::optional<ResponseHeader> ParseResponseHeader(const Response& res);

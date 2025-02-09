@@ -12,8 +12,8 @@ namespace mithril::http {
 
 struct URL {
     std::string url;
-    std::string service;  
-    std::string host;    
+    std::string service;
+    std::string host; 
     std::string port;
     std::string path;  
     bool valid = false;

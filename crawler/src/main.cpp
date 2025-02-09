@@ -6,8 +6,18 @@
 int main(int argc, char* argv[]) {
     mithril::http::InitializeSSL();
 
-    mithril::Coordinator c;
-    c.Run();
+    try {
+        auto config = mithril::CrawlerConfig::FromFile(
+            argc > 1 ? argv[1] : "crawler.conf"
+        );
+        
+        mithril::Coordinator c(config);
+        c.Run();
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
 
     mithril::http::DeinitializeSSL();
 
