@@ -32,12 +32,11 @@ void RequestManager::Run() {
             frontier_->GetURLs(toAdd, urls, wantAtLeastOne);
 
             for (const auto& url : urls) {
-                auto parsed = http::ParseURL(url);
-                if (parsed.host.empty()) {
+                if (auto parsed = http::ParseURL(url)) {
+                    requestExecutor_.Add(http::Request::GET(std::move(*parsed)));
+                } else {
                     std::cerr << "bad url: " << url << std::endl;
-                    continue;
                 }
-                requestExecutor_.Add(http::Request::GET(std::move(parsed)));
             }
         }
 

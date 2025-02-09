@@ -39,15 +39,6 @@ const char* AfterEndingOfTag(const char* start, const char* end) {
     return nullptr;
 }
 
-bool CompareTagName(const char* start1, const char* end1, const char* start2, const char* end2) {
-    if (!start1 || !end1 || !start2 || !end2)
-        return false;
-    size_t len1 = end1 - start1;
-    size_t len2 = end2 - start2;
-    return len1 == len2 && std::strncmp(start1, start2, len1) == 0;
-}
-
-
 struct ParserState {
     bool inTitle = false;
     bool inAnchor = false;

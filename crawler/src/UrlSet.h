@@ -4,6 +4,8 @@
 #include <string>
 #include <unordered_set>
 
+#include "http/URL.h"
+
 namespace mithril {
 
 /**

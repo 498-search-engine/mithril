@@ -21,6 +21,8 @@ void PopulateHeaderFields(ResponseHeader& h) {
     for (auto& header : h.headers) {
         if (InsensitiveStrEquals(header.name, "Content-Type")) {
             h.ContentType = &header;
+        } else if (InsensitiveStrEquals(header.name, "Location")) {
+            h.Location = &header;
         }
     }
 }

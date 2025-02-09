@@ -4,6 +4,22 @@ namespace mithril {
 
 UrlFrontier::UrlFrontier() {}
 
+namespace {
+    constexpr size_t MAX_URL_LENGTH = 2048;
+    constexpr size_t MIN_URL_LENGTH = 10;
+    
+    bool HasInvalidChars(std::string_view str) {
+        return std::any_of(str.begin(), str.end(), 
+            [](unsigned char c) {
+                return c <= 0x20 || c > 0x7E;
+            });
+    }
+    
+    bool IsValidUrl(std::string_view url) {
+        return url.length() >= MIN_URL_LENGTH &&  url.length() <= MAX_URL_LENGTH &&!HasInvalidChars(url);
+    }
+}  //  namespace
+
 bool UrlFrontier::Empty() const {
     std::unique_lock lock(mu_);
     return urls_.empty();
@@ -31,7 +47,7 @@ void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out, bool atLeas
 
 int UrlFrontier::PutURL(std::string u) {
     std::unique_lock lock(mu_);
-    if (seen_.Contains(u)) {
+    if (!IsValidUrl(u) || seen_.Contains(u)) {
         return 0;
     }
     seen_.Put(u);
@@ -45,7 +61,7 @@ int UrlFrontier::PutURLs(std::vector<std::string> urls) {
 
     int i = 0;
     for (auto& u : urls) {
-        if (seen_.Contains(u)) {
+        if (!IsValidUrl(u) || seen_.Contains(u)) {
             continue;
         }
         seen_.Put(u);

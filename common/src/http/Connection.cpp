@@ -90,7 +90,7 @@ std::optional<Connection> Connection::NewWithRequest(const Request& req) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    bool isSecure = req.Url().service == "https";
+    bool isSecure = req.Url().scheme == "https";
     const char* port = req.Url().port.empty() ? (isSecure ? "443" : "80") : req.Url().port.c_str();
 
     int status = getaddrinfo(req.Url().host.c_str(), port, &hints, &address);
@@ -128,7 +128,7 @@ Connection::Connection(int fd, struct addrinfo* address, const Request& req)
       currentChunkSize_(0),
       currentChunkBytesRead_(0),
       ssl_(nullptr),
-      isSecure_(req.Url().service == "https"),
+      isSecure_(req.Url().scheme == "https"),
       sni_(req.Url().host) {
     if (isSecure_) {
         InitializeSSL();
