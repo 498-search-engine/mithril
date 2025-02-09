@@ -36,6 +36,7 @@ void Worker::Run() {
  * - Content-Type is text/html
  */
 void Worker::ProcessHTMLDocument(http::Request req, http::Response res) {
+    // TODO: early return if non latin script page
     html::Parser parser(res.body.data(), res.body.size());
 
     // TODO: do better logging, tracking
@@ -100,10 +101,6 @@ void Worker::ProcessDocument(http::Request req, http::Response res) {
                 std::cout << "invalid redirect Location: '" << location << "' from " << req.Url().url << std::endl;
                 return;
             }
-
-            #ifndef NDEBUG
-            std::cout << "redirect " << header->status << ": " << req.Url().url << " -> " << *new_url << std::endl;
-            #endif
 
             frontier_->PutURL(std::move(*new_url));
             break;

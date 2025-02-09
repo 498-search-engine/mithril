@@ -1,4 +1,4 @@
-#include "config.h"
+#include "Config.h"
 
 #include <fstream>
 #include <stdexcept>
@@ -14,7 +14,7 @@ std::string trim(std::string_view str) {
 }
 }
 
-CrawlerConfig CrawlerConfig::FromFile(const std::string& path) {
+CrawlerConfig LoadConfigFromFile(const std::string& path) {
     CrawlerConfig config;
     std::ifstream file(path);
     if (!file) {

@@ -95,13 +95,13 @@ MakeAbsoluteLink(const http::URL& currentUrl, const std::string& base, const std
 
     // Handle protocol-relative URLs
     if (href.substr(0, 2) == "//") {
-        return currentUrl.service + ":" + href;
+        return currentUrl.scheme + ":" + href;
     }
 
     // Handle root-relative URLs
     if (href[0] == '/') {
         std::string portPart = currentUrl.port.empty() ? "" : ":" + currentUrl.port;
-        return currentUrl.service + "://" + currentUrl.host + portPart + ResolvePath(href);
+        return currentUrl.scheme + "://" + currentUrl.host + portPart + ResolvePath(href);
     }
 
     // Handle relative URLs
@@ -133,7 +133,7 @@ MakeAbsoluteLink(const http::URL& currentUrl, const std::string& base, const std
     // Combine base path with href and resolve
     auto resolvedPath = ResolvePath(basePath + href);
     auto portPart = currentUrl.port.empty() ? "" : ":" + currentUrl.port;
-    return currentUrl.service + "://" + currentUrl.host + portPart + resolvedPath;
+    return currentUrl.scheme + "://" + currentUrl.host + portPart + resolvedPath;
 }
 
 }  // namespace mithril::html

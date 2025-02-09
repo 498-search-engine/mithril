@@ -4,7 +4,7 @@
 #include "DocumentQueue.h"
 #include "RequestManager.h"
 #include "UrlFrontier.h"
-#include "config.h"
+#include "Config.h"
 
 #include <memory>
 
@@ -14,7 +14,7 @@ class Coordinator {
 public:
     explicit Coordinator(const CrawlerConfig& config);
     void Run();
-    
+
 private:
     const CrawlerConfig config_;
     std::unique_ptr<UrlFrontier> frontier_;

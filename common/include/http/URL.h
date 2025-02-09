@@ -7,18 +7,16 @@
 #include <string_view>
 #include <cassert>
 #include <iostream>
+#include <optional>
 
 namespace mithril::http {
 
 struct URL {
     std::string url;
-    std::string service;
+    std::string scheme;
     std::string host; 
     std::string port;
     std::string path;  
-    bool valid = false;
-    
-    explicit operator bool() const { return valid; }
 };
 
 // helpers for host validation
@@ -68,121 +66,135 @@ namespace {
     }
 }
 
-inline URL ParseURL(std::string_view url_view) {
+inline std::optional<URL> ParseURL(std::string_view url_view) {
     URL u;
     u.url = url_view;
     std::string_view uv = u.url;
     const size_t size = uv.size();
     
-    try {
-        // --- Scheme validation ---
-        size_t scheme_end = uv.find(':');
-        if(scheme_end == std::string_view::npos || scheme_end == 0) {
-            throw std::invalid_argument("Missing or invalid scheme");
-        }
-        
-        u.service = uv.substr(0, scheme_end);
-        std::transform(u.service.begin(), u.service.end(), u.service.begin(),
-            [](unsigned char c) { return std::tolower(c); });
-            
-        if(u.service != "http" && u.service != "https") {
-            throw std::invalid_argument("Unsupported scheme: " + u.service);
-        }
-
-        // --- Authority validation ---
-        size_t i = scheme_end + 1;
-        size_t authority_start = i;
-        
-        // Require // for net-paths (RFC 3986 section 3)
-        if(i+1 < size && uv[i] == '/' && uv[i+1] == '/') {
-            i += 2;
-            authority_start = i;
-        } else if(u.service == "http" || u.service == "https") {
-            throw std::invalid_argument("Missing authority component");
-        }
-
-        // --- Host validation ---
-        size_t host_end = authority_start;
-        while(host_end < size && uv[host_end] != ':' && uv[host_end] != '/' &&
-              uv[host_end] != '?' && uv[host_end] != '#') {
-            host_end++;
-        }
-        
-        u.host = uv.substr(authority_start, host_end - authority_start);
-        if(u.host.empty()) {
-            throw std::invalid_argument("Empty host");
-        }
-
-        const bool is_valid_host = IsValidDomain(u.host) || IsValidIPv6(u.host);
-        if(!is_valid_host) {
-            throw std::invalid_argument("Invalid host: " + u.host);
-        }
-
-        // --- Port validation ---
-        i = host_end;
-        if(i < size && uv[i] == ':') {
-            i++;
-            size_t port_start = i;
-            while(i < size && uv[i] != '/' && uv[i] != '?' && uv[i] != '#') i++;
-            
-            u.port = uv.substr(port_start, i - port_start);
-            if(u.port.empty()) {
-                throw std::invalid_argument("Empty port");
-            }
-            
-            if(!std::all_of(u.port.begin(), u.port.end(), ::isdigit)) {
-                throw std::invalid_argument("Non-numeric port: " + u.port);
-            }
-            
-            const int port_num = std::stoi(u.port);
-            if(port_num < 1 || port_num > 65535) {
-                throw std::invalid_argument("Port out of range: " + u.port);
-            }
-        }
-
-        // --- Path validation ---
-        size_t path_start = i;
-        size_t path_end = std::min({
-            uv.find('?', path_start),
-            uv.find('#', path_start),
-            size
-        });
-        
-        u.path = uv.substr(path_start, path_end - path_start);
-        if(u.path.empty() || u.path[0] != '/') {
-            u.path.insert(0, 1, '/');
-        }
-
-        u.valid = true;
-    }
-    catch(const std::exception& e) {
+    // Scheme validation
+    size_t scheme_end = uv.find(':');
+    if(scheme_end == std::string_view::npos || scheme_end == 0) {
         #ifndef NDEBUG
-        std::cerr << "URL parse error: " << e.what() << " in " << uv << "\n";
+        std::cerr << "URL parse error: Missing or invalid scheme in " << uv << "\n";
         #endif
+        return std::nullopt;
     }
     
+    u.scheme = uv.substr(0, scheme_end);
+    std::transform(u.scheme.begin(), u.scheme.end(), u.scheme.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+        
+    if(u.scheme != "http" && u.scheme != "https") {
+        #ifndef NDEBUG
+        std::cerr << "URL parse error: Unsupported scheme: " << u.scheme << " in " << uv << "\n";
+        #endif
+        return std::nullopt;
+    }
+
+    // Authority validation
+    size_t i = scheme_end + 1;
+    size_t authority_start = i;
+    
+    if(i+1 < size && uv[i] == '/' && uv[i+1] == '/') {
+        i += 2;
+        authority_start = i;
+    } else if(u.scheme == "http" || u.scheme == "https") {
+        #ifndef NDEBUG
+        std::cerr << "URL parse error: Missing authority component in " << uv << "\n";
+        #endif
+        return std::nullopt;
+    }
+
+    // Host validation
+    size_t host_end = authority_start;
+    while(host_end < size && uv[host_end] != ':' && uv[host_end] != '/' &&
+          uv[host_end] != '?' && uv[host_end] != '#') {
+        host_end++;
+    }
+    
+    u.host = uv.substr(authority_start, host_end - authority_start);
+    if(u.host.empty()) {
+        #ifndef NDEBUG
+        std::cerr << "URL parse error: Empty host in " << uv << "\n";
+        #endif
+        return std::nullopt;
+    }
+
+    if(!IsValidDomain(u.host) && !IsValidIPv6(u.host)) {
+        #ifndef NDEBUG
+        std::cerr << "URL parse error: Invalid host: " << u.host << " in " << uv << "\n";
+        #endif
+        return std::nullopt;
+    }
+
+    // Port validation
+    i = host_end;
+    if(i < size && uv[i] == ':') {
+        i++;
+        size_t port_start = i;
+        while(i < size && uv[i] != '/' && uv[i] != '?' && uv[i] != '#') i++;
+        
+        u.port = uv.substr(port_start, i - port_start);
+        if(u.port.empty()) {
+            #ifndef NDEBUG
+            std::cerr << "URL parse error: Empty port in " << uv << "\n";
+            #endif
+            return std::nullopt;
+        }
+        
+        if(!std::all_of(u.port.begin(), u.port.end(), ::isdigit)) {
+            #ifndef NDEBUG
+            std::cerr << "URL parse error: Non-numeric port: " << u.port << " in " << uv << "\n";
+            #endif
+            return std::nullopt;
+        }
+        
+        const int port_num = std::stoi(u.port);
+        if(port_num < 1 || port_num > 65535) {
+            #ifndef NDEBUG
+            std::cerr << "URL parse error: Port out of range: " << u.port << " in " << uv << "\n";
+            #endif
+            return std::nullopt;
+        }
+    }
+
+    // Path validation
+    size_t path_start = i;
+    size_t path_end = std::min({
+        uv.find('?', path_start),
+        uv.find('#', path_start),
+        size
+    });
+    
+    u.path = uv.substr(path_start, path_end - path_start);
+    if(u.path.empty() || u.path[0] != '/') {
+        u.path.insert(0, 1, '/');
+    }
+
     return u;
 }
+
 
 inline std::string NormalizeURL(const URL& url) {
     std::string normalized;
     normalized.reserve(url.url.size());
 
-    // Lowercase service and host
-    std::string service = url.service;
-    std::transform(service.begin(), service.end(), service.begin(),
+    // Lowercase scheme and host
+    std::string scheme = url.scheme;
+    std::transform(scheme.begin(), scheme.end(), scheme.begin(),
         [](unsigned char c) { return std::tolower(c); });
     
     std::string host = url.host;
     std::transform(host.begin(), host.end(), host.begin(),
         [](unsigned char c) { return std::tolower(c); });
 
-    normalized += service + "://" + host;
+    normalized += scheme + "://" + host;
 
     // Add non-default port
     if (!url.port.empty() &&
-        !((service == "http" && url.port == "80") ||
-          (service == "https" && url.port == "443"))) {
+        !((scheme == "http" && url.port == "80") ||
+          (scheme == "https" && url.port == "443"))) {
         normalized += ":" + url.port;
     }
 
@@ -222,15 +234,20 @@ inline std::string NormalizeURL(const URL& url) {
 // Runtime test cases (replace static_assert)
 inline void TestURLParsing() {
     auto test1 = ParseURL("https://GitHub.COM/dnsge?achievement=arctic#section");
-    assert(test1.service == "https");
-    assert(test1.host == "GitHub.COM");
-    assert(test1.path == "/dnsge");
-    assert(NormalizeURL(test1) == "https://github.com/dnsge");
+    assert(test1.has_value());
+    assert(test1->scheme == "https");
+    assert(test1->host == "GitHub.COM");
+    assert(test1->path == "/dnsge");
+    assert(NormalizeURL(*test1) == "https://github.com/dnsge");
 
     auto test2 = ParseURL("http://example.com:8080//a//b/../c");
-    assert(test2.port == "8080");
-    assert(test2.path == "//a//b/../c");
-    assert(NormalizeURL(test2) == "http://example.com:8080/a/b/../c");
+    assert(test2.has_value());
+    assert(test2->port == "8080");
+    assert(test2->path == "//a//b/../c");
+    assert(NormalizeURL(*test2) == "http://example.com:8080/a/b/../c");
+
+    auto test3 = ParseURL("invalid://test");
+    assert(!test3.has_value());
 }
 
 } // namespace mithril::http

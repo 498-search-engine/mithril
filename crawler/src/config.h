@@ -10,9 +10,9 @@ struct CrawlerConfig {
     size_t num_workers = 2;
     size_t concurrent_requests = 10;
     std::vector<std::string> seed_urls;
-
-    static CrawlerConfig FromFile(const std::string& path);
 };
+
+CrawlerConfig LoadConfigFromFile(const std::string& path);
 
 } // namespace mithril
 

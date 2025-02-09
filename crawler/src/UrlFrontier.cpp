@@ -48,9 +48,6 @@ void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out, bool atLeas
 int UrlFrontier::PutURL(std::string u) {
     std::unique_lock lock(mu_);
     if (!IsValidUrl(u)) {
-        #ifndef NDEBUG
-        std::cout << "rejected invalid URL: " << u << std::endl;
-        #endif
         return 0;
     }
     if (seen_.Contains(u)) {
@@ -67,6 +64,9 @@ int UrlFrontier::PutURLs(std::vector<std::string> urls) {
 
     int i = 0;
     for (auto& u : urls) {
+        if (!IsValidUrl(u)) {
+            continue;
+        }
         if (seen_.Contains(u)) {
             continue;
         }

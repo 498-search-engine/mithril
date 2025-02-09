@@ -7,9 +7,7 @@ int main(int argc, char* argv[]) {
     mithril::http::InitializeSSL();
 
     try {
-        auto config = mithril::CrawlerConfig::FromFile(
-            argc > 1 ? argv[1] : "crawler.conf"
-        );
+        auto config = mithril::LoadConfigFromFile(argc > 1 ? argv[1] : "crawler.conf");
         
         mithril::Coordinator c(config);
         c.Run();
