@@ -286,6 +286,7 @@ bool Connection::ReadFromSocket() {
             }
             // TODO: error handling strategy
             state_ = State::Error;
+            Close();
             return false;
         }
     } while (bytesRead > 0);
@@ -308,6 +309,7 @@ void Connection::Connect() {
                 // Some other error occurred
                 perror("mithril::http::Connection::Connect() connect");
                 state_ = State::Error;
+                Close();
                 return;
             }
         }
@@ -328,6 +330,7 @@ void Connection::Connect() {
             // Actual SSL error occurred
             PrintSSLConnectError(ssl_, status);
             state_ = State::Error;
+            Close();
             return;
         }
     }
@@ -386,6 +389,9 @@ bool Connection::ProcessSend() {
             }
             // TODO: error handling strategy
             perror("HTTP Connection send request data");
+            state_ = State::Error;
+            Close();
+            return false;
         }
     } while (requestBytesSent_ < rawRequest_.size());
 

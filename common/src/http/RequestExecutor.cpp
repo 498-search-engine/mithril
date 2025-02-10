@@ -6,11 +6,16 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
-#include <iostream>
 #include <unistd.h>
 #include <utility>
 
+#if defined(USE_KQUEUE)
+#    include <ctime>
+#endif
+
 namespace mithril::http {
+
+constexpr int SocketWaitTimeoutMs = 5;  // 5 milliseconds
 
 RequestExecutor::RequestExecutor()
 #if defined(USE_EPOLL)
@@ -110,7 +115,7 @@ void RequestExecutor::ProcessConnections() {
     size_t nRemoved = 0;
 #if defined(USE_EPOLL)
     // TODO: untested, unchecked epoll code written by 4o
-    int nev = epoll_wait(epoll_, events_.data(), events_.size(), -1);
+    int nev = epoll_wait(epoll_, events_.data(), events_.size(), SocketWaitTimeoutMs);
     if (nev == -1) {
         perror("RequestExecutor epoll_wait");
         exit(1);
@@ -171,7 +176,10 @@ void RequestExecutor::ProcessConnections() {
         }
     }
 #elif defined(USE_KQUEUE)
-    int nev = kevent(kq_, nullptr, 0, events_.data(), static_cast<int>(events_.size()), nullptr);  // TODO: timeout
+    struct timespec timeout {
+        .tv_sec = 0, .tv_nsec = static_cast<long>(SocketWaitTimeoutMs) * 1000L * 1000L,
+    };
+    int nev = kevent(kq_, nullptr, 0, events_.data(), static_cast<int>(events_.size()), &timeout);  // TODO: timeout
     for (int i = 0; i < nev; ++i) {
         auto& ev = events_[i];
         auto fd = static_cast<int>(ev.ident);
@@ -287,7 +295,6 @@ bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator
         activeConnections_.erase(connIt);
         return true;
     } else if (conn.IsError()) {
-        conn.Close();
         failedConnections_.push_back(std::move(connIt->second));
         activeConnections_.erase(connIt);
         return true;
