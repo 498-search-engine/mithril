@@ -350,14 +350,8 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
         HandleRobotsNotFound(it->second);
         break;
 
-    case http::StatusCode::MovedPermanently:
-    case http::StatusCode::Found:
-    case http::StatusCode::TemporaryRedirect:
-    case http::StatusCode::PermanentRedirect:
     default:
-        // TODO: do we want to support redirects on robots.txt?
-        // For now, let's be nice and consider the robots.txt to deny all
-        std::cerr << "not following robots.txt redirect for " << canonicalHost << std::endl;
+        std::cerr << "got unhandled robots.txt status " << header->status << " for " << canonicalHost << std::endl;
         it->second.rules = RobotRules{true};
         it->second.valid = true;
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;

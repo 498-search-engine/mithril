@@ -47,9 +47,6 @@ void UrlFrontier::ProcessRobotsRequests() {
             seen_.Put(it->url);
             urls_.push(std::move(it->url));
             cv_.notify_one();
-        } else {
-            // Not allowed
-            std::cerr << "url " << it->url << " disallowed by robots.txt" << std::endl;
         }
 
         it = urlsWaitingForRobots_.erase(it);
@@ -117,7 +114,6 @@ bool UrlFrontier::PutURLInternal(std::string u) {
     }
 
     if (!robots->Allowed(parsed->path)) {
-        std::cerr << "url " << u << " disallowed by robots.txt" << std::endl;
         return false;
     }
 
