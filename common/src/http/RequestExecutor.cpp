@@ -1,7 +1,10 @@
 #include "http/RequestExecutor.h"
 
+#include "html/Link.h"
 #include "http/Connection.h"
 #include "http/Request.h"
+#include "http/Response.h"
+#include "http/URL.h"
 
 #include <cassert>
 #include <cstddef>
@@ -56,7 +59,7 @@ RequestExecutor::~RequestExecutor() {
 void RequestExecutor::Add(Request req) {
     assert(events_.size() == activeConnections_.size());
 
-    auto conn = Connection::NewWithRequest(req);
+    auto conn = Connection::NewFromRequest(req);
     if (!conn) {
         return;
     }
@@ -64,6 +67,7 @@ void RequestExecutor::Add(Request req) {
     pendingConnection_.push_back(ReqConn{
         .req = std::move(req),
         .conn = std::move(*conn),
+        .state = RequestState{},
     });
 }
 
@@ -131,8 +135,7 @@ void RequestExecutor::ProcessConnections() {
             bool writingBefore = connIt->second.conn.IsWriting();
 
             if ((ev.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0) {
-                HandleConnEOF(connIt);
-                removed = true;
+                removed = HandleConnEOF(connIt);
             } else if ((ev.events & (EPOLLIN | EPOLLOUT)) != 0) {
                 removed = HandleConnReady(connIt);
             }
@@ -190,8 +193,7 @@ void RequestExecutor::ProcessConnections() {
             bool writingBefore = connIt->second.conn.IsWriting();
 
             if ((ev.flags & EV_EOF) != 0) {
-                HandleConnEOF(connIt);
-                removed = true;
+                removed = HandleConnEOF(connIt);
             } else if (ev.filter == EVFILT_READ || ev.filter == EVFILT_WRITE) {
                 removed = HandleConnReady(connIt);
             }
@@ -257,57 +259,117 @@ void RequestExecutor::ProcessPendingConnections() {
     }
 }
 
-void RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt) {
-    auto& conn = connIt->second.conn;
-    auto& req = connIt->second.req;
-
+bool RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt) {
     // Attempt to process any data that may still be in the socket
-    conn.Process(true);
+    connIt->second.conn.Process(true);
 
-    if (conn.IsComplete()) {
-        // Socket got EOF but we were able to read rest of response from socket
-        readyResponses_.push_back({
-            .req = std::move(req),
-            .res = conn.GetResponse(),
-        });
-    } else {
-        // Socket has been closed without finishing response, mark as failed
-        conn.Close();
-        failedConnections_.push_back(std::move(connIt->second));
+    if (connIt->second.conn.IsComplete()) {
+        // Socket contained rest of response data after closing
+        return HandleConnComplete(connIt);
     }
 
-    activeConnections_.erase(connIt);
+    // Socket has been closed without finishing response, mark as failed
+    connIt->second.conn.Close();
+    return HandleConnError(connIt);
 }
 
 bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator connIt) {
-    auto& conn = connIt->second.conn;
-    auto& req = connIt->second.req;
-
     // Process additional received data
-    conn.Process(false);
+    connIt->second.conn.Process(false);
 
-    if (conn.IsComplete()) {
-        // Connection finished receiving HTTP response
-        readyResponses_.push_back({
-            .req = std::move(req),
-            .res = conn.GetResponse(),
-        });
-        activeConnections_.erase(connIt);
-        return true;
-    } else if (conn.IsError()) {
-        failedConnections_.push_back(std::move(connIt->second));
-        activeConnections_.erase(connIt);
-        return true;
+    // Check if the connection has reached a terminal state
+    if (connIt->second.conn.IsComplete()) {
+        return HandleConnComplete(connIt);
+    } else if (connIt->second.conn.IsError()) {
+        return HandleConnError(connIt);
     }
 
+    // Connection is still working on sending request/getting response
     return false;
+}
+
+bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::iterator connIt) {
+    auto& conn = connIt->second.conn;
+    auto& req = connIt->second.req;
+    auto& state = connIt->second.state;
+    assert(conn.IsComplete());
+
+    auto res = conn.GetResponse();
+    auto header = ParseResponseHeader(res);
+    if (!header) {
+        return HandleConnError(connIt);
+    }
+
+    if (req.Options().followRedirects > 0 && state.redirects < req.Options().followRedirects) {
+        // Check for redirects
+        switch (header->status) {
+        case StatusCode::MovedPermanently:
+        case StatusCode::Found:
+        case StatusCode::TemporaryRedirect:
+        case StatusCode::PermanentRedirect:
+            {
+                // Do redirect
+                auto* loc = header->Location;
+                if (loc == nullptr) {
+                    // No `Location` header
+                    return HandleConnError(connIt);
+                }
+
+                auto absoluteRedirect = html::MakeAbsoluteLink(conn.url_, "", loc->value);
+                if (!absoluteRedirect) {
+                    return HandleConnError(connIt);
+                }
+
+                auto parsedRedirect = ParseURL(*absoluteRedirect);
+                if (!parsedRedirect) {
+                    return HandleConnError(connIt);
+                }
+
+                std::cerr << "following redirect: " << req.Url().url << " -> " << *absoluteRedirect << std::endl;
+                auto newConn = Connection::NewFromURL(req.GetMethod(), *parsedRedirect);
+                if (!newConn) {
+                    return HandleConnError(connIt);
+                }
+
+                // Increment number of followed redirects
+                ++state.redirects;
+
+                // Starting new connection, put into pendingConnection list
+                pendingConnection_.push_back({
+                    .req = std::move(req),
+                    .conn = std::move(*newConn),
+                    .state = state,
+                });
+
+                activeConnections_.erase(connIt);
+                return true;
+            }
+        default:
+            break;
+        }
+    }
+
+    readyResponses_.push_back({
+        .req = std::move(req),
+        .res = std::move(res),
+        .header = std::move(*header),
+    });
+
+    activeConnections_.erase(connIt);
+    return true;
+}
+
+bool RequestExecutor::HandleConnError(std::unordered_map<int, ReqConn>::iterator connIt) {
+    failedConnections_.push_back(std::move(connIt->second));
+    activeConnections_.erase(connIt);
+    return true;
 }
 
 size_t RequestExecutor::InFlightRequests() const {
     return pendingConnection_.size() + activeConnections_.size();
 }
 
-std::vector<ReqRes>& RequestExecutor::ReadyResponses() {
+std::vector<CompleteResponse>& RequestExecutor::ReadyResponses() {
     return readyResponses_;
 }
 

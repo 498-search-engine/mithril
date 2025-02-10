@@ -16,8 +16,8 @@ public:
     void Run();
 
 private:
-    void ProcessDocument(http::Request req, http::Response res);
-    void ProcessHTMLDocument(http::Request req, http::Response res);
+    void ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header);
+    void ProcessHTMLDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header);
 
     DocumentQueue* docQueue_;
     UrlFrontier* frontier_;

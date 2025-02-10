@@ -24,7 +24,7 @@ void Worker::Run() {
             return;
         }
 
-        ProcessDocument(std::move(doc->req), std::move(doc->res));
+        ProcessDocument(doc->req, doc->res, doc->header);
     }
 }
 
@@ -35,7 +35,9 @@ void Worker::Run() {
  * - Status code is 200 OK
  * - Content-Type is text/html
  */
-void Worker::ProcessHTMLDocument(http::Request req, http::Response res) {
+void Worker::ProcessHTMLDocument(const http::Request& req,
+                                 const http::Response& res,
+                                 const http::ResponseHeader& header) {
     // TODO: early return if non latin script page
     html::Parser parser(res.body.data(), res.body.size());
 
@@ -59,43 +61,35 @@ void Worker::ProcessHTMLDocument(http::Request req, http::Response res) {
     }
 }
 
-void Worker::ProcessDocument(http::Request req, http::Response res) {
-    auto header = http::ParseResponseHeader(res);
-    if (!header) {
-        std::cout << "failed to parse doc " << req.Url().url << std::endl;
-        return;
-    }
+void Worker::ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header) {
+    switch (header.status) {
+    case http::StatusCode::OK:
+        if (!header.ContentType) {
+            std::cout << "no content-type header" << std::endl;
+            return;
+        }
+        if (header.ContentType->value.starts_with("text/html")) {
+            ProcessHTMLDocument(req, res, header);
+        } else {
+            std::cout << "unsupported content-type: " << header.ContentType->value << std::endl;
+        }
+        break;
 
-    switch (header->status) {
-        case http::StatusCode::OK:
-            if (!header->ContentType) {
-                std::cout << "no content-type header" << std::endl;
+    case http::StatusCode::MovedPermanently:
+    case http::StatusCode::Found:
+    case http::StatusCode::TemporaryRedirect:
+    case http::StatusCode::PermanentRedirect:
+        {
+            if (!header.Location) {
+                std::cout << "redirect without Location header: " << req.Url().url << std::endl;
                 return;
             }
-            if (header->ContentType->value.starts_with("text/html")) {
-                ProcessHTMLDocument(std::move(req), std::move(res));
-            } else {
-                std::cout << "unsupported content-type: " << header->ContentType->value << std::endl;
-            }
-            break;
 
-        case http::StatusCode::MovedPermanently:
-        case http::StatusCode::Found:
-        case http::StatusCode::TemporaryRedirect:
-        case http::StatusCode::PermanentRedirect: {
-            if (!header->Location) {
-                std::cout << "redirect without Location header: " 
-                         << req.Url().url << std::endl;
-                return;
-            }
-            
-            std::string location{header->Location->value};
-            auto new_url = html::MakeAbsoluteLink(
-                req.Url(),
-                "",  // No base tag for redirects
-                location
-            );
-            
+            std::string location{header.Location->value};
+            auto new_url = html::MakeAbsoluteLink(req.Url(),
+                                                  "",  // No base tag for redirects
+                                                  location);
+
             if (!new_url) {
                 std::cout << "invalid redirect Location: '" << location << "' from " << req.Url().url << std::endl;
                 return;
@@ -105,9 +99,9 @@ void Worker::ProcessDocument(http::Request req, http::Response res) {
             break;
         }
 
-        default:
-            std::cout << "unhandled status " << header->status << std::endl;
-            break;
+    default:
+        std::cout << "unhandled status " << header.status << std::endl;
+        break;
     }
 }
 

@@ -16,15 +16,15 @@ public:
 
     void Close();
 
-    void Push(http::ReqRes res);
-    std::optional<http::ReqRes> Pop();
+    void Push(http::CompleteResponse res);
+    std::optional<http::CompleteResponse> Pop();
 
 private:
     mutable std::mutex mu_;
     mutable std::condition_variable cv_;
 
     bool closed_;
-    std::queue<http::ReqRes> readyResponses_;
+    std::queue<http::CompleteResponse> readyResponses_;
 };
 
 }  // namespace mithril

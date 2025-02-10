@@ -3,6 +3,7 @@
 
 #include "http/Connection.h"
 #include "http/Request.h"
+#include "http/Response.h"
 
 #include <list>
 #include <unordered_map>
@@ -24,14 +25,20 @@
 
 namespace mithril::http {
 
+struct RequestState {
+    int redirects{0};
+};
+
 struct ReqConn {
     Request req;
     Connection conn;
+    RequestState state;
 };
 
-struct ReqRes {
+struct CompleteResponse {
     Request req;
     Response res;
+    ResponseHeader header;
 };
 
 /**
@@ -63,7 +70,7 @@ public:
     /**
      * @brief Returns vector containing complete HTTP responses.
      */
-    std::vector<ReqRes>& ReadyResponses();
+    std::vector<CompleteResponse>& ReadyResponses();
 
     /**
      * @brief Returns vector containing HTTP connections that failed to
@@ -72,8 +79,11 @@ public:
     std::vector<ReqConn>& FailedConnections();
 
 private:
-    void HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt);
+    bool HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt);
     bool HandleConnReady(std::unordered_map<int, ReqConn>::iterator connIt);
+
+    bool HandleConnComplete(std::unordered_map<int, ReqConn>::iterator connIt);
+    bool HandleConnError(std::unordered_map<int, ReqConn>::iterator connIt);
 
     void ProcessPendingConnections();
     void SetupActiveConnection(ReqConn reqConn);
@@ -88,7 +98,7 @@ private:
 
     std::list<ReqConn> pendingConnection_;
     std::unordered_map<int, ReqConn> activeConnections_;
-    std::vector<ReqRes> readyResponses_;
+    std::vector<CompleteResponse> readyResponses_;
     std::vector<ReqConn> failedConnections_;
 };
 

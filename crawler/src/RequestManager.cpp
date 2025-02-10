@@ -72,7 +72,7 @@ void RequestManager::Stop() {
     stopped_.store(true, std::memory_order_release);
 }
 
-void RequestManager::DispatchReadyResponse(http::ReqRes res) {
+void RequestManager::DispatchReadyResponse(http::CompleteResponse res) {
     docQueue_->Push(std::move(res));
 }
 

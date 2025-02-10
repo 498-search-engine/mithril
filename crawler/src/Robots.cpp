@@ -16,6 +16,7 @@ using namespace std::string_view_literals;
 
 constexpr size_t MaxRobotsTxtSize = 500L * 1024L;  // 500 KB
 constexpr auto MaxInFlightRobotsTxtRequests = 100;
+constexpr int MaxRobotsTxtRedirects = 5;
 
 namespace {
 
@@ -278,13 +279,17 @@ void RobotRulesCache::Fetch(const std::string& scheme,
                             const std::string& host,
                             const std::string& port,
                             const std::string& canonicalHost) {
-    executor_.Add(http::Request::GET(http::URL{
-        .url = canonicalHost + "/robots.txt",
-        .scheme = scheme,
-        .host = host,
-        .port = port,
-        .path = "/robots.txt",
-    }));
+    executor_.Add(http::Request::GET(
+        http::URL{
+            .url = canonicalHost + "/robots.txt",
+            .scheme = scheme,
+            .host = host,
+            .port = port,
+            .path = "/robots.txt",
+        },
+        http::RequestOptions{
+            .followRedirects = MaxRobotsTxtRedirects,
+        }));
 }
 
 bool RobotRulesCache::HasPendingRequests() const {
@@ -317,7 +322,7 @@ void RobotRulesCache::ProcessPendingRequests() {
     }
 }
 
-void RobotRulesCache::HandleRobotsResponse(http::ReqRes r) {
+void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
     auto canonicalHost = CanonicalizeHost(r.req.Url());
 
     // TODO: when this is an LRU cache, could it be possible we don't find it?

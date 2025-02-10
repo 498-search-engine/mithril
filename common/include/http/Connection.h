@@ -3,6 +3,7 @@
 
 #include "http/Request.h"
 #include "http/Response.h"
+#include "http/URL.h"
 
 #include <netdb.h>
 #include <optional>
@@ -17,7 +18,8 @@ class RequestExecutor;
 
 class Connection {
 public:
-    static std::optional<Connection> NewWithRequest(const Request& req);
+    static std::optional<Connection> NewFromRequest(const Request& req);
+    static std::optional<Connection> NewFromURL(Method method, const URL& url);
 
     ~Connection();
 
@@ -89,7 +91,7 @@ private:
      * addrinfo and will call freeaddrinfo when appropriate.
      * @param req Request to be executed on the connection
      */
-    Connection(int fd, struct addrinfo* address, const Request& req);
+    Connection(int fd, struct addrinfo* address, Method method, const URL& url);
 
     void InitializeSSL();
 
@@ -112,6 +114,7 @@ private:
     struct addrinfo* address_;
     State state_;
 
+    URL url_;
     std::string rawRequest_;
     size_t requestBytesSent_;
 
@@ -126,7 +129,6 @@ private:
 
     SSL* ssl_;
     bool isSecure_;
-    std::string sni_;
 };
 
 }  // namespace mithril::http

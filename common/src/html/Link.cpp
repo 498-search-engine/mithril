@@ -71,8 +71,7 @@ static_assert(ResolvePath("/a/././././") == "/a/");
 
 }  // namespace
 
-std::optional<std::string>
-MakeAbsoluteLink(const http::URL& currentUrl, const std::string& base, const std::string& href) {
+std::optional<std::string> MakeAbsoluteLink(const http::URL& currentUrl, std::string_view base, std::string_view href) {
     // If href is empty, return nullopt
     if (href.empty()) {
         return std::nullopt;
@@ -90,12 +89,12 @@ MakeAbsoluteLink(const http::URL& currentUrl, const std::string& base, const std
 
     // If href is already absolute URL, return it
     if (href.substr(0, 7) == "http://" || href.substr(0, 8) == "https://") {
-        return href;
+        return std::string{href};
     }
 
     // Handle protocol-relative URLs
     if (href.substr(0, 2) == "//") {
-        return currentUrl.scheme + ":" + href;
+        return currentUrl.scheme + ":" + std::string{href};
     }
 
     // Handle root-relative URLs
@@ -117,7 +116,7 @@ MakeAbsoluteLink(const http::URL& currentUrl, const std::string& base, const std
                 basePath = base.substr(pathStart);
             }
         } else {
-            basePath = "/" + base;
+            basePath = "/" + std::string{base};
         }
     } else {
         // Use the current URL's path as base
@@ -131,7 +130,7 @@ MakeAbsoluteLink(const http::URL& currentUrl, const std::string& base, const std
     }
 
     // Combine base path with href and resolve
-    auto resolvedPath = ResolvePath(basePath + href);
+    auto resolvedPath = ResolvePath(basePath + std::string{href});
     auto portPart = currentUrl.port.empty() ? "" : ":" + currentUrl.port;
     return currentUrl.scheme + "://" + currentUrl.host + portPart + resolvedPath;
 }

@@ -55,7 +55,7 @@ private:
                const std::string& port,
                const std::string& canonicalHost);
 
-    void HandleRobotsResponse(http::ReqRes r);
+    void HandleRobotsResponse(http::CompleteResponse r);
     void HandleRobotsResponseFailed(http::ReqConn r);
 
     static void HandleRobotsOK(const http::ResponseHeader& header, const http::Response& res, RobotCacheEntry& entry);

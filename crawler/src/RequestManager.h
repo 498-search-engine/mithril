@@ -15,7 +15,7 @@ public:
     void Stop();
 
 private:
-    void DispatchReadyResponse(http::ReqRes res);
+    void DispatchReadyResponse(http::CompleteResponse res);
     void DispatchFailedRequest(http::ReqConn req);
 
     size_t targetConcurrentReqs_;

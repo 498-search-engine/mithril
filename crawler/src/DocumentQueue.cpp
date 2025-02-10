@@ -17,13 +17,13 @@ void DocumentQueue::Close() {
     }
 }
 
-void DocumentQueue::Push(http::ReqRes res) {
+void DocumentQueue::Push(http::CompleteResponse res) {
     std::unique_lock lock(mu_);
     readyResponses_.push(std::move(res));
     cv_.notify_one();
 }
 
-std::optional<http::ReqRes> DocumentQueue::Pop() {
+std::optional<http::CompleteResponse> DocumentQueue::Pop() {
     std::unique_lock lock(mu_);
     cv_.wait(lock, [this]() { return !this->readyResponses_.empty() || this->closed_; });
 
