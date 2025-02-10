@@ -80,7 +80,10 @@ private:
         ReadingBody,     // Reading HTTP response body (not chunked)
         Complete,        // HTTP response complete
         Closed,          // Socket closed
-        Error            // Request encountered error
+
+        ConnectError,        // Error while establishing connection
+        SocketError,         // Error while reading/writing from socket
+        UnexpectedEOFError,  // Got unexpected EOF while reading response
     };
 
     /**

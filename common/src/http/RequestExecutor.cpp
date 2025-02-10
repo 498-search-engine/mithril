@@ -246,7 +246,10 @@ void RequestExecutor::ProcessPendingConnections() {
 
         if (it->conn.IsError()) {
             // Connection failed in some way
-            failedConnections_.push_back(std::move(*it));
+            failedRequests_.push_back(FailedRequest{
+                .req = std::move(it->req),
+                .error = RequestError::ConnectionError,
+            });
             it = pendingConnection_.erase(it);
         } else if (it->conn.IsActive()) {
             // Now connected
@@ -270,7 +273,7 @@ bool RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator c
 
     // Socket has been closed without finishing response, mark as failed
     connIt->second.conn.Close();
-    return HandleConnError(connIt);
+    return HandleConnError(connIt, RequestError::ConnectionError);
 }
 
 bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator connIt) {
@@ -281,7 +284,7 @@ bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator
     if (connIt->second.conn.IsComplete()) {
         return HandleConnComplete(connIt);
     } else if (connIt->second.conn.IsError()) {
-        return HandleConnError(connIt);
+        return HandleConnError(connIt, RequestError::ConnectionError);
     }
 
     // Connection is still working on sending request/getting response
@@ -297,10 +300,10 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
     auto res = conn.GetResponse();
     auto header = ParseResponseHeader(res);
     if (!header) {
-        return HandleConnError(connIt);
+        return HandleConnError(connIt, RequestError::InvalidResponseData);
     }
 
-    if (req.Options().followRedirects > 0 && state.redirects < req.Options().followRedirects) {
+    if (req.Options().followRedirects > 0) {
         // Check for redirects
         switch (header->status) {
         case StatusCode::MovedPermanently:
@@ -308,27 +311,33 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
         case StatusCode::TemporaryRedirect:
         case StatusCode::PermanentRedirect:
             {
+                if (state.redirects >= req.Options().followRedirects) {
+                    // Too many redirects!
+                    return HandleConnError(connIt, RequestError::TooManyRedirects);
+                }
+
                 // Do redirect
                 auto* loc = header->Location;
                 if (loc == nullptr) {
                     // No `Location` header
-                    return HandleConnError(connIt);
+                    return HandleConnError(connIt, RequestError::InvalidResponseData);
                 }
 
                 auto absoluteRedirect = html::MakeAbsoluteLink(conn.url_, "", loc->value);
                 if (!absoluteRedirect) {
-                    return HandleConnError(connIt);
+                    return HandleConnError(connIt, RequestError::InvalidResponseData);
                 }
 
                 auto parsedRedirect = ParseURL(*absoluteRedirect);
                 if (!parsedRedirect) {
-                    return HandleConnError(connIt);
+                    return HandleConnError(connIt, RequestError::InvalidResponseData);
                 }
 
-                std::cerr << "following redirect: " << req.Url().url << " -> " << *absoluteRedirect << std::endl;
+                std::cerr << "following redirect (" << state.redirects + 1 << "/" << req.Options().followRedirects
+                          << ") " << req.Url().url << " -> " << *absoluteRedirect << std::endl;
                 auto newConn = Connection::NewFromURL(req.GetMethod(), *parsedRedirect);
                 if (!newConn) {
-                    return HandleConnError(connIt);
+                    return HandleConnError(connIt, RequestError::RedirectError);
                 }
 
                 // Increment number of followed redirects
@@ -359,8 +368,11 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
     return true;
 }
 
-bool RequestExecutor::HandleConnError(std::unordered_map<int, ReqConn>::iterator connIt) {
-    failedConnections_.push_back(std::move(connIt->second));
+bool RequestExecutor::HandleConnError(std::unordered_map<int, ReqConn>::iterator connIt, RequestError error) {
+    failedRequests_.push_back(FailedRequest{
+        .req = std::move(connIt->second.req),
+        .error = error,
+    });
     activeConnections_.erase(connIt);
     return true;
 }
@@ -373,8 +385,8 @@ std::vector<CompleteResponse>& RequestExecutor::ReadyResponses() {
     return readyResponses_;
 }
 
-std::vector<ReqConn>& RequestExecutor::FailedConnections() {
-    return failedConnections_;
+std::vector<FailedRequest>& RequestExecutor::FailedRequests() {
+    return failedRequests_;
 }
 
 }  // namespace mithril::http

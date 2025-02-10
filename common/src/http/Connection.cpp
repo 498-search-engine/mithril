@@ -283,14 +283,15 @@ bool Connection::ReadFromSocket() {
                 // No more data available right now
                 return false;
             }
-            // TODO: error handling strategy
+
+            // TODO: error logging
             if (isSecure_) {
                 PrintSSLError(ssl_, bytesRead);
             } else {
                 perror("mithril::http::Connection::ReadFromSocket(): read bytes");
             }
-            // TODO: error handling strategy
-            state_ = State::Error;
+
+            state_ = State::SocketError;
             Close();
             return false;
         }
@@ -313,7 +314,7 @@ void Connection::Connect() {
             } else {
                 // Some other error occurred
                 perror("mithril::http::Connection::Connect() connect");
-                state_ = State::Error;
+                state_ = State::ConnectError;
                 Close();
                 return;
             }
@@ -334,7 +335,7 @@ void Connection::Connect() {
 
             // Actual SSL error occurred
             PrintSSLConnectError(ssl_, status);
-            state_ = State::Error;
+            state_ = State::ConnectError;
             Close();
             return;
         }
@@ -342,7 +343,7 @@ void Connection::Connect() {
 }
 
 void Connection::Process(bool gotEof) {
-    if (state_ == State::Complete || state_ == State::Closed || state_ == State::Error) {
+    if (IsComplete() || state_ == State::Closed || IsError()) {
         return;
     }
 
@@ -359,8 +360,8 @@ void Connection::Process(bool gotEof) {
     if (gotEof) {
         if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
             (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
-            state_ = State::Error;
-            // TODO: error handling strategy
+            state_ = State::UnexpectedEOFError;
+            // TODO: error logging
             std::cerr << "conn: closed before receiveing complete response" << std::endl;
         } else {
             state_ = State::Complete;
@@ -392,9 +393,10 @@ bool Connection::ProcessSend() {
             } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 return false;
             }
-            // TODO: error handling strategy
+
+            // TODO: error logging
             perror("HTTP Connection send request data");
-            state_ = State::Error;
+            state_ = State::SocketError;
             Close();
             return false;
         }
@@ -439,7 +441,7 @@ bool Connection::IsActive() const {
 }
 
 bool Connection::IsError() const {
-    return state_ == State::Error;
+    return state_ == State::ConnectError || state_ == State::SocketError || state_ == State::UnexpectedEOFError;
 }
 
 bool Connection::IsSecure() const {

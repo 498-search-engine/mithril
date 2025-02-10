@@ -306,23 +306,23 @@ void RobotRulesCache::ProcessPendingRequests() {
     // Process connections with ready responses
     auto& ready = executor_.ReadyResponses();
     if (!ready.empty()) {
-        for (auto& r : ready) {
-            HandleRobotsResponse(std::move(r));
+        for (const auto& r : ready) {
+            HandleRobotsResponse(r);
         }
         ready.clear();
     }
 
     // Process requests that failed
-    auto& failed = executor_.FailedConnections();
+    auto& failed = executor_.FailedRequests();
     if (!failed.empty()) {
-        for (auto& f : failed) {
-            HandleRobotsResponseFailed(std::move(f));
+        for (const auto& f : failed) {
+            HandleRobotsResponseFailed(f);
         }
         failed.clear();
     }
 }
 
-void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
+void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
     auto canonicalHost = CanonicalizeHost(r.req.Url());
 
     // TODO: when this is an LRU cache, could it be possible we don't find it?
@@ -365,8 +365,8 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
     }
 }
 
-void RobotRulesCache::HandleRobotsResponseFailed(http::ReqConn r) {
-    auto canonicalHost = CanonicalizeHost(r.req.Url());
+void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& failed) {
+    auto canonicalHost = CanonicalizeHost(failed.req.Url());
     auto it = cache_.find(canonicalHost);
     if (it == cache_.end()) {
         return;
