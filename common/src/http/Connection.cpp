@@ -477,8 +477,13 @@ void Connection::ProcessHeaders() {
 }
 
 void Connection::ProcessBody() {
-    size_t availableBytes = buffer_.size() - headersLength_;
-    size_t bytesToRead = std::min(availableBytes, contentLength_ - bodyBytesRead_);
+    size_t receivedBodyBytes = buffer_.size() - headersLength_;
+    assert(receivedBodyBytes >= bodyBytesRead_);
+    size_t bytesToRead = receivedBodyBytes - bodyBytesRead_;
+
+    if (bytesToRead == 0) {
+        return;
+    }
 
     // Copy actual body data to body buffer
     body_.insert(body_.end(),
