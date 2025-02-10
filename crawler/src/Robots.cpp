@@ -6,6 +6,7 @@
 #include "http/Response.h"
 #include "http/URL.h"
 
+#include <cstddef>
 #include <iostream>
 #include <string_view>
 
@@ -14,6 +15,7 @@ namespace mithril {
 using namespace std::string_view_literals;
 
 constexpr size_t MaxRobotsTxtSize = 500L * 1024L;  // 500 KB
+constexpr auto MaxInFlightRobotsTxtRequests = 100;
 
 namespace {
 
@@ -76,7 +78,7 @@ std::optional<RobotLine> ParseRobotLine(std::string_view line) {
     ++i;  // consume :
     ConsumeWhitespace(line, i);
 
-    if (i == line.size()) {
+    if (i >= line.size()) {
         return std::nullopt;
     }
 
@@ -244,13 +246,24 @@ RobotRules* RobotRulesCache::GetOrFetch(const std::string& scheme, const std::st
 
     auto it = cache_.find(canonicalHost);
     if (it == cache_.end()) {
-        cache_.emplace(canonicalHost);
-        Fetch(scheme, host, port, canonicalHost);
+        if (executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
+            cache_.insert({canonicalHost, {}});
+            Fetch(scheme, host, port, canonicalHost);
+        }
         return nullptr;
     }
 
     if (it->second.expiresAt == 0) {
         // Already fetching
+        return nullptr;
+    }
+
+    auto now = MonotonicTime();
+    if (now >= it->second.expiresAt) {
+        it->second.expiresAt = 0;  // Mark as already fetching
+        if (executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
+            Fetch(scheme, host, port, canonicalHost);
+        }
         return nullptr;
     }
 
@@ -265,18 +278,6 @@ void RobotRulesCache::Fetch(const std::string& scheme,
                             const std::string& host,
                             const std::string& port,
                             const std::string& canonicalHost) {
-    auto it = cache_.find(canonicalHost);
-    if (it != cache_.end()) {
-        if (it->second.expiresAt == 0) {
-            // Already fetching
-            return;
-        }
-        it->second.expiresAt = 0;
-    } else {
-        // Insert with expiresAt = 0 to indicate in process of fetching
-        cache_.emplace(canonicalHost);
-    }
-
     executor_.Add(http::Request::GET(http::URL{
         .url = canonicalHost + "/robots.txt",
         .scheme = scheme,
@@ -329,6 +330,7 @@ void RobotRulesCache::HandleRobotsResponse(http::ReqRes r) {
     auto header = http::ParseResponseHeader(r.res);
     if (!header) {
         std::cerr << "failed to parse robots.txt response for " << r.req.Url().url << std::endl;
+        it->second.rules = RobotRules{true};
         it->second.valid = false;
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
         return;
@@ -336,19 +338,11 @@ void RobotRulesCache::HandleRobotsResponse(http::ReqRes r) {
 
     switch (header->status) {
     case http::StatusCode::OK:
-        // Parse the response body
-        it->second.rules = RobotRules::FromRobotsTxt(std::string_view{r.res.body.data(), r.res.body.size()},
-                                                     "mithril-crawler"sv);  // TODO: move UA string somewhere else
-        it->second.valid = true;
-        it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+        HandleRobotsOK(*header, r.res, it->second);
         break;
 
-
     case http::StatusCode::NotFound:
-        // 404 Not Found = go for it!
-        it->second.rules = RobotRules{false};
-        it->second.valid = true;
-        it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+        HandleRobotsNotFound(it->second);
         break;
 
     case http::StatusCode::MovedPermanently:
@@ -358,6 +352,7 @@ void RobotRulesCache::HandleRobotsResponse(http::ReqRes r) {
     default:
         // TODO: do we want to support redirects on robots.txt?
         // For now, let's be nice and consider the robots.txt to deny all
+        std::cerr << "not following robots.txt redirect for " << canonicalHost << std::endl;
         it->second.rules = RobotRules{true};
         it->second.valid = true;
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
@@ -372,9 +367,35 @@ void RobotRulesCache::HandleRobotsResponseFailed(http::ReqConn r) {
         return;
     }
 
+    std::cerr << "request for robots.txt at " << canonicalHost << " failed" << std::endl;
+
     it->second.rules = RobotRules{};
     it->second.valid = false;
     it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+}
+
+void RobotRulesCache::HandleRobotsOK(const http::ResponseHeader& header,
+                                     const http::Response& res,
+                                     RobotCacheEntry& entry) {
+    bool isTextPlain = header.ContentType != nullptr && header.ContentType->value.starts_with("text/plain");
+    if (isTextPlain) {
+        // Parse the response body
+        entry.rules = RobotRules::FromRobotsTxt(std::string_view{res.body.data(), res.body.size()},
+                                                "mithril-crawler"sv);  // TODO: move UA string somewhere else
+        entry.valid = true;
+    } else {
+        entry.rules = RobotRules{false};
+        entry.valid = true;
+    }
+
+    entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+}
+
+void RobotRulesCache::HandleRobotsNotFound(RobotCacheEntry& entry) {
+    // 404 Not Found = go for it!
+    entry.rules = RobotRules{false};
+    entry.valid = true;
+    entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
 }
 
 }  // namespace mithril

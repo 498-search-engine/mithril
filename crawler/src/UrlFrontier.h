@@ -1,13 +1,13 @@
 #ifndef CRAWLER_URLFRONTIER_H
 #define CRAWLER_URLFRONTIER_H
 
+#include "Robots.h"
 #include "UrlSet.h"
 
 #include <condition_variable>
 #include <mutex>
 #include <queue>
 #include <string>
-#include <core/dary_heap.h>
 
 namespace mithril {
 
@@ -16,6 +16,8 @@ public:
     UrlFrontier();
 
     bool Empty() const;
+
+    void ProcessRobotsRequests();
 
     /**
      * @brief Gets at least one URL from the frontier, up to max
@@ -30,25 +32,28 @@ public:
      * @brief Puts a url onto the frontier (if not already visited).
      *
      * @param u URL to add to frontier.
-     * @return 1 if accepted, 0 if not
      */
-    int PutURL(std::string u);
+    void PutURL(std::string u);
 
     /**
      * @brief Puts multiple urls onto the frontier (if not already visited)
      *
      * @param urls URLs to add to frontier.
-     * @return Number of accepted URLs.
      */
-    int PutURLs(std::vector<std::string> urls);
+    void PutURLs(std::vector<std::string> urls);
 
 private:
+    bool PutURLInternal(std::string u);
+
     mutable std::mutex mu_;
     mutable std::condition_variable cv_;
+    mutable std::condition_variable robotsCv_;
 
     std::queue<std::string> urls_;
     UrlSet seen_;
-    core::dary_heap<std::string, int> test_heap;
+
+    RobotRulesCache robotRulesCache_;
+    std::list<http::URL> urlsWaitingForRobots_;
 };
 
 }  // namespace mithril

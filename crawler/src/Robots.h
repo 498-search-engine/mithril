@@ -1,7 +1,9 @@
 #ifndef CRAWLER_ROBOTS_H
 #define CRAWLER_ROBOTS_H
 
+#include "http/Request.h"
 #include "http/RequestExecutor.h"
+#include "http/Response.h"
 
 #include <string>
 #include <string_view>
@@ -25,6 +27,7 @@ public:
     bool Allowed(std::string_view path) const;
 
 private:
+    // TODO: would it be better to use a trie or some other data structure?
     std::vector<std::string> disallowPrefixes_;  // sorted by length descending
     std::vector<std::string> allowPrefixes_;     // sorted by length descending
     bool disallowAll_;
@@ -33,7 +36,7 @@ private:
 
 class RobotRulesCache {
 public:
-    RobotRulesCache();
+    RobotRulesCache() = default;
 
     RobotRules* GetOrFetch(const std::string& scheme, const std::string& host, const std::string& port);
 
@@ -54,6 +57,9 @@ private:
 
     void HandleRobotsResponse(http::ReqRes r);
     void HandleRobotsResponseFailed(http::ReqConn r);
+
+    static void HandleRobotsOK(const http::ResponseHeader& header, const http::Response& res, RobotCacheEntry& entry);
+    static void HandleRobotsNotFound(RobotCacheEntry& entry);
 
     // TODO: Use an LRU cache
     std::unordered_map<std::string, RobotCacheEntry> cache_;

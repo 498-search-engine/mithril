@@ -55,8 +55,7 @@ void Worker::ProcessHTMLDocument(http::Request req, http::Response res) {
     }
 
     if (!absoluteURLs.empty()) {
-        auto n = frontier_->PutURLs(std::move(absoluteURLs));
-        std::cout << "pushed " << n << " links to frontier" << std::endl;
+        frontier_->PutURLs(std::move(absoluteURLs));
     }
 }
 

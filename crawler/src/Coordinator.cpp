@@ -13,15 +13,10 @@ namespace mithril {
 constexpr size_t NumWorkers = 2;
 constexpr size_t ConcurrentRequests = 10;
 
-Coordinator::Coordinator(const CrawlerConfig& config)
-    : config_(config) {
+Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     frontier_ = std::make_unique<UrlFrontier>();
     docQueue_ = std::make_unique<DocumentQueue>();
-    requestManager_ = std::make_unique<RequestManager>(
-        config_.concurrent_requests,
-        frontier_.get(),
-        docQueue_.get()
-    );
+    requestManager_ = std::make_unique<RequestManager>(config_.concurrent_requests, frontier_.get(), docQueue_.get());
 }
 
 void Coordinator::Run() {
@@ -29,10 +24,10 @@ void Coordinator::Run() {
     for (const auto& url : config_.seed_urls) {
         frontier_->PutURL(url);
     }
-    
+
     std::vector<std::thread> workerThreads;
     workerThreads.reserve(config_.num_workers);
-    
+
     for (size_t i = 0; i < config_.num_workers; ++i) {
         workerThreads.emplace_back([docQueue = docQueue_.get(), frontier = frontier_.get()] {
             Worker w(docQueue, frontier);
@@ -40,8 +35,17 @@ void Coordinator::Run() {
         });
     }
 
-    std::thread eThread([r = requestManager_.get()] { r->Run(); });
-    eThread.join();
+    std::thread requestThread([r = requestManager_.get()] { r->Run(); });
+
+    // TODO: shutdown strategy for threads
+    std::thread frontierThread([f = frontier_.get()] {
+        while (true) {
+            f->ProcessRobotsRequests();
+        }
+    });
+
+    requestThread.join();
+    frontierThread.join();
 
     docQueue_->Close();
 
