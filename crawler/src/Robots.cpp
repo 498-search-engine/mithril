@@ -128,6 +128,7 @@ RobotRules RobotRules::FromRobotsTxt(std::string_view file, std::string_view use
     std::vector<std::string> disallowPrefixes;
     std::vector<std::string> allowPrefixes;
     bool matchesUserAgent = false;
+    bool inUserAgentDefns = false;
 
     if (file.size() > MaxRobotsTxtSize) {
         // Only parse MaxRobotsTxtSize amount of bytes
@@ -150,8 +151,16 @@ RobotRules RobotRules::FromRobotsTxt(std::string_view file, std::string_view use
         }
 
         if (InsensitiveStrEquals(line->directive, "user-agent"sv)) {
-            matchesUserAgent = (line->value == "*" || InsensitiveStrEquals(line->value, userAgent));
+            if (!inUserAgentDefns) {
+                inUserAgentDefns = true;
+                matchesUserAgent = false;
+            }
+            matchesUserAgent |= (line->value == "*" || InsensitiveStrEquals(line->value, userAgent));
             continue;
+        } else {
+            // Got a directive other than "User-agent", any subsequent
+            // "User-agent" directives will begin a new group
+            inUserAgentDefns = false;
         }
 
         if (!matchesUserAgent) {
