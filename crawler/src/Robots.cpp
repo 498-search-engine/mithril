@@ -359,12 +359,16 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
         HandleRobotsNotFound(it->second);
         break;
 
+    case http::StatusCode::Unauthorized:
+    case http::StatusCode::Forbidden:
     default:
-        std::cerr << "got unhandled robots.txt status " << header->status << " for " << canonicalHost << std::endl;
+        std::cerr << "got robots.txt status " << header->status << " for " << canonicalHost << std::endl;
         it->second.rules = RobotRules{true};
         it->second.valid = true;
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
         break;
+
+        // TODO: cut-outs for 429, 5xx, etc.
     }
 }
 

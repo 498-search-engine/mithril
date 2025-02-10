@@ -333,8 +333,6 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
                     return HandleConnError(connIt, RequestError::InvalidResponseData);
                 }
 
-                std::cerr << "following redirect (" << state.redirects + 1 << "/" << req.Options().followRedirects
-                          << ") " << req.Url().url << " -> " << *absoluteRedirect << std::endl;
                 auto newConn = Connection::NewFromURL(req.GetMethod(), *parsedRedirect);
                 if (!newConn) {
                     return HandleConnError(connIt, RequestError::RedirectError);
