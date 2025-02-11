@@ -43,11 +43,6 @@ public:
     void PutURLs(std::vector<std::string> urls);
 
 private:
-    struct WaitingURLs {
-        http::CanonicalHost canonicalHost;
-        std::vector<http::URL> urls;
-    };
-
     /**
      * @brief Puts a url onto the frontier (if not already visited). Assumes
      * caller holds required lock.
@@ -70,7 +65,7 @@ private:
     UrlSet seen_;
 
     RobotRulesCache robotRulesCache_;
-    std::unordered_map<std::string, WaitingURLs> urlsWaitingForRobots_;
+    std::unordered_map<http::CanonicalHost, std::vector<http::URL>> urlsWaitingForRobots_;
 };
 
 }  // namespace mithril

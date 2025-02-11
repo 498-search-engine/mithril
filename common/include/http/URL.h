@@ -264,6 +264,10 @@ struct CanonicalHost {
     std::string port;
 };
 
+inline bool operator==(const CanonicalHost& a, const CanonicalHost& b) {
+    return a.url == b.url;
+}
+
 /**
  * @brief Transforms a URL into a canonical representation of just the host
  * information (hostname, scheme, port).
@@ -288,5 +292,17 @@ inline CanonicalHost CanonicalizeHost(const http::URL& url) {
 }
 
 } // namespace mithril::http
+
+namespace std {
+
+template<>
+struct hash<mithril::http::CanonicalHost> {
+    size_t operator()(const mithril::http::CanonicalHost& c) const {
+        std::hash<std::string> h;
+        return h(c.url);
+    }
+};
+
+}  // namespace std
 
 #endif

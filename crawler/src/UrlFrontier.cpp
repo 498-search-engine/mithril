@@ -41,8 +41,7 @@ void UrlFrontier::ProcessRobotsRequests() {
 
     auto it = urlsWaitingForRobots_.begin();
     while (it != urlsWaitingForRobots_.end()) {
-        const auto& canonicalHost = it->second.canonicalHost;
-        auto* robots = robotRulesCache_.GetOrFetch(canonicalHost);
+        auto* robots = robotRulesCache_.GetOrFetch(it->first);
         if (robots == nullptr) {
             // Still fetching...
             ++it;
@@ -51,9 +50,8 @@ void UrlFrontier::ProcessRobotsRequests() {
 
         // The cache has fetched and resolved the robots.txt page for this
         // canonical host. Process all queued URLs.
-        auto& urls = it->second.urls;
         bool pushed = false;
-        for (auto& url : urls) {
+        for (auto& url : it->second) {
             if (robots->Allowed(url.path)) {
                 assert(seen_.Contains(url.url));
                 urls_.push(std::move(url.url));
@@ -128,23 +126,17 @@ bool UrlFrontier::PutURLInternal(std::string u) {
     auto* robots = robotRulesCache_.GetOrFetch(canonicalHost);
     if (robots == nullptr) {
         // Fetch is in progress
-        auto it = urlsWaitingForRobots_.find(canonicalHost.url);
+        auto it = urlsWaitingForRobots_.find(canonicalHost);
         if (it == urlsWaitingForRobots_.end()) {
             // This is the first pending URL for this canonical host
-            auto url = canonicalHost.url;
-            auto insertResult = urlsWaitingForRobots_.insert({
-                std::move(url),
-                WaitingURLs{
-                            .canonicalHost = std::move(canonicalHost),
-                            }
-            });
+            auto insertResult = urlsWaitingForRobots_.try_emplace(std::move(canonicalHost));
             assert(insertResult.second);
             it = insertResult.first;
             // Notify that a new request for a robots.txt page is available
             robotsCv_.notify_one();
         }
 
-        it->second.urls.push_back(std::move(*parsed));
+        it->second.push_back(std::move(*parsed));
         return true;
     }
 
