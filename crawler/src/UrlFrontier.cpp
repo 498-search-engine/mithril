@@ -132,8 +132,13 @@ bool UrlFrontier::PutURLInternal(std::string u) {
         auto it = urlsWaitingForRobots_.find(canonicalHost.url);
         if (it == urlsWaitingForRobots_.end()) {
             // This is the first pending URL for this canonical host
-            auto insertResult = urlsWaitingForRobots_.insert(
-                {canonicalHost.url, WaitingURLs{.canonicalHost = std::move(canonicalHost)}});
+            auto url = canonicalHost.url;
+            auto insertResult = urlsWaitingForRobots_.insert({
+                std::move(url),
+                WaitingURLs{
+                            .canonicalHost = std::move(canonicalHost),
+                            }
+            });
             assert(insertResult.second);
             it = insertResult.first;
             // Notify that a new request for a robots.txt page is available
