@@ -44,15 +44,27 @@ public:
 
 private:
     struct WaitingURLs {
-        http::URL canonicalHost;
+        http::CanonicalHost canonicalHost;
         std::vector<http::URL> urls;
     };
 
+    /**
+     * @brief Puts a url onto the frontier (if not already visited). Assumes
+     * caller holds required lock.
+     *
+     * If the canonical host for the URL has a cached robots.txt ruleset, the
+     * URL will be immediately pushed onto the active queue. Otherwise, a
+     * request to fetch the robots.txt page is scheduled and the URL is put on a
+     * waiting queue.
+     *
+     * @param u URL to add to frontier.
+     * @return Whether the URL was accepted into the frontier.
+     */
     bool PutURLInternal(std::string u);
 
     mutable std::mutex mu_;
-    mutable std::condition_variable cv_;
-    mutable std::condition_variable robotsCv_;
+    mutable std::condition_variable cv_;        // Notifies when URL is available in queue
+    mutable std::condition_variable robotsCv_;  // Notifies when new request is available for processing
 
     std::queue<std::string> urls_;
     UrlSet seen_;

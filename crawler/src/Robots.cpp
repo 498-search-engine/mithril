@@ -214,7 +214,7 @@ namespace {
 
 }  // namespace
 
-RobotRules* RobotRulesCache::GetOrFetch(const http::URL& canonicalHost) {
+RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
     auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
         if (executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
@@ -245,7 +245,7 @@ RobotRules* RobotRulesCache::GetOrFetch(const http::URL& canonicalHost) {
     return nullptr;
 }
 
-void RobotRulesCache::Fetch(const http::URL& canonicalHost) {
+void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
     executor_.Add(http::Request::GET(
         http::URL{
             .url = canonicalHost.url + "/robots.txt",

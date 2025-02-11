@@ -254,26 +254,24 @@ inline void TestURLParsing() {
     assert(!test3.has_value());
 }
 
-inline std::string CanonicalizeHost(const std::string& scheme, const std::string& host, const std::string& port) {
-    std::string h;
-    h.append(scheme);
-    h.append("://");
-    h.append(host);
-    if (port.empty()) {
-        h.append(InsensitiveStrEquals(scheme, "https"sv) ? ":443" : ":80");
-    } else {
-        h.push_back(':');
-        h.append(port);
-    }
+struct CanonicalHost {
+    std::string url;
+    std::string scheme;
+    std::string host; 
+    std::string port;
+};
 
-    return h;
-}
-
-inline http::URL CanonicalizeHost(const http::URL& url) {
-    auto canonical = http::URL{
+/**
+ * @brief Transforms a URL into a canonical representation of just the host
+ * information (hostname, scheme, port).
+ *
+ * @param url URL to canonicalize
+ * @return CanonicalHost 
+ */
+inline CanonicalHost CanonicalizeHost(const http::URL& url) {
+    auto canonical = http::CanonicalHost{
         .scheme = ToLowerCase(url.scheme),
         .host = ToLowerCase(url.host),
-        .path = "",
     };
 
     if (url.port.empty()) {

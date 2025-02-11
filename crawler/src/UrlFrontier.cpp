@@ -50,6 +50,8 @@ void UrlFrontier::ProcessRobotsRequests() {
             continue;
         }
 
+        // The cache has fetched and resolved the robots.txt page for this
+        // canonical host. Process all queued URLs.
         auto& urls = it->second.urls;
         bool pushed = false;
         for (auto& url : urls) {
@@ -115,13 +117,13 @@ bool UrlFrontier::PutURLInternal(std::string u) {
         return false;
     }
 
-    // Add to URLs seen before we go any farther
-    seen_.Put(u);
-
     auto parsed = http::ParseURL(u);
     if (!parsed) {
         return false;
     }
+
+    // Add to URLs seen set before we go any further.
+    seen_.Put(u);
 
     auto canonicalHost = http::CanonicalizeHost(*parsed);
     auto* robots = robotRulesCache_.GetOrFetch(canonicalHost);
@@ -129,10 +131,12 @@ bool UrlFrontier::PutURLInternal(std::string u) {
         // Fetch is in progress
         auto it = urlsWaitingForRobots_.find(canonicalHost.url);
         if (it == urlsWaitingForRobots_.end()) {
-            auto insertResult =
-                urlsWaitingForRobots_.insert({canonicalHost.url, WaitingURLs{.canonicalHost = canonicalHost}});
+            // This is the first pending URL for this canonical host
+            auto insertResult = urlsWaitingForRobots_.insert(
+                {canonicalHost.url, WaitingURLs{.canonicalHost = std::move(canonicalHost)}});
             assert(insertResult.second);
             it = insertResult.first;
+            // Notify that a new request for a robots.txt page is available
             robotsCv_.notify_one();
         }
 
