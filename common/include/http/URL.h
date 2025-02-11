@@ -1,5 +1,5 @@
-#ifndef COMMON_HTTP_PARSEDURL_H
-#define COMMON_HTTP_PARSEDURL_H
+#ifndef COMMON_HTTP_URL_H
+#define COMMON_HTTP_URL_H
 
 #include "Util.h"
 
@@ -170,8 +170,7 @@ inline std::optional<URL> ParseURL(std::string_view url_view) {
     return u;
 }
 
-
-inline std::string NormalizeURL(const URL& url) {
+inline std::string CanonicalizeURL(const URL& url) {
     std::string normalized;
     normalized.reserve(url.url.size());
 
@@ -229,13 +228,13 @@ inline void TestURLParsing() {
     assert(test1->scheme == "https");
     assert(test1->host == "GitHub.COM");
     assert(test1->path == "/dnsge");
-    assert(NormalizeURL(*test1) == "https://github.com/dnsge");
+    assert(CanonicalizeURL(*test1) == "https://github.com/dnsge");
 
     auto test2 = ParseURL("http://example.com:8080//a//b/../c");
     assert(test2.has_value());
     assert(test2->port == "8080");
     assert(test2->path == "//a//b/../c");
-    assert(NormalizeURL(*test2) == "http://example.com:8080/a/b/../c");
+    assert(CanonicalizeURL(*test2) == "http://example.com:8080/a/b/../c");
 
     auto test3 = ParseURL("invalid://test");
     assert(!test3.has_value());
@@ -262,17 +261,22 @@ inline bool operator==(const CanonicalHost& a, const CanonicalHost& b) {
  */
 inline CanonicalHost CanonicalizeHost(const http::URL& url) {
     auto canonical = http::CanonicalHost{
+        .url = {},
         .scheme = ToLowerCase(url.scheme),
         .host = ToLowerCase(url.host),
+        .port = {},
     };
 
-    if (url.port.empty()) {
-        canonical.port = InsensitiveStrEquals(url.scheme, "https"sv) ? "443" : "80";
-    } else {
-        canonical.port = url.port;
+    canonical.url = canonical.scheme + "://" + canonical.host;
+
+    if (!url.port.empty()) {
+        if ((url.scheme == "https"sv && url.port != "443"sv) || (url.scheme == "http"sv && url.port != "80"sv)) {
+            canonical.port = url.port;
+            canonical.url += ":";
+            canonical.url += canonical.port;
+        }
     }
 
-    canonical.url = canonical.scheme + "://" + canonical.host + ":" + canonical.port;
     return canonical;
 }
 

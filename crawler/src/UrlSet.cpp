@@ -6,7 +6,7 @@ namespace mithril {
 
 void UrlSet::Put(const std::string& url) {
     if (auto parsed = http::ParseURL(url)) {
-        auto normalized = http::NormalizeURL(*parsed);
+        auto normalized = http::CanonicalizeURL(*parsed);
         set_.insert(std::move(normalized));
     } else {
         std::cerr << "bad url: " << url << std::endl;
@@ -15,10 +15,10 @@ void UrlSet::Put(const std::string& url) {
 
 bool UrlSet::Contains(const std::string& url) const {
     if (auto parsed = http::ParseURL(url)) {
-        auto normalized = http::NormalizeURL(*parsed);
+        auto normalized = http::CanonicalizeURL(*parsed);
         return set_.contains(normalized);
     }
     return false;
- }
+}
 
 }  // namespace mithril

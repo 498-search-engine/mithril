@@ -147,3 +147,29 @@ TEST(URL, ParseEdgeCases) {
         EXPECT_EQ(result->scheme, "https");
     }
 }
+
+TEST(URL, CanonicalizeHost) {
+    // Basic canonicalization
+    {
+        auto url = ParseURL("Https://GitHub.COM/dnsge?achievement=arctic#section"sv);
+        ASSERT_TRUE(url.has_value());
+
+        auto canonical = CanonicalizeHost(*url);
+        EXPECT_EQ(canonical.url, "https://github.com");
+        EXPECT_EQ(canonical.scheme, "https");
+        EXPECT_EQ(canonical.host, "github.com");
+        EXPECT_EQ(canonical.port, "");
+    }
+
+    // Non-standard port
+    {
+        auto url = ParseURL("https://github.com:80/dnsge?achievement=arctic#section"sv);
+        ASSERT_TRUE(url.has_value());
+
+        auto canonical = CanonicalizeHost(*url);
+        EXPECT_EQ(canonical.url, "https://github.com:80");
+        EXPECT_EQ(canonical.scheme, "https");
+        EXPECT_EQ(canonical.host, "github.com");
+        EXPECT_EQ(canonical.port, "80");
+    }
+}
