@@ -43,6 +43,11 @@ public:
     void PutURLs(std::vector<std::string> urls);
 
 private:
+    struct WaitingURLs {
+        http::URL canonicalHost;
+        std::vector<http::URL> urls;
+    };
+
     bool PutURLInternal(std::string u);
 
     mutable std::mutex mu_;
@@ -53,7 +58,7 @@ private:
     UrlSet seen_;
 
     RobotRulesCache robotRulesCache_;
-    std::list<http::URL> urlsWaitingForRobots_;
+    std::unordered_map<std::string, WaitingURLs> urlsWaitingForRobots_;
 };
 
 }  // namespace mithril

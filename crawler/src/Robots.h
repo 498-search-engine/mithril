@@ -1,9 +1,9 @@
 #ifndef CRAWLER_ROBOTS_H
 #define CRAWLER_ROBOTS_H
 
-#include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
+#include "http/URL.h"
 
 #include <string>
 #include <string_view>
@@ -38,9 +38,9 @@ class RobotRulesCache {
 public:
     RobotRulesCache() = default;
 
-    RobotRules* GetOrFetch(const std::string& scheme, const std::string& host, const std::string& port);
+    RobotRules* GetOrFetch(const http::URL& canonicalHost);
 
-    bool HasPendingRequests() const;
+    size_t PendingRequests() const;
     void ProcessPendingRequests();
 
 private:
@@ -50,10 +50,7 @@ private:
         bool valid{false};
     };
 
-    void Fetch(const std::string& scheme,
-               const std::string& host,
-               const std::string& port,
-               const std::string& canonicalHost);
+    void Fetch(const http::URL& canonicalHost);
 
     void HandleRobotsResponse(const http::CompleteResponse& r);
     void HandleRobotsResponseFailed(const http::FailedRequest& failed);

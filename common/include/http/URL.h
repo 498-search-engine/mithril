@@ -1,6 +1,8 @@
 #ifndef COMMON_HTTP_PARSEDURL_H
 #define COMMON_HTTP_PARSEDURL_H
 
+#include "Util.h"
+
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -10,6 +12,8 @@
 #include <optional>
 
 namespace mithril::http {
+
+using namespace std::string_view_literals;
 
 struct URL {
     std::string url;
@@ -248,6 +252,38 @@ inline void TestURLParsing() {
 
     auto test3 = ParseURL("invalid://test");
     assert(!test3.has_value());
+}
+
+inline std::string CanonicalizeHost(const std::string& scheme, const std::string& host, const std::string& port) {
+    std::string h;
+    h.append(scheme);
+    h.append("://");
+    h.append(host);
+    if (port.empty()) {
+        h.append(InsensitiveStrEquals(scheme, "https"sv) ? ":443" : ":80");
+    } else {
+        h.push_back(':');
+        h.append(port);
+    }
+
+    return h;
+}
+
+inline http::URL CanonicalizeHost(const http::URL& url) {
+    auto canonical = http::URL{
+        .scheme = ToLowerCase(url.scheme),
+        .host = ToLowerCase(url.host),
+        .path = "",
+    };
+
+    if (url.port.empty()) {
+        canonical.port = InsensitiveStrEquals(url.scheme, "https"sv) ? "443" : "80";
+    } else {
+        canonical.port = url.port;
+    }
+
+    canonical.url = canonical.scheme + "://" + canonical.host + ":" + canonical.port;
+    return canonical;
 }
 
 } // namespace mithril::http

@@ -1,6 +1,7 @@
 #include "Robots.h"
 
 #include "Clock.h"
+#include "Util.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
@@ -24,14 +25,6 @@ struct RobotLine {
     std::string_view directive;
     std::string_view value;
 };
-
-constexpr bool InsensitiveCharEquals(char a, char b) {
-    return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-}
-
-constexpr bool InsensitiveStrEquals(std::string_view a, std::string_view b) {
-    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), InsensitiveCharEquals);
-}
 
 template<typename F>
 void ConsumeUntil(std::string_view line, size_t& i, F f) {
@@ -219,46 +212,14 @@ bool RobotRules::Allowed(std::string_view path) const {
 
 namespace {
 
-std::string CanonicalizeHost(const std::string& scheme, const std::string& host, const std::string& port) {
-    std::string h;
-    h.append(scheme);
-    h.append("://");
-    h.append(host);
-    if (port.empty()) {
-        h.append(InsensitiveStrEquals(scheme, "https"sv) ? ":443" : ":80");
-    } else {
-        h.push_back(':');
-        h.append(port);
-    }
-
-    return h;
-}
-
-std::string CanonicalizeHost(const http::URL& url) {
-    std::string h;
-    h.append(url.scheme);
-    h.append("://");
-    h.append(url.host);
-    if (url.port.empty()) {
-        h.append(InsensitiveStrEquals(url.scheme, "https"sv) ? ":443" : ":80");
-    } else {
-        h.push_back(':');
-        h.append(url.port);
-    }
-
-    return h;
-}
-
 }  // namespace
 
-RobotRules* RobotRulesCache::GetOrFetch(const std::string& scheme, const std::string& host, const std::string& port) {
-    std::string canonicalHost = CanonicalizeHost(scheme, host, port);
-
-    auto it = cache_.find(canonicalHost);
+RobotRules* RobotRulesCache::GetOrFetch(const http::URL& canonicalHost) {
+    auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
         if (executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
-            cache_.insert({canonicalHost, {}});
-            Fetch(scheme, host, port, canonicalHost);
+            cache_.insert({canonicalHost.url, {}});
+            Fetch(canonicalHost);
         }
         return nullptr;
     }
@@ -272,7 +233,7 @@ RobotRules* RobotRulesCache::GetOrFetch(const std::string& scheme, const std::st
     if (now >= it->second.expiresAt) {
         it->second.expiresAt = 0;  // Mark as already fetching
         if (executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
-            Fetch(scheme, host, port, canonicalHost);
+            Fetch(canonicalHost);
         }
         return nullptr;
     }
@@ -284,16 +245,13 @@ RobotRules* RobotRulesCache::GetOrFetch(const std::string& scheme, const std::st
     return nullptr;
 }
 
-void RobotRulesCache::Fetch(const std::string& scheme,
-                            const std::string& host,
-                            const std::string& port,
-                            const std::string& canonicalHost) {
+void RobotRulesCache::Fetch(const http::URL& canonicalHost) {
     executor_.Add(http::Request::GET(
         http::URL{
-            .url = canonicalHost + "/robots.txt",
-            .scheme = scheme,
-            .host = host,
-            .port = port,
+            .url = canonicalHost.url + "/robots.txt",
+            .scheme = canonicalHost.scheme,
+            .host = canonicalHost.host,
+            .port = canonicalHost.port,
             .path = "/robots.txt",
         },
         http::RequestOptions{
@@ -301,8 +259,8 @@ void RobotRulesCache::Fetch(const std::string& scheme,
         }));
 }
 
-bool RobotRulesCache::HasPendingRequests() const {
-    return executor_.InFlightRequests() > 0;
+size_t RobotRulesCache::PendingRequests() const {
+    return executor_.InFlightRequests();
 }
 
 void RobotRulesCache::ProcessPendingRequests() {
@@ -336,7 +294,7 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
 
     // TODO: when this is an LRU cache, could it be possible we don't find it?
     // Would it matter?
-    auto it = cache_.find(canonicalHost);
+    auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
         return;
     }
@@ -362,7 +320,7 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
     case http::StatusCode::Unauthorized:
     case http::StatusCode::Forbidden:
     default:
-        std::cerr << "got robots.txt status " << header->status << " for " << canonicalHost << std::endl;
+        std::cerr << "got robots.txt status " << header->status << " for " << canonicalHost.url << std::endl;
         it->second.rules = RobotRules{true};
         it->second.valid = true;
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
@@ -374,12 +332,12 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
 
 void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& failed) {
     auto canonicalHost = CanonicalizeHost(failed.req.Url());
-    auto it = cache_.find(canonicalHost);
+    auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
         return;
     }
 
-    std::cerr << "request for robots.txt at " << canonicalHost << " failed" << std::endl;
+    std::cerr << "request for robots.txt at " << canonicalHost.url << " failed" << std::endl;
 
     it->second.rules = RobotRules{};
     it->second.valid = false;

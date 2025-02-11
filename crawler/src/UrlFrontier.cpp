@@ -28,25 +28,40 @@ bool UrlFrontier::Empty() const {
 
 void UrlFrontier::ProcessRobotsRequests() {
     std::unique_lock lock(mu_);
-    robotsCv_.wait(lock, [this]() { return !urlsWaitingForRobots_.empty() || robotRulesCache_.HasPendingRequests(); });
 
-    if (robotRulesCache_.HasPendingRequests()) {
-        robotRulesCache_.ProcessPendingRequests();
+    // Wait until we have requests to execute. We only ever get new requests to
+    // process when PutURLInternal is called.
+    robotsCv_.wait(lock, [this]() { return robotRulesCache_.PendingRequests() > 0; });
+
+    size_t before = robotRulesCache_.PendingRequests();
+    robotRulesCache_.ProcessPendingRequests();
+    if (robotRulesCache_.PendingRequests() >= before) {
+        // No requests finished on call to ProcessPendingRequests
+        return;
     }
 
     auto it = urlsWaitingForRobots_.begin();
     while (it != urlsWaitingForRobots_.end()) {
-        auto* robots = robotRulesCache_.GetOrFetch(it->scheme, it->host, it->port);
+        const auto& canonicalHost = it->second.canonicalHost;
+        auto* robots = robotRulesCache_.GetOrFetch(canonicalHost);
         if (robots == nullptr) {
             // Still fetching...
             ++it;
             continue;
         }
 
-        if (robots->Allowed(it->path)) {
-            seen_.Put(it->url);
-            urls_.push(std::move(it->url));
-            cv_.notify_one();
+        auto& urls = it->second.urls;
+        bool pushed = false;
+        for (auto& url : urls) {
+            if (robots->Allowed(url.path)) {
+                assert(seen_.Contains(url.url));
+                urls_.push(std::move(url.url));
+                pushed = true;
+            }
+        }
+
+        if (pushed) {
+            cv_.notify_all();
         }
 
         it = urlsWaitingForRobots_.erase(it);
@@ -100,16 +115,28 @@ bool UrlFrontier::PutURLInternal(std::string u) {
         return false;
     }
 
+    // Add to URLs seen before we go any farther
+    seen_.Put(u);
+
     auto parsed = http::ParseURL(u);
     if (!parsed) {
         return false;
     }
 
-    auto* robots = robotRulesCache_.GetOrFetch(parsed->scheme, parsed->host, parsed->port);
+    auto canonicalHost = http::CanonicalizeHost(*parsed);
+    auto* robots = robotRulesCache_.GetOrFetch(canonicalHost);
     if (robots == nullptr) {
         // Fetch is in progress
-        urlsWaitingForRobots_.push_back(std::move(*parsed));
-        robotsCv_.notify_one();
+        auto it = urlsWaitingForRobots_.find(canonicalHost.url);
+        if (it == urlsWaitingForRobots_.end()) {
+            auto insertResult =
+                urlsWaitingForRobots_.insert({canonicalHost.url, WaitingURLs{.canonicalHost = canonicalHost}});
+            assert(insertResult.second);
+            it = insertResult.first;
+            robotsCv_.notify_one();
+        }
+
+        it->second.urls.push_back(std::move(*parsed));
         return true;
     }
 
@@ -117,7 +144,6 @@ bool UrlFrontier::PutURLInternal(std::string u) {
         return false;
     }
 
-    seen_.Put(u);
     urls_.push(std::move(u));
     return true;
 }

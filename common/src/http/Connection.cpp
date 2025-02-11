@@ -1,5 +1,6 @@
 #include "http/Connection.h"
 
+#include "Util.h"
 #include "http/Request.h"
 #include "http/Response.h"
 #include "http/SSL.h"
@@ -13,7 +14,6 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
-#include <iterator>
 #include <netdb.h>
 #include <stdexcept>
 #include <unistd.h>
@@ -32,18 +32,6 @@ constexpr const char* ContentLengthHeader = "Content-Length: ";
 constexpr const char* TransferEncodingChunkedHeader = "Transfer-Encoding: chunked";
 constexpr const char* HeaderDelimiter = "\r\n\r\n";
 constexpr const char* CRLF = "\r\n";
-
-size_t FindCaseInsensitive(const std::string& s, const char* q) {
-    auto len = std::strlen(q);
-    auto it = std::search(s.begin(), s.end(), q, q + len, [](unsigned char a, unsigned char b) -> bool {
-        return std::tolower(a) == std::tolower(b);
-    });
-    if (it == s.end()) {
-        return std::string::npos;
-    } else {
-        return std::distance(s.begin(), it);
-    }
-}
 
 void PrintSSLError(SSL* ssl, int status) {
     int sslErr = SSL_get_error(ssl, status);

@@ -1,6 +1,7 @@
 #include "http/Response.h"
 
-#include <algorithm>
+#include "Util.h"
+
 #include <cctype>
 #include <string>
 #include <string_view>
@@ -8,14 +9,6 @@
 namespace mithril::http {
 
 namespace {
-
-bool InsensitiveCharEquals(char a, char b) {
-    return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-}
-
-bool InsensitiveStrEquals(std::string_view a, std::string_view b) {
-    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), InsensitiveCharEquals);
-}
 
 void PopulateHeaderFields(ResponseHeader& h) {
     for (auto& header : h.headers) {
