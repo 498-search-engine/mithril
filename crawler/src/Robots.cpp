@@ -95,14 +95,6 @@ std::optional<RobotLine> ParseRobotLine(std::string_view line) {
     };
 }
 
-std::string_view FixWildcardPath(std::string_view p) {
-    // Remove trailing '*' from "/something/*", we don't support wildcards
-    if (p.ends_with("/*")) {
-        p.remove_suffix(1);
-    }
-    return p;
-}
-
 }  // namespace
 
 namespace internal {
@@ -311,11 +303,9 @@ RobotRules RobotRules::FromRobotsTxt(std::string_view file, std::string_view use
         }
 
         if (InsensitiveStrEquals(line->directive, "disallow"sv)) {
-            auto path = FixWildcardPath(line->value);
-            disallowPrefixes.emplace_back(path);
+            disallowPrefixes.emplace_back(line->value);
         } else if (InsensitiveStrEquals(line->directive, "allow"sv)) {
-            auto path = FixWildcardPath(line->value);
-            allowPrefixes.emplace_back(path);
+            allowPrefixes.emplace_back(line->value);
         }
     }
 
