@@ -5,11 +5,11 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace mithril::html {
 
-std::optional<std::string>
-MakeAbsoluteLink(const http::URL& currentUrl, const std::string& base, const std::string& href);
+std::optional<std::string> MakeAbsoluteLink(const http::URL& currentUrl, std::string_view base, std::string_view href);
 
 }  // namespace mithril::html
 

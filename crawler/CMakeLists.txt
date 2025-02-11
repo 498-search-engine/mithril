@@ -4,6 +4,7 @@ add_executable(crawler
     src/Coordinator.cpp
     src/DocumentQueue.cpp
     src/RequestManager.cpp
+    src/Robots.cpp
     src/UrlFrontier.cpp
     src/UrlSet.cpp
     src/Worker.cpp

@@ -1,10 +1,10 @@
 #ifndef CRAWLER_COORDINATOR_H
 #define CRAWLER_COORDINATOR_H
 
+#include "Config.h"
 #include "DocumentQueue.h"
 #include "RequestManager.h"
 #include "UrlFrontier.h"
-#include "Config.h"
 
 #include <memory>
 

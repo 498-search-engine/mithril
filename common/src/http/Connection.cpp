@@ -1,8 +1,10 @@
 #include "http/Connection.h"
 
+#include "Util.h"
 #include "http/Request.h"
 #include "http/Response.h"
 #include "http/SSL.h"
+#include "http/URL.h"
 
 #include <algorithm>
 #include <cassert>
@@ -12,7 +14,6 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
-#include <iterator>
 #include <netdb.h>
 #include <stdexcept>
 #include <unistd.h>
@@ -31,18 +32,6 @@ constexpr const char* ContentLengthHeader = "Content-Length: ";
 constexpr const char* TransferEncodingChunkedHeader = "Transfer-Encoding: chunked";
 constexpr const char* HeaderDelimiter = "\r\n\r\n";
 constexpr const char* CRLF = "\r\n";
-
-size_t FindCaseInsensitive(const std::string& s, const char* q) {
-    auto len = std::strlen(q);
-    auto it = std::search(s.begin(), s.end(), q, q + len, [](unsigned char a, unsigned char b) -> bool {
-        return std::tolower(a) == std::tolower(b);
-    });
-    if (it == s.end()) {
-        return std::string::npos;
-    } else {
-        return std::distance(s.begin(), it);
-    }
-}
 
 void PrintSSLError(SSL* ssl, int status) {
     int sslErr = SSL_get_error(ssl, status);
@@ -82,7 +71,11 @@ void PrintSSLConnectError(SSL* ssl, int status) {
 
 }  // namespace
 
-std::optional<Connection> Connection::NewWithRequest(const Request& req) {
+std::optional<Connection> Connection::NewFromRequest(const Request& req) {
+    return Connection::NewFromURL(req.GetMethod(), req.Url());
+}
+
+std::optional<Connection> Connection::NewFromURL(Method method, const URL& url) {
     struct addrinfo* address;
     struct addrinfo hints {};
     memset(&hints, 0, sizeof(hints));
@@ -90,13 +83,13 @@ std::optional<Connection> Connection::NewWithRequest(const Request& req) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    bool isSecure = req.Url().scheme == "https";
-    const char* port = req.Url().port.empty() ? (isSecure ? "443" : "80") : req.Url().port.c_str();
+    bool isSecure = url.scheme == "https";
+    const char* port = url.port.empty() ? (isSecure ? "443" : "80") : url.port.c_str();
 
-    int status = getaddrinfo(req.Url().host.c_str(), port, &hints, &address);
+    int status = getaddrinfo(url.host.c_str(), port, &hints, &address);
     if (status == -1 || address == nullptr) {
         // TODO: better logging
-        std::cerr << "failed to get addr for " << req.Url().host << ":" << port << std::endl;
+        std::cerr << "failed to get addr for " << url.host << ":" << port << std::endl;
         return std::nullopt;
     }
 
@@ -113,14 +106,15 @@ std::optional<Connection> Connection::NewWithRequest(const Request& req) {
         // continue anyway
     }
 
-    return Connection{fd, address, req};
+    return Connection{fd, address, method, url};
 }
 
-Connection::Connection(int fd, struct addrinfo* address, const Request& req)
+Connection::Connection(int fd, struct addrinfo* address, Method method, const URL& url)
     : fd_(fd),
       address_(address),
       state_(State::TCPConnecting),
-      rawRequest_(BuildRawRequestString(req)),
+      url_(url),
+      rawRequest_(BuildRawRequestString(method, url)),
       requestBytesSent_(0),
       contentLength_(0),
       headersLength_(0),
@@ -128,8 +122,7 @@ Connection::Connection(int fd, struct addrinfo* address, const Request& req)
       currentChunkSize_(0),
       currentChunkBytesRead_(0),
       ssl_(nullptr),
-      isSecure_(req.Url().scheme == "https"),
-      sni_(req.Url().host) {
+      isSecure_(url.scheme == "https") {
     if (isSecure_) {
         InitializeSSL();
     }
@@ -143,6 +136,7 @@ Connection::Connection(Connection&& other) noexcept
     : fd_(other.fd_),
       address_(other.address_),
       state_(other.state_),
+      url_(std::move(other.url_)),
       rawRequest_(std::move(other.rawRequest_)),
       requestBytesSent_(other.requestBytesSent_),
       contentLength_(other.contentLength_),
@@ -153,8 +147,7 @@ Connection::Connection(Connection&& other) noexcept
       buffer_(std::move(other.buffer_)),
       body_(std::move(other.body_)),
       ssl_(other.ssl_),
-      isSecure_(other.isSecure_),
-      sni_(std::move(other.sni_)) {
+      isSecure_(other.isSecure_) {
     other.fd_ = -1;
     other.address_ = nullptr;
     other.state_ = State::Closed;
@@ -167,6 +160,7 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     fd_ = other.fd_;
     address_ = other.address_;
     state_ = other.state_;
+    url_ = std::move(other.url_);
     rawRequest_ = std::move(other.rawRequest_);
     requestBytesSent_ = other.requestBytesSent_;
     contentLength_ = other.contentLength_;
@@ -178,7 +172,6 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     body_ = std::move(other.body_);
     ssl_ = other.ssl_;
     isSecure_ = other.isSecure_;
-    sni_ = std::move(other.sni_);
 
     other.fd_ = -1;
     other.address_ = nullptr;
@@ -217,7 +210,7 @@ void Connection::InitializeSSL() {
     }
 
     // Set Server Name Indication (SNI)
-    SSL_set_tlsext_host_name(ssl_, sni_.c_str());
+    SSL_set_tlsext_host_name(ssl_, url_.host.c_str());
 }
 
 void Connection::Close() {
@@ -278,14 +271,16 @@ bool Connection::ReadFromSocket() {
                 // No more data available right now
                 return false;
             }
-            // TODO: error handling strategy
+
+            // TODO: error logging
             if (isSecure_) {
                 PrintSSLError(ssl_, bytesRead);
             } else {
                 perror("mithril::http::Connection::ReadFromSocket(): read bytes");
             }
-            // TODO: error handling strategy
-            state_ = State::Error;
+
+            state_ = State::SocketError;
+            Close();
             return false;
         }
     } while (bytesRead > 0);
@@ -307,7 +302,8 @@ void Connection::Connect() {
             } else {
                 // Some other error occurred
                 perror("mithril::http::Connection::Connect() connect");
-                state_ = State::Error;
+                state_ = State::ConnectError;
+                Close();
                 return;
             }
         }
@@ -327,14 +323,15 @@ void Connection::Connect() {
 
             // Actual SSL error occurred
             PrintSSLConnectError(ssl_, status);
-            state_ = State::Error;
+            state_ = State::ConnectError;
+            Close();
             return;
         }
     }
 }
 
 void Connection::Process(bool gotEof) {
-    if (state_ == State::Complete || state_ == State::Closed || state_ == State::Error) {
+    if (IsComplete() || state_ == State::Closed || IsError()) {
         return;
     }
 
@@ -351,8 +348,8 @@ void Connection::Process(bool gotEof) {
     if (gotEof) {
         if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
             (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
-            state_ = State::Error;
-            // TODO: error handling strategy
+            state_ = State::UnexpectedEOFError;
+            // TODO: error logging
             std::cerr << "conn: closed before receiveing complete response" << std::endl;
         } else {
             state_ = State::Complete;
@@ -384,8 +381,12 @@ bool Connection::ProcessSend() {
             } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 return false;
             }
-            // TODO: error handling strategy
+
+            // TODO: error logging
             perror("HTTP Connection send request data");
+            state_ = State::SocketError;
+            Close();
+            return false;
         }
     } while (requestBytesSent_ < rawRequest_.size());
 
@@ -428,7 +429,7 @@ bool Connection::IsActive() const {
 }
 
 bool Connection::IsError() const {
-    return state_ == State::Error;
+    return state_ == State::ConnectError || state_ == State::SocketError || state_ == State::UnexpectedEOFError;
 }
 
 bool Connection::IsSecure() const {

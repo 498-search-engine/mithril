@@ -14,11 +14,12 @@ constexpr const char* ConnectionCloseHeader = "Connection: close\r\n";
 
 }  // namespace
 
-Request Request::GET(URL url) {
-    return Request{Method::GET, std::move(url)};
+Request Request::GET(URL url, RequestOptions options) {
+    return Request{Method::GET, std::move(url), options};
 }
 
-Request::Request(enum Method method, URL url) : method_(method), url_(std::move(url)) {}
+Request::Request(enum Method method, URL url, RequestOptions options)
+    : method_(method), url_(std::move(url)), options_(options) {}
 
 Method Request::GetMethod() const {
     return method_;
@@ -28,24 +29,32 @@ const URL& Request::Url() const {
     return url_;
 }
 
+const RequestOptions& Request::Options() const {
+    return options_;
+}
+
 std::string BuildRawRequestString(const Request& req) {
+    return BuildRawRequestString(req.GetMethod(), req.Url());
+}
+
+std::string BuildRawRequestString(Method method, const URL& url) {
     std::string rawRequest;
     rawRequest.reserve(256);
 
-    switch (req.GetMethod()) {
+    switch (method) {
     case Method::GET:
         rawRequest.append("GET ");
         break;
     }
 
-    if (req.Url().path.empty()) {
+    if (url.path.empty()) {
         rawRequest.append("/");
     } else {
-        rawRequest.append(req.Url().path);
+        rawRequest.append(url.path);
     }
 
     rawRequest.append(" HTTP/1.1\r\nHost: ");
-    rawRequest.append(req.Url().host);
+    rawRequest.append(url.host);
     rawRequest.append(CRLF);
     rawRequest.append(UserAgentHeader);
     rawRequest.append(AcceptAllHeader);

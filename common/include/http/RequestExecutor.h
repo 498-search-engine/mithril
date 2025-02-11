@@ -3,6 +3,7 @@
 
 #include "http/Connection.h"
 #include "http/Request.h"
+#include "http/Response.h"
 
 #include <list>
 #include <unordered_map>
@@ -24,14 +25,28 @@
 
 namespace mithril::http {
 
-struct ReqConn {
-    Request req;
-    Connection conn;
+struct RequestState {
+    int redirects{0};
 };
 
-struct ReqRes {
+struct CompleteResponse {
     Request req;
     Response res;
+    ResponseHeader header;
+};
+
+enum class RequestError : uint8_t {
+    None,
+    ConnectionError,
+    InvalidResponseData,
+
+    RedirectError,
+    TooManyRedirects,
+};
+
+struct FailedRequest {
+    Request req;
+    RequestError error{RequestError::None};
 };
 
 /**
@@ -63,17 +78,26 @@ public:
     /**
      * @brief Returns vector containing complete HTTP responses.
      */
-    std::vector<ReqRes>& ReadyResponses();
+    std::vector<CompleteResponse>& ReadyResponses();
 
     /**
-     * @brief Returns vector containing HTTP connections that failed to
-     * completely receive a response.
+     * @brief Returns vector containing HTTP requests that failed to receive a
+     * response.
      */
-    std::vector<ReqConn>& FailedConnections();
+    std::vector<FailedRequest>& FailedRequests();
 
 private:
-    void HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt);
+    struct ReqConn {
+        Request req;
+        Connection conn;
+        RequestState state;
+    };
+
+    bool HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt);
     bool HandleConnReady(std::unordered_map<int, ReqConn>::iterator connIt);
+
+    bool HandleConnComplete(std::unordered_map<int, ReqConn>::iterator connIt);
+    bool HandleConnError(std::unordered_map<int, ReqConn>::iterator connIt, RequestError error);
 
     void ProcessPendingConnections();
     void SetupActiveConnection(ReqConn reqConn);
@@ -88,8 +112,8 @@ private:
 
     std::list<ReqConn> pendingConnection_;
     std::unordered_map<int, ReqConn> activeConnections_;
-    std::vector<ReqRes> readyResponses_;
-    std::vector<ReqConn> failedConnections_;
+    std::vector<CompleteResponse> readyResponses_;
+    std::vector<FailedRequest> failedRequests_;
 };
 
 }  // namespace mithril::http

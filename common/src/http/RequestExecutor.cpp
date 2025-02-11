@@ -1,16 +1,24 @@
 #include "http/RequestExecutor.h"
 
+#include "html/Link.h"
 #include "http/Connection.h"
 #include "http/Request.h"
+#include "http/Response.h"
+#include "http/URL.h"
 
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
-#include <iostream>
 #include <unistd.h>
 #include <utility>
 
+#if defined(USE_KQUEUE)
+#    include <ctime>
+#endif
+
 namespace mithril::http {
+
+constexpr int SocketWaitTimeoutMs = 5;  // 5 milliseconds
 
 RequestExecutor::RequestExecutor()
 #if defined(USE_EPOLL)
@@ -51,7 +59,7 @@ RequestExecutor::~RequestExecutor() {
 void RequestExecutor::Add(Request req) {
     assert(events_.size() == activeConnections_.size());
 
-    auto conn = Connection::NewWithRequest(req);
+    auto conn = Connection::NewFromRequest(req);
     if (!conn) {
         return;
     }
@@ -59,6 +67,7 @@ void RequestExecutor::Add(Request req) {
     pendingConnection_.push_back(ReqConn{
         .req = std::move(req),
         .conn = std::move(*conn),
+        .state = RequestState{},
     });
 }
 
@@ -110,7 +119,7 @@ void RequestExecutor::ProcessConnections() {
     size_t nRemoved = 0;
 #if defined(USE_EPOLL)
     // TODO: untested, unchecked epoll code written by 4o
-    int nev = epoll_wait(epoll_, events_.data(), events_.size(), -1);
+    int nev = epoll_wait(epoll_, events_.data(), events_.size(), SocketWaitTimeoutMs);
     if (nev == -1) {
         perror("RequestExecutor epoll_wait");
         exit(1);
@@ -126,8 +135,7 @@ void RequestExecutor::ProcessConnections() {
             bool writingBefore = connIt->second.conn.IsWriting();
 
             if ((ev.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0) {
-                HandleConnEOF(connIt);
-                removed = true;
+                removed = HandleConnEOF(connIt);
             } else if ((ev.events & (EPOLLIN | EPOLLOUT)) != 0) {
                 removed = HandleConnReady(connIt);
             }
@@ -171,7 +179,10 @@ void RequestExecutor::ProcessConnections() {
         }
     }
 #elif defined(USE_KQUEUE)
-    int nev = kevent(kq_, nullptr, 0, events_.data(), static_cast<int>(events_.size()), nullptr);  // TODO: timeout
+    struct timespec timeout {
+        .tv_sec = 0, .tv_nsec = static_cast<long>(SocketWaitTimeoutMs) * 1000L * 1000L,
+    };
+    int nev = kevent(kq_, nullptr, 0, events_.data(), static_cast<int>(events_.size()), &timeout);
     for (int i = 0; i < nev; ++i) {
         auto& ev = events_[i];
         auto fd = static_cast<int>(ev.ident);
@@ -182,8 +193,7 @@ void RequestExecutor::ProcessConnections() {
             bool writingBefore = connIt->second.conn.IsWriting();
 
             if ((ev.flags & EV_EOF) != 0) {
-                HandleConnEOF(connIt);
-                removed = true;
+                removed = HandleConnEOF(connIt);
             } else if (ev.filter == EVFILT_READ || ev.filter == EVFILT_WRITE) {
                 removed = HandleConnReady(connIt);
             }
@@ -236,7 +246,10 @@ void RequestExecutor::ProcessPendingConnections() {
 
         if (it->conn.IsError()) {
             // Connection failed in some way
-            failedConnections_.push_back(std::move(*it));
+            failedRequests_.push_back(FailedRequest{
+                .req = std::move(it->req),
+                .error = RequestError::ConnectionError,
+            });
             it = pendingConnection_.erase(it);
         } else if (it->conn.IsActive()) {
             // Now connected
@@ -249,63 +262,130 @@ void RequestExecutor::ProcessPendingConnections() {
     }
 }
 
-void RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt) {
-    auto& conn = connIt->second.conn;
-    auto& req = connIt->second.req;
-
+bool RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt) {
     // Attempt to process any data that may still be in the socket
-    conn.Process(true);
+    connIt->second.conn.Process(true);
 
-    if (conn.IsComplete()) {
-        // Socket got EOF but we were able to read rest of response from socket
-        readyResponses_.push_back({
-            .req = std::move(req),
-            .res = conn.GetResponse(),
-        });
-    } else {
-        // Socket has been closed without finishing response, mark as failed
-        conn.Close();
-        failedConnections_.push_back(std::move(connIt->second));
+    if (connIt->second.conn.IsComplete()) {
+        // Socket contained rest of response data after closing
+        return HandleConnComplete(connIt);
     }
 
-    activeConnections_.erase(connIt);
+    // Socket has been closed without finishing response, mark as failed
+    connIt->second.conn.Close();
+    return HandleConnError(connIt, RequestError::ConnectionError);
 }
 
 bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator connIt) {
-    auto& conn = connIt->second.conn;
-    auto& req = connIt->second.req;
-
     // Process additional received data
-    conn.Process(false);
+    connIt->second.conn.Process(false);
 
-    if (conn.IsComplete()) {
-        // Connection finished receiving HTTP response
-        readyResponses_.push_back({
-            .req = std::move(req),
-            .res = conn.GetResponse(),
-        });
-        activeConnections_.erase(connIt);
-        return true;
-    } else if (conn.IsError()) {
-        conn.Close();
-        failedConnections_.push_back(std::move(connIt->second));
-        activeConnections_.erase(connIt);
-        return true;
+    // Check if the connection has reached a terminal state
+    if (connIt->second.conn.IsComplete()) {
+        return HandleConnComplete(connIt);
+    } else if (connIt->second.conn.IsError()) {
+        return HandleConnError(connIt, RequestError::ConnectionError);
     }
 
+    // Connection is still working on sending request/getting response
     return false;
+}
+
+bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::iterator connIt) {
+    auto& conn = connIt->second.conn;
+    auto& req = connIt->second.req;
+    auto& state = connIt->second.state;
+    assert(conn.IsComplete());
+
+    auto res = conn.GetResponse();
+    auto header = ParseResponseHeader(res);
+    if (!header) {
+        return HandleConnError(connIt, RequestError::InvalidResponseData);
+    }
+
+    if (req.Options().followRedirects > 0) {
+        // Check for redirects
+        switch (header->status) {
+        case StatusCode::MovedPermanently:
+        case StatusCode::Found:
+        case StatusCode::SeeOther:
+        case StatusCode::TemporaryRedirect:
+        case StatusCode::PermanentRedirect:
+            {
+                if (state.redirects >= req.Options().followRedirects) {
+                    // Too many redirects!
+                    return HandleConnError(connIt, RequestError::TooManyRedirects);
+                }
+
+                // Do redirect
+                auto* loc = header->Location;
+                if (loc == nullptr) {
+                    // No `Location` header
+                    return HandleConnError(connIt, RequestError::InvalidResponseData);
+                }
+
+                auto absoluteRedirect = html::MakeAbsoluteLink(conn.url_, "", loc->value);
+                if (!absoluteRedirect) {
+                    return HandleConnError(connIt, RequestError::InvalidResponseData);
+                }
+
+                auto parsedRedirect = ParseURL(*absoluteRedirect);
+                if (!parsedRedirect) {
+                    return HandleConnError(connIt, RequestError::InvalidResponseData);
+                }
+
+                auto newConn = Connection::NewFromURL(req.GetMethod(), *parsedRedirect);
+                if (!newConn) {
+                    return HandleConnError(connIt, RequestError::RedirectError);
+                }
+
+                // Increment number of followed redirects
+                ++state.redirects;
+
+                // Starting new connection, put into pendingConnection list
+                pendingConnection_.push_back({
+                    .req = std::move(req),
+                    .conn = std::move(*newConn),
+                    .state = state,
+                });
+
+                activeConnections_.erase(connIt);
+                return true;
+            }
+        default:
+            break;
+        }
+    }
+
+    readyResponses_.push_back({
+        .req = std::move(req),
+        .res = std::move(res),
+        .header = std::move(*header),
+    });
+
+    activeConnections_.erase(connIt);
+    return true;
+}
+
+bool RequestExecutor::HandleConnError(std::unordered_map<int, ReqConn>::iterator connIt, RequestError error) {
+    failedRequests_.push_back(FailedRequest{
+        .req = std::move(connIt->second.req),
+        .error = error,
+    });
+    activeConnections_.erase(connIt);
+    return true;
 }
 
 size_t RequestExecutor::InFlightRequests() const {
     return pendingConnection_.size() + activeConnections_.size();
 }
 
-std::vector<ReqRes>& RequestExecutor::ReadyResponses() {
+std::vector<CompleteResponse>& RequestExecutor::ReadyResponses() {
     return readyResponses_;
 }
 
-std::vector<ReqConn>& RequestExecutor::FailedConnections() {
-    return failedConnections_;
+std::vector<FailedRequest>& RequestExecutor::FailedRequests() {
+    return failedRequests_;
 }
 
 }  // namespace mithril::http

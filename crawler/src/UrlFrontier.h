@@ -1,13 +1,13 @@
 #ifndef CRAWLER_URLFRONTIER_H
 #define CRAWLER_URLFRONTIER_H
 
+#include "Robots.h"
 #include "UrlSet.h"
 
 #include <condition_variable>
 #include <mutex>
 #include <queue>
 #include <string>
-#include <core/dary_heap.h>
 
 namespace mithril {
 
@@ -16,6 +16,8 @@ public:
     UrlFrontier();
 
     bool Empty() const;
+
+    void ProcessRobotsRequests();
 
     /**
      * @brief Gets at least one URL from the frontier, up to max
@@ -30,25 +32,40 @@ public:
      * @brief Puts a url onto the frontier (if not already visited).
      *
      * @param u URL to add to frontier.
-     * @return 1 if accepted, 0 if not
      */
-    int PutURL(std::string u);
+    void PutURL(std::string u);
 
     /**
      * @brief Puts multiple urls onto the frontier (if not already visited)
      *
      * @param urls URLs to add to frontier.
-     * @return Number of accepted URLs.
      */
-    int PutURLs(std::vector<std::string> urls);
+    void PutURLs(std::vector<std::string> urls);
 
 private:
+    /**
+     * @brief Puts a url onto the frontier (if not already visited). Assumes
+     * caller holds required lock.
+     *
+     * If the canonical host for the URL has a cached robots.txt ruleset, the
+     * URL will be immediately pushed onto the active queue. Otherwise, a
+     * request to fetch the robots.txt page is scheduled and the URL is put on a
+     * waiting queue.
+     *
+     * @param u URL to add to frontier.
+     * @return Whether the URL was accepted into the frontier.
+     */
+    bool PutURLInternal(std::string u);
+
     mutable std::mutex mu_;
-    mutable std::condition_variable cv_;
+    mutable std::condition_variable cv_;        // Notifies when URL is available in queue
+    mutable std::condition_variable robotsCv_;  // Notifies when new request is available for processing
 
     std::queue<std::string> urls_;
     UrlSet seen_;
-    core::dary_heap<std::string, int> test_heap;
+
+    RobotRulesCache robotRulesCache_;
+    std::unordered_map<http::CanonicalHost, std::vector<http::URL>> urlsWaitingForRobots_;
 };
 
 }  // namespace mithril

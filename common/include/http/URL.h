@@ -1,6 +1,8 @@
 #ifndef COMMON_HTTP_PARSEDURL_H
 #define COMMON_HTTP_PARSEDURL_H
 
+#include "Util.h"
+
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -10,6 +12,11 @@
 #include <optional>
 
 namespace mithril::http {
+
+constexpr size_t MinUrlLength = 10;
+constexpr size_t MaxUrlLength = 2048;
+
+using namespace std::string_view_literals;
 
 struct URL {
     std::string url;
@@ -250,6 +257,52 @@ inline void TestURLParsing() {
     assert(!test3.has_value());
 }
 
+struct CanonicalHost {
+    std::string url;
+    std::string scheme;
+    std::string host; 
+    std::string port;
+};
+
+inline bool operator==(const CanonicalHost& a, const CanonicalHost& b) {
+    return a.url == b.url;
+}
+
+/**
+ * @brief Transforms a URL into a canonical representation of just the host
+ * information (hostname, scheme, port).
+ *
+ * @param url URL to canonicalize
+ * @return CanonicalHost 
+ */
+inline CanonicalHost CanonicalizeHost(const http::URL& url) {
+    auto canonical = http::CanonicalHost{
+        .scheme = ToLowerCase(url.scheme),
+        .host = ToLowerCase(url.host),
+    };
+
+    if (url.port.empty()) {
+        canonical.port = InsensitiveStrEquals(url.scheme, "https"sv) ? "443" : "80";
+    } else {
+        canonical.port = url.port;
+    }
+
+    canonical.url = canonical.scheme + "://" + canonical.host + ":" + canonical.port;
+    return canonical;
+}
+
 } // namespace mithril::http
+
+namespace std {
+
+template<>
+struct hash<mithril::http::CanonicalHost> {
+    size_t operator()(const mithril::http::CanonicalHost& c) const {
+        std::hash<std::string> h;
+        return h(c.url);
+    }
+};
+
+}  // namespace std
 
 #endif

@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - redirect support, crawler config reading, improve url parsing, normalization (#15)
+- robots.txt handling (#25)
 
 ### Fixed
 - Fix copying body data from buffer (#24)

@@ -18,6 +18,8 @@ enum StatusCode : uint16_t {
     PermanentRedirect = 308,
 
     BadRequest = 400,
+    Unauthorized = 401,
+    Forbidden = 403,
     NotFound = 404,
     TooManyRequests = 429,
 
