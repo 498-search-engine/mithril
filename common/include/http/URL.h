@@ -28,6 +28,7 @@ struct URL {
 
 // helpers for host validation
 namespace {
+
 bool IsAlnum(char c) {
     return std::isalnum(c) != 0;
 }
@@ -64,23 +65,6 @@ bool IsValidDomain(std::string_view host) {
     return true;
 }
 
-bool IsValidIPv6(std::string_view host) {
-    if (host.size() < 3)
-        return false;
-    if (host.front() != '[' || host.back() != ']')
-        return false;
-
-    std::string_view inner = host.substr(1, host.size() - 2);
-    bool has_colon = false;
-
-    for (char c : inner) {
-        if (!std::isxdigit(c) && c != ':')
-            return false;
-        if (c == ':')
-            has_colon = true;
-    }
-    return has_colon;  // Minimal IPv6 validation
-}
 }  // namespace
 
 inline std::optional<URL> ParseURL(std::string_view url_view) {
@@ -124,8 +108,13 @@ inline std::optional<URL> ParseURL(std::string_view url_view) {
 
     // Host validation
     size_t host_end = authority_start;
-    while (host_end < size && uv[host_end] != ':' && uv[host_end] != '/' && uv[host_end] != '?' &&
-           uv[host_end] != '#') {
+    while (host_end < size) {
+        if (uv[host_end] == '[') {
+            // We just won't be doing IPv6, sorry
+            return std::nullopt;
+        } else if (uv[host_end] == ':' || uv[host_end] == '/' || uv[host_end] == '?' || uv[host_end] == '#') {
+            break;
+        }
         host_end++;
     }
 
@@ -137,7 +126,7 @@ inline std::optional<URL> ParseURL(std::string_view url_view) {
         return std::nullopt;
     }
 
-    if (!IsValidDomain(u.host) && !IsValidIPv6(u.host)) {
+    if (!IsValidDomain(u.host)) {
 #ifndef NDEBUG
         std::cerr << "URL parse error: Invalid host: " << u.host << " in " << uv << "\n";
 #endif
@@ -176,14 +165,7 @@ inline std::optional<URL> ParseURL(std::string_view url_view) {
         }
     }
 
-    // Path validation
-    size_t path_start = i;
-    size_t path_end = std::min({uv.find('?', path_start), uv.find('#', path_start), size});
-
-    u.path = uv.substr(path_start, path_end - path_start);
-    if (u.path.empty() || u.path[0] != '/') {
-        u.path.insert(0, 1, '/');
-    }
+    u.path = uv.substr(i);  // Rest of string
 
     return u;
 }
@@ -272,7 +254,8 @@ inline bool operator==(const CanonicalHost& a, const CanonicalHost& b) {
 
 /**
  * @brief Transforms a URL into a canonical representation of just the host
- * information (hostname, scheme, port).
+ * information (hostname, scheme, port). If no port is specified, the implied
+ * port will be added.
  *
  * @param url URL to canonicalize
  * @return CanonicalHost
