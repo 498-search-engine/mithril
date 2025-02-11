@@ -77,6 +77,7 @@ void Worker::ProcessDocument(const http::Request& req, const http::Response& res
 
     case http::StatusCode::MovedPermanently:
     case http::StatusCode::Found:
+    case http::StatusCode::SeeOther:
     case http::StatusCode::TemporaryRedirect:
     case http::StatusCode::PermanentRedirect:
         {

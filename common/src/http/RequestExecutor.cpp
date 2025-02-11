@@ -308,6 +308,7 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
         switch (header->status) {
         case StatusCode::MovedPermanently:
         case StatusCode::Found:
+        case StatusCode::SeeOther:
         case StatusCode::TemporaryRedirect:
         case StatusCode::PermanentRedirect:
             {
