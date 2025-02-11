@@ -182,7 +182,7 @@ void RequestExecutor::ProcessConnections() {
     struct timespec timeout {
         .tv_sec = 0, .tv_nsec = static_cast<long>(SocketWaitTimeoutMs) * 1000L * 1000L,
     };
-    int nev = kevent(kq_, nullptr, 0, events_.data(), static_cast<int>(events_.size()), &timeout);  // TODO: timeout
+    int nev = kevent(kq_, nullptr, 0, events_.data(), static_cast<int>(events_.size()), &timeout);
     for (int i = 0; i < nev; ++i) {
         auto& ev = events_[i];
         auto fd = static_cast<int>(ev.ident);
