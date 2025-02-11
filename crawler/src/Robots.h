@@ -14,6 +14,50 @@ namespace mithril {
 
 constexpr long RobotsTxtCacheDurationSeconds = 4L * 60L * 60L;  // 4 hours
 
+namespace internal {
+
+class RobotsTrie {
+public:
+    // Returns true if the path is allowed
+    bool IsAllowed(std::string_view path) const;
+
+    // Construct trie from vectors of allow/disallow patterns
+    RobotsTrie(const std::vector<std::string>& disallows, const std::vector<std::string>& allows);
+
+private:
+    enum class NodeType : uint8_t { NonTerminal = 0, Disallow = 1, Allow = 2 };
+
+    struct Node {
+        std::vector<std::pair<std::string, Node>> fixedSegments;
+        std::unique_ptr<Node> wildcardMatch;  // corresponds to a *
+        std::unique_ptr<Node> emptyMatch;     // corresponds to a / with nothing before it
+        NodeType type{NodeType::NonTerminal};
+        uint16_t patternLength{0};
+    };
+
+    // Helper to find the best matching rule for a path
+    struct MatchResult {
+        NodeType type{NodeType::NonTerminal};
+        uint16_t length{0};
+
+        bool operator>(const MatchResult& other) const;
+    };
+
+    // Helper to insert a pattern into the trie
+    void Insert(const std::string& pattern, NodeType type);
+
+    MatchResult FindBestMatch(const std::vector<std::string_view>& segments) const;
+
+    void FindBestMatchRecursive(const std::vector<std::string_view>& segments,
+                                size_t index,
+                                const Node* node,
+                                MatchResult& best) const;
+
+    Node root_;
+};
+
+}  // namespace internal
+
 class RobotRules {
 public:
     /**
@@ -36,7 +80,7 @@ public:
      * @param disallowPrefixes Disallowed prefixes to filter by.
      * @param allowPrefixes Allowed prefixes to filter by.
      */
-    RobotRules(std::vector<std::string> disallowPrefixes, std::vector<std::string> allowPrefixes);
+    RobotRules(const std::vector<std::string>& disallowPrefixes, const std::vector<std::string>& allowPrefixes);
 
     /**
      * @brief Creates a RobotRules object from the contents of a robots.txt file.
@@ -57,9 +101,7 @@ public:
     bool Allowed(std::string_view path) const;
 
 private:
-    // TODO: would it be better to use a trie or some other data structure?
-    std::vector<std::string> disallowPrefixes_;  // sorted by length descending
-    std::vector<std::string> allowPrefixes_;     // sorted by length descending
+    std::unique_ptr<internal::RobotsTrie> trie_;
     bool disallowAll_;
 };
 

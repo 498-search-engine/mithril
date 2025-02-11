@@ -7,16 +7,15 @@
 namespace mithril {
 
 namespace {
-constexpr size_t MaxUrlLength = 2048;
-constexpr size_t MinUrlLength = 10;
 
 bool HasInvalidChars(std::string_view str) {
     return std::any_of(str.begin(), str.end(), [](unsigned char c) { return c <= 0x20 || c > 0x7E; });
 }
 
 bool IsValidUrl(std::string_view url) {
-    return url.length() >= MinUrlLength && url.length() <= MaxUrlLength && !HasInvalidChars(url);
+    return url.length() >= http::MinUrlLength && url.length() <= http::MaxUrlLength && !HasInvalidChars(url);
 }
+
 }  //  namespace
 
 UrlFrontier::UrlFrontier() {}

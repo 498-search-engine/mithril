@@ -7,6 +7,7 @@
 #include "http/Response.h"
 #include "http/URL.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
 #include <string_view>
@@ -104,15 +105,163 @@ std::string_view FixWildcardPath(std::string_view p) {
 
 }  // namespace
 
+namespace internal {
+
+bool RobotsTrie::MatchResult::operator>(const MatchResult& other) const {
+    if (length != other.length) {
+        return length > other.length;
+    }
+    // Allow (2) > Disallow (1)
+    return type > other.type;
+}
+
+RobotsTrie::RobotsTrie(const std::vector<std::string>& disallows, const std::vector<std::string>& allows) {
+    // Insert all patterns, disallows first (allows take precedence for same length)
+    for (const auto& pattern : disallows) {
+        Insert(pattern, NodeType::Disallow);
+    }
+    for (const auto& pattern : allows) {
+        Insert(pattern, NodeType::Allow);
+    }
+}
+
+void RobotsTrie::Insert(const std::string& pattern, NodeType type) {
+    if (pattern.empty() || pattern.length() > http::MaxUrlLength) {
+        return;
+    }
+
+    // Split path into segments on / delimiter
+    auto segments = SplitPath(pattern);
+
+    for (const auto& segment : segments) {
+        if (segment.size() > 1 && segment.find('*') != std::string_view::npos) {
+            // Segment contains a '*' but has other stuff -- we can't handle
+            // that with our trie implementation. Discard the rule.
+            return;
+        }
+    }
+
+    Node* current = &root_;
+
+    for (const auto& segment : segments) {
+        if (segment.empty()) {
+            if (!current->emptyMatch) {
+                current->emptyMatch = std::make_unique<Node>();
+            }
+            current = current->emptyMatch.get();
+        } else if (segment == "*") {
+            if (!current->wildcardMatch) {
+                current->wildcardMatch = std::make_unique<Node>();
+            }
+            current = current->wildcardMatch.get();
+        } else {
+            // Find or insert segment in sorted vector
+            auto it = std::lower_bound(current->fixedSegments.begin(),
+                                       current->fixedSegments.end(),
+                                       segment,
+                                       [](const auto& pair, const std::string_view& val) { return pair.first < val; });
+
+            if (it == current->fixedSegments.end() || it->first != segment) {
+                it = current->fixedSegments.insert(it, {std::string{segment}, Node{}});
+            }
+            current = &it->second;
+        }
+    }
+
+    current->type = type;
+    current->patternLength = static_cast<uint16_t>(pattern.length());
+}
+
+bool RobotsTrie::IsAllowed(std::string_view path) const {
+    auto segments = SplitPath(path);
+    auto result = FindBestMatch(segments);
+    // Allow if no `Disallow` rule matched
+    return result.type != NodeType::Disallow;
+}
+
+void RobotsTrie::FindBestMatchRecursive(const std::vector<std::string_view>& segments,
+                                        size_t index,
+                                        const Node* node,
+                                        MatchResult& best) const {
+    assert(node != nullptr);
+
+    // Check if current node is terminal and updates best if appropriate
+    if (node->type != NodeType::NonTerminal) {
+        MatchResult current{
+            .type = node->type,
+            .length = node->patternLength,
+        };
+        if (current > best) {
+            best = current;
+        }
+    }
+
+    // If we've processed all segments, stop recursion
+    if (index >= segments.size()) {
+        return;
+    }
+
+    constexpr auto Comparator = [](const auto& pair, const std::string_view& val) { return pair.first < val; };
+    auto firstLetter = segments[index].substr(0, 1);  // segments[index] could be empty! substr will check.
+
+    // Get range of fixed segments based on the first letter.
+    // There are two interesting cases:
+    // 1. Exact match
+    // 2. Prefix match
+    // Prefix match is only possible if the node is terminal.
+    auto begin = std::lower_bound(node->fixedSegments.begin(), node->fixedSegments.end(), firstLetter, Comparator);
+    auto end = node->fixedSegments.end();
+    if (!firstLetter.empty()) {
+        char nextLetter = firstLetter[0] + 1;
+        end = std::lower_bound(begin, node->fixedSegments.end(), std::string_view{&nextLetter, 1}, Comparator);
+    }
+
+    for (auto it = begin; it != end; ++it) {
+        assert(!it->first.empty());
+        if (it->first == segments[index]) {
+            // Exact match
+            FindBestMatchRecursive(segments, index + 1, &it->second, best);
+        } else if (it->second.type != NodeType::NonTerminal) {
+            // Non-terminal, check if segment is prefix
+            if (segments[index].starts_with(it->first)) {
+                FindBestMatchRecursive(segments, index + 1, &it->second, best);
+            }
+        }
+    }
+
+    // Try wildcard match
+    if (node->wildcardMatch) {
+        FindBestMatchRecursive(segments, index + 1, node->wildcardMatch.get(), best);
+    }
+    if (node->emptyMatch) {
+        FindBestMatchRecursive(segments, index + 1, node->emptyMatch.get(), best);
+    }
+}
+
+RobotsTrie::MatchResult RobotsTrie::FindBestMatch(const std::vector<std::string_view>& segments) const {
+    MatchResult best;
+    FindBestMatchRecursive(segments, 0, &root_, best);
+    return best;
+}
+
+}  // namespace internal
+
 
 RobotRules::RobotRules() : RobotRules(true) {}
 
-RobotRules::RobotRules(bool disallowAll) : disallowAll_(disallowAll) {}
+RobotRules::RobotRules(bool disallowAll) : trie_(nullptr), disallowAll_(disallowAll) {}
 
-RobotRules::RobotRules(std::vector<std::string> disallowPrefixes, std::vector<std::string> allowPrefixes)
-    : disallowPrefixes_(std::move(disallowPrefixes)), allowPrefixes_(std::move(allowPrefixes)), disallowAll_(false) {
-    SortByLength(disallowPrefixes_);
-    SortByLength(allowPrefixes_);
+RobotRules::RobotRules(const std::vector<std::string>& disallowPrefixes, const std::vector<std::string>& allowPrefixes)
+    : trie_(nullptr), disallowAll_(false) {
+    if (allowPrefixes.size() == 0 && disallowPrefixes.size() == 1) {
+        if (disallowPrefixes.front().empty() || disallowPrefixes.front() == "/"sv) {
+            // Common "Disallow everything" case
+            disallowAll_ = true;
+            return;
+        }
+    }
+
+    trie_ = std::make_unique<internal::RobotsTrie>(disallowPrefixes, allowPrefixes);
 }
 
 RobotRules RobotRules::FromRobotsTxt(std::string_view file, std::string_view userAgent) {
@@ -170,7 +319,7 @@ RobotRules RobotRules::FromRobotsTxt(std::string_view file, std::string_view use
         }
     }
 
-    return RobotRules{std::move(disallowPrefixes), std::move(allowPrefixes)};
+    return RobotRules{disallowPrefixes, allowPrefixes};
 }
 
 bool RobotRules::Allowed(std::string_view path) const {
@@ -178,47 +327,18 @@ bool RobotRules::Allowed(std::string_view path) const {
         return false;
     }
 
-    if (disallowPrefixes_.empty() && allowPrefixes_.empty()) {
+    if (trie_ == nullptr) {
         return true;
     }
 
-    bool allow = true;
-    size_t longest = 0;
-
-    // Check if any `Disallow` directive forbids this path
-    for (const auto& disallow : disallowPrefixes_) {
-        if (path.starts_with(disallow)) {
-            longest = disallow.size();
-            allow = false;
-            break;
-        }
-    }
-
-    // No `Disallow` directive for this URL, must be allowed
-    if (allow) {
-        return true;
-    }
-
-    // This url is disallowed. See if there is an `Allow` directive with longer
-    // length than the `Disallow` directive to overrule it.
-    for (const auto& allow : allowPrefixes_) {
-        if (path.starts_with(allow) && allow.size() > longest) {
-            return true;
-        }
-    }
-
-    return false;
+    return trie_->IsAllowed(path);
 }
-
-namespace {
-
-}  // namespace
 
 RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
     auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
         if (executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
-            cache_.insert({canonicalHost.url, {}});
+            cache_.try_emplace(canonicalHost.url);
             Fetch(canonicalHost);
         }
         return nullptr;

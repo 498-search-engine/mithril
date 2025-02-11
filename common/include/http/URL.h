@@ -13,6 +13,9 @@
 
 namespace mithril::http {
 
+constexpr size_t MinUrlLength = 10;
+constexpr size_t MaxUrlLength = 2048;
+
 using namespace std::string_view_literals;
 
 struct URL {
