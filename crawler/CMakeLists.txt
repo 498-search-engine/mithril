@@ -1,6 +1,6 @@
 find_package(OpenSSL REQUIRED)
 
-add_executable(crawler
+add_library(crawler STATIC
     src/Coordinator.cpp
     src/DocumentQueue.cpp
     src/RequestManager.cpp
@@ -9,15 +9,17 @@ add_executable(crawler
     src/UrlSet.cpp
     src/Worker.cpp
     src/Config.cpp
-    src/main.cpp
 )
 
-target_include_directories(crawler PRIVATE src)
+target_include_directories(crawler PUBLIC src)
 
-target_link_libraries(crawler PRIVATE
-    OpenSSL::SSL
-    OpenSSL::Crypto
-
+target_link_libraries(crawler PUBLIC
     lib::core
     common
 )
+
+add_executable(mithril_crawler
+    src/main.cpp
+)
+
+target_link_libraries(mithril_crawler PRIVATE crawler)
