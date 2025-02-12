@@ -56,6 +56,20 @@ private:
     Node root_;
 };
 
+struct RobotLine {
+    std::string_view directive;
+    std::string_view value;
+};
+
+struct RobotDirectives {
+    std::vector<std::string> disallows;
+    std::vector<std::string> allows;
+};
+
+std::optional<RobotLine> ParseRobotLine(std::string_view line);
+
+RobotDirectives ParseRobotsTxt(std::string_view file, std::string_view userAgent);
+
 }  // namespace internal
 
 class RobotRules {
