@@ -1,6 +1,10 @@
 #include "UrlSet.h"
 
+#include "http/URL.h"
+
+#include <iostream>
 #include <string>
+#include <utility>
 
 namespace mithril {
 

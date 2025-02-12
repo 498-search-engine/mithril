@@ -8,9 +8,16 @@
 #include "http/URL.h"
 
 #include <algorithm>
+#include <cassert>
+#include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <memory>
+#include <optional>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace mithril {
 

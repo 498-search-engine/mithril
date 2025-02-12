@@ -16,6 +16,7 @@ Checks: >
   -readability-magic-numbers,
   -readability-function-cognitive-complexity,
   -modernize-use-nodiscard,
+  -modernize-use-ranges,
   performance-for-range-copy,
   bugprone-use-after-move,
   cppcoreguidelines-pro-type-member-init

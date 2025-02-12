@@ -10,6 +10,7 @@ add_library(common STATIC
     src/http/RequestExecutor.cpp
     src/http/Response.cpp
     src/http/SSL.cpp
+    src/http/URL.cpp
 
     src/Clock.cpp
     src/Util.cpp
