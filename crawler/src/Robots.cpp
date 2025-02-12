@@ -22,11 +22,6 @@ constexpr int MaxRobotsTxtRedirects = 5;
 
 namespace {
 
-struct RobotLine {
-    std::string_view directive;
-    std::string_view value;
-};
-
 template<typename F>
 void ConsumeUntil(std::string_view line, size_t& i, F f) {
     while (i < line.size() && !f(line[i])) {
@@ -49,6 +44,10 @@ void ConsumeWhitespace(std::string_view line, size_t& i) {
 void SortByLength(std::vector<std::string>& v) {
     std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.size() > b.size(); });
 }
+
+}  // namespace
+
+namespace internal {
 
 std::optional<RobotLine> ParseRobotLine(std::string_view line) {
     if (line.empty()) {
@@ -95,9 +94,59 @@ std::optional<RobotLine> ParseRobotLine(std::string_view line) {
     };
 }
 
-}  // namespace
+RobotDirectives ParseRobotsTxt(std::string_view file, std::string_view userAgent) {
+    RobotDirectives d;
+    bool matchesUserAgent = false;
+    bool inUserAgentDefns = false;
 
-namespace internal {
+    if (file.size() > MaxRobotsTxtSize) {
+        // Only parse MaxRobotsTxtSize amount of bytes
+        file.remove_suffix(file.size() - MaxRobotsTxtSize);
+    }
+
+    size_t pos = 0;
+    while (pos < file.size()) {
+        auto lineEnd = file.find_first_of("\r\n", pos);
+        if (lineEnd == std::string_view::npos) {
+            lineEnd = file.size();
+        }
+
+        auto fileLine = file.substr(pos, lineEnd - pos);
+        pos = lineEnd + 1;
+
+        auto line = ParseRobotLine(fileLine);
+        if (!line) {
+            continue;
+        }
+
+        if (InsensitiveStrEquals(line->directive, "user-agent"sv)) {
+            if (!inUserAgentDefns) {
+                inUserAgentDefns = true;
+                matchesUserAgent = false;
+            }
+            matchesUserAgent |= (line->value == "*" || InsensitiveStrEquals(line->value, userAgent));
+            continue;
+        } else {
+            // Got a directive other than "User-agent", any subsequent
+            // "User-agent" directives will begin a new group
+            inUserAgentDefns = false;
+        }
+
+        if (!matchesUserAgent) {
+            // Don't care about this rule
+            continue;
+        }
+
+        if (InsensitiveStrEquals(line->directive, "disallow"sv)) {
+            d.disallows.emplace_back(line->value);
+        } else if (InsensitiveStrEquals(line->directive, "allow"sv)) {
+            d.allows.emplace_back(line->value);
+        }
+    }
+
+    return d;
+}
+
 
 bool RobotsTrie::MatchResult::operator>(const MatchResult& other) const {
     if (length != other.length) {
@@ -257,59 +306,8 @@ RobotRules::RobotRules(const std::vector<std::string>& disallowPrefixes, const s
 }
 
 RobotRules RobotRules::FromRobotsTxt(std::string_view file, std::string_view userAgent) {
-    using namespace std::string_view_literals;
-
-    std::vector<std::string> disallowPrefixes;
-    std::vector<std::string> allowPrefixes;
-    bool matchesUserAgent = false;
-    bool inUserAgentDefns = false;
-
-    if (file.size() > MaxRobotsTxtSize) {
-        // Only parse MaxRobotsTxtSize amount of bytes
-        file.remove_suffix(file.size() - MaxRobotsTxtSize);
-    }
-
-    size_t pos = 0;
-    while (pos < file.size()) {
-        auto lineEnd = file.find_first_of("\r\n", pos);
-        if (lineEnd == std::string_view::npos) {
-            lineEnd = file.size();
-        }
-
-        auto fileLine = file.substr(pos, lineEnd - pos);
-        pos = lineEnd + 1;
-
-        auto line = ParseRobotLine(fileLine);
-        if (!line) {
-            continue;
-        }
-
-        if (InsensitiveStrEquals(line->directive, "user-agent"sv)) {
-            if (!inUserAgentDefns) {
-                inUserAgentDefns = true;
-                matchesUserAgent = false;
-            }
-            matchesUserAgent |= (line->value == "*" || InsensitiveStrEquals(line->value, userAgent));
-            continue;
-        } else {
-            // Got a directive other than "User-agent", any subsequent
-            // "User-agent" directives will begin a new group
-            inUserAgentDefns = false;
-        }
-
-        if (!matchesUserAgent) {
-            // Don't care about this rule
-            continue;
-        }
-
-        if (InsensitiveStrEquals(line->directive, "disallow"sv)) {
-            disallowPrefixes.emplace_back(line->value);
-        } else if (InsensitiveStrEquals(line->directive, "allow"sv)) {
-            allowPrefixes.emplace_back(line->value);
-        }
-    }
-
-    return RobotRules{disallowPrefixes, allowPrefixes};
+    auto directives = internal::ParseRobotsTxt(file, userAgent);
+    return RobotRules{directives.disallows, directives.allows};
 }
 
 bool RobotRules::Allowed(std::string_view path) const {
