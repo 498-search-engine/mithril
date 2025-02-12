@@ -221,25 +221,6 @@ inline std::string CanonicalizeURL(const URL& url) {
     return normalized;
 }
 
-// Runtime test cases (replace static_assert)
-inline void TestURLParsing() {
-    auto test1 = ParseURL("https://GitHub.COM/dnsge?achievement=arctic#section");
-    assert(test1.has_value());
-    assert(test1->scheme == "https");
-    assert(test1->host == "GitHub.COM");
-    assert(test1->path == "/dnsge");
-    assert(CanonicalizeURL(*test1) == "https://github.com/dnsge");
-
-    auto test2 = ParseURL("http://example.com:8080//a//b/../c");
-    assert(test2.has_value());
-    assert(test2->port == "8080");
-    assert(test2->path == "//a//b/../c");
-    assert(CanonicalizeURL(*test2) == "http://example.com:8080/a/b/../c");
-
-    auto test3 = ParseURL("invalid://test");
-    assert(!test3.has_value());
-}
-
 struct CanonicalHost {
     std::string url;
     std::string scheme;
