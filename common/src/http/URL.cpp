@@ -22,31 +22,37 @@ bool IsAlnum(char c) {
 }
 
 bool IsValidDomainLabel(std::string_view label) {
-    if (label.empty() || label.size() > 63)
+    if (label.empty() || label.size() > 63) {
         return false;
-    if (label.front() == '-' || label.back() == '-')
+    }
+    if (label.front() == '-' || label.back() == '-') {
         return false;
+    }
 
     for (char c : label) {
-        if (!IsAlnum(c) && c != '-')
+        if (!IsAlnum(c) && c != '-') {
             return false;
+        }
     }
     return true;
 }
 
 bool IsValidDomain(std::string_view host) {
-    if (host.empty() || host.size() > 253)
+    if (host.empty() || host.size() > MaxHostSize) {
         return false;
-    if (host.front() == '.' || host.back() == '.')
+    }
+    if (host.front() == '.' || host.back() == '.') {
         return false;
+    }
 
     size_t start = 0;
     while (start < host.size()) {
         size_t dot = host.find('.', start);
         std::string_view label = host.substr(start, dot - start);
 
-        if (!IsValidDomainLabel(label))
+        if (!IsValidDomainLabel(label)) {
             return false;
+        }
 
         start = (dot != std::string_view::npos) ? dot + 1 : host.size();
     }
@@ -55,22 +61,23 @@ bool IsValidDomain(std::string_view host) {
 
 }  // namespace
 
-std::optional<URL> ParseURL(std::string_view url_view) {
-    URL u;
-    u.url = url_view;
-    std::string_view uv = u.url;
+std::optional<URL> ParseURL(std::string_view s) {
+    auto u = URL{
+        .url = std::string{s},
+    };
+    auto uv = std::string_view{u.url};
     const size_t size = uv.size();
 
     // Scheme validation
-    size_t scheme_end = uv.find(':');
-    if (scheme_end == std::string_view::npos || scheme_end == 0) {
+    size_t schemeEnd = uv.find(':');
+    if (schemeEnd == std::string_view::npos || schemeEnd == 0) {
 #ifndef NDEBUG
         std::cerr << "URL parse error: Missing or invalid scheme in " << uv << "\n";
 #endif
         return std::nullopt;
     }
 
-    u.scheme = uv.substr(0, scheme_end);
+    u.scheme = uv.substr(0, schemeEnd);
     std::transform(u.scheme.begin(), u.scheme.end(), u.scheme.begin(), [](unsigned char c) { return std::tolower(c); });
 
     if (u.scheme != "http" && u.scheme != "https") {
@@ -81,12 +88,12 @@ std::optional<URL> ParseURL(std::string_view url_view) {
     }
 
     // Authority validation
-    size_t i = scheme_end + 1;
-    size_t authority_start = i;
+    size_t i = schemeEnd + 1;
+    size_t authorityStart = i;
 
     if (i + 1 < size && uv[i] == '/' && uv[i + 1] == '/') {
         i += 2;
-        authority_start = i;
+        authorityStart = i;
     } else if (u.scheme == "http" || u.scheme == "https") {
 #ifndef NDEBUG
         std::cerr << "URL parse error: Missing authority component in " << uv << "\n";
@@ -95,18 +102,18 @@ std::optional<URL> ParseURL(std::string_view url_view) {
     }
 
     // Host validation
-    size_t host_end = authority_start;
-    while (host_end < size) {
-        if (uv[host_end] == '[') {
+    size_t hostEnd = authorityStart;
+    while (hostEnd < size) {
+        if (uv[hostEnd] == '[') {
             // We just won't be doing IPv6, sorry
             return std::nullopt;
-        } else if (uv[host_end] == ':' || uv[host_end] == '/' || uv[host_end] == '?' || uv[host_end] == '#') {
+        } else if (uv[hostEnd] == ':' || uv[hostEnd] == '/' || uv[hostEnd] == '?' || uv[hostEnd] == '#') {
             break;
         }
-        host_end++;
+        hostEnd++;
     }
 
-    u.host = uv.substr(authority_start, host_end - authority_start);
+    u.host = uv.substr(authorityStart, hostEnd - authorityStart);
     if (u.host.empty()) {
 #ifndef NDEBUG
         std::cerr << "URL parse error: Empty host in " << uv << "\n";
@@ -122,14 +129,15 @@ std::optional<URL> ParseURL(std::string_view url_view) {
     }
 
     // Port validation
-    i = host_end;
+    i = hostEnd;
     if (i < size && uv[i] == ':') {
         i++;
-        size_t port_start = i;
-        while (i < size && uv[i] != '/' && uv[i] != '?' && uv[i] != '#')
+        size_t portStart = i;
+        while (i < size && uv[i] != '/' && uv[i] != '?' && uv[i] != '#') {
             i++;
+        }
 
-        u.port = uv.substr(port_start, i - port_start);
+        u.port = uv.substr(portStart, i - portStart);
         if (u.port.empty()) {
 #ifndef NDEBUG
             std::cerr << "URL parse error: Empty port in " << uv << "\n";
@@ -144,8 +152,8 @@ std::optional<URL> ParseURL(std::string_view url_view) {
             return std::nullopt;
         }
 
-        const int port_num = std::stoi(u.port);
-        if (port_num < 1 || port_num > 65535) {
+        const int portNum = std::stoi(u.port);
+        if (portNum < 1 || portNum > 65535) {
 #ifndef NDEBUG
             std::cerr << "URL parse error: Port out of range: " << u.port << " in " << uv << "\n";
 #endif
@@ -177,33 +185,33 @@ std::string CanonicalizeURL(const URL& url) {
     }
 
     // Normalize path
-    std::string clean_path;
-    clean_path.reserve(url.path.size());
-    bool prev_slash = false;
+    std::string cleanPath;
+    cleanPath.reserve(url.path.size());
+    bool prevSlash = false;
 
     // Ensure leading slash and collapse duplicates
     if (url.path.empty() || url.path[0] != '/') {
-        clean_path += '/';
-        prev_slash = true;
+        cleanPath += '/';
+        prevSlash = true;
     }
 
     for (char c : url.path) {
         if (c == '/') {
-            if (!prev_slash) {
-                clean_path += '/';
-                prev_slash = true;
+            if (!prevSlash) {
+                cleanPath += '/';
+                prevSlash = true;
             }
         } else {
-            clean_path += c;
-            prev_slash = false;
+            cleanPath += c;
+            prevSlash = false;
         }
     }
 
     // Handle trailing slash for empty paths
-    if (clean_path.empty() || (clean_path.size() == 1 && clean_path[0] == '/')) {
+    if (cleanPath.empty() || (cleanPath.size() == 1 && cleanPath[0] == '/')) {
         normalized += "/";
     } else {
-        normalized += clean_path;
+        normalized += cleanPath;
     }
 
     return normalized;

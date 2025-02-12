@@ -11,6 +11,7 @@ namespace mithril::http {
 
 constexpr size_t MinUrlLength = 10;
 constexpr size_t MaxUrlLength = 2048;
+constexpr size_t MaxHostSize = 253;
 
 struct URL {
     std::string url;
@@ -34,10 +35,10 @@ inline bool operator==(const CanonicalHost& a, const CanonicalHost& b) {
 /**
  * @brief Attempts to parse a URL to an http/https resource.
  *
- * @param url_view URL string to parse
+ * @param s URL string to parse
  * @return std::optional<URL> The parsed URL, or std::nullopt if invalid.
  */
-std::optional<URL> ParseURL(std::string_view url_view);
+std::optional<URL> ParseURL(std::string_view s);
 
 /**
  * @brief Transforms a URL into its canonical form.
