@@ -9,6 +9,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 set(TEST_SOURCES
+    src/Robots.cpp
     src/URL.cpp
 )
 
