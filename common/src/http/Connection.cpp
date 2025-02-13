@@ -17,6 +17,7 @@
 #include <netdb.h>
 #include <stdexcept>
 #include <unistd.h>
+#include <utility>
 #include <netinet/in.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
@@ -33,9 +34,9 @@ constexpr const char* TransferEncodingChunkedHeader = "Transfer-Encoding: chunke
 constexpr const char* HeaderDelimiter = "\r\n\r\n";
 constexpr const char* CRLF = "\r\n";
 
-void PrintSSLError(SSL* ssl, int status) {
+void PrintSSLError(SSL* ssl, int status, const char* operation) {
     int sslErr = SSL_get_error(ssl, status);
-    std::cerr << "SSL operation failed with error code: " << sslErr << "\n";
+    std::cerr << operation << " failed with error code: " << sslErr << "\n";
 
     // Print the entire error queue
     unsigned long err;
@@ -47,7 +48,7 @@ void PrintSSLError(SSL* ssl, int status) {
 }
 
 void PrintSSLConnectError(SSL* ssl, int status) {
-    PrintSSLError(ssl, status);
+    PrintSSLError(ssl, status, "SSL_connect");
 
     // Print verification errors if any
     long verifyResult = SSL_get_verify_result(ssl);
@@ -193,6 +194,8 @@ void Connection::InitializeSSL() {
     auto* ctx = http::internal::SSLCtx;
     assert(ctx != nullptr);
 
+    ERR_clear_error();
+
     ssl_ = SSL_new(ctx);
     if (ssl_ == nullptr) {
         // TODO: error handling strategy
@@ -201,8 +204,7 @@ void Connection::InitializeSSL() {
 
     int status = SSL_set_fd(ssl_, fd_);
     if (status != 1) {
-        PrintSSLError(ssl_, status);
-
+        PrintSSLError(ssl_, status, "SSL_set_fd");
         SSL_free(ssl_);
         ssl_ = nullptr;
         // TODO: error handling strategy
@@ -210,7 +212,22 @@ void Connection::InitializeSSL() {
     }
 
     // Set Server Name Indication (SNI)
-    SSL_set_tlsext_host_name(ssl_, url_.host.c_str());
+    status = SSL_set_tlsext_host_name(ssl_, url_.host.c_str());
+    if (status != 1) {
+        PrintSSLError(ssl_, status, "SSL_set_tlsext_host_name");
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+        throw std::runtime_error("Failed to set SNI hostname");
+    }
+
+    // Set DNS hostname to verify
+    status = SSL_set1_host(ssl_, url_.host.c_str());
+    if (status != 1) {
+        PrintSSLError(ssl_, status, "SSL_set1_host");
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+        throw std::runtime_error("Failed to set certificate verification hostname");
+    }
 }
 
 void Connection::Close() {
@@ -245,15 +262,75 @@ Response Connection::GetResponse() {
     };
 }
 
-bool Connection::ReadFromSocket() {
+bool Connection::WriteToSocketRaw() {
+    assert(!isSecure_);
+    ssize_t bytesSent;
+
+    do {
+        bytesSent = send(fd_, rawRequest_.data(), rawRequest_.size() - requestBytesSent_, MSG_DONTWAIT);
+        if (bytesSent > 0) {
+            requestBytesSent_ += bytesSent;
+        } else if (bytesSent == 0) {
+            // Got EOF
+            return true;
+        } else if (bytesSent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return false;
+            }
+
+            perror("mithril::http::Connection::WriteToSocketRaw(): write bytes");
+            // TODO: error logging
+            state_ = State::SocketError;
+            Close();
+            return false;
+        }
+    } while (requestBytesSent_ < rawRequest_.size());
+
+    // Request fully written, now into reading headers phase
+    state_ = State::ReadingHeaders;
+
+    return false;
+}
+
+bool Connection::WriteToSocketSSL() {
+    assert(isSecure_);
+    ssize_t bytesSent;
+
+    ERR_clear_error();
+
+    do {
+        bytesSent = SSL_write(ssl_, rawRequest_.data() + requestBytesSent_, rawRequest_.size() - requestBytesSent_);
+        if (bytesSent > 0) {
+            requestBytesSent_ += bytesSent;
+        } else {
+            assert(bytesSent <= 0);
+            int err = SSL_get_error(ssl_, bytesSent);
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+                // Can't write more data right now
+                return false;
+            } else if (err == SSL_ERROR_ZERO_RETURN || err == SSL_ERROR_SYSCALL) {
+                return true;
+            } else {
+                PrintSSLError(ssl_, bytesSent, "SSL_write");
+                state_ = State::SocketError;
+                Close();
+                return false;
+            }
+        }
+    } while (requestBytesSent_ < rawRequest_.size());
+
+    // Request fully written, now into reading headers phase
+    state_ = State::ReadingHeaders;
+
+    return false;
+}
+
+bool Connection::ReadFromSocketRaw() {
+    assert(!isSecure_);
     char tempBuffer[BufferSize];
     ssize_t bytesRead;
     do {
-        if (isSecure_) {
-            bytesRead = SSL_read(ssl_, tempBuffer, BufferSize);
-        } else {
-            bytesRead = recv(fd_, tempBuffer, BufferSize, MSG_DONTWAIT);
-        }
+        bytesRead = recv(fd_, tempBuffer, BufferSize, MSG_DONTWAIT);
 
         if (bytesRead > 0) {
             buffer_.insert(buffer_.end(), tempBuffer, tempBuffer + bytesRead);
@@ -261,27 +338,45 @@ bool Connection::ReadFromSocket() {
             // Got EOF
             return true;
         } else if (bytesRead < 0) {
-            if (isSecure_) {
-                int err = SSL_get_error(ssl_, bytesRead);
-                if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
-                    // No more data available right now
-                    return false;
-                }
-            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // No more data available right now
                 return false;
             }
-
             // TODO: error logging
-            if (isSecure_) {
-                PrintSSLError(ssl_, bytesRead);
-            } else {
-                perror("mithril::http::Connection::ReadFromSocket(): read bytes");
-            }
-
+            perror("mithril::http::Connection::ReadFromSocketRaw(): read bytes");
             state_ = State::SocketError;
             Close();
             return false;
+        }
+    } while (bytesRead > 0);
+    return false;
+}
+
+bool Connection::ReadFromSocketSSL() {
+    assert(isSecure_);
+    char tempBuffer[BufferSize];
+    ssize_t bytesRead;
+
+    ERR_clear_error();
+
+    do {
+        bytesRead = SSL_read(ssl_, tempBuffer, BufferSize);
+        if (bytesRead > 0) {
+            buffer_.insert(buffer_.end(), tempBuffer, tempBuffer + bytesRead);
+        } else {
+            assert(bytesRead <= 0);
+            int err = SSL_get_error(ssl_, bytesRead);
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+                // No more data available right now
+                return false;
+            } else if (err == SSL_ERROR_ZERO_RETURN || err == SSL_ERROR_SYSCALL) {
+                return true;
+            } else {
+                PrintSSLError(ssl_, bytesRead, "SSL_read");
+                state_ = err == SSL_ERROR_SSL ? State::UnexpectedEOFError : State::SocketError;
+                Close();
+                return false;
+            }
         }
     } while (bytesRead > 0);
     return false;
@@ -351,7 +446,7 @@ void Connection::Process(bool gotEof) {
             state_ = State::UnexpectedEOFError;
             // TODO: error logging
             std::cerr << "conn: closed before receiveing complete response" << std::endl;
-        } else {
+        } else if (!IsError()) {
             state_ = State::Complete;
         }
         Close();
@@ -359,45 +454,20 @@ void Connection::Process(bool gotEof) {
 }
 
 bool Connection::ProcessSend() {
-    ssize_t bytesSent;
-    do {
-        if (isSecure_) {
-            bytesSent = SSL_write(ssl_, rawRequest_.data() + requestBytesSent_, rawRequest_.size() - requestBytesSent_);
-        } else {
-            bytesSent = send(fd_, rawRequest_.data(), rawRequest_.size() - requestBytesSent_, MSG_DONTWAIT);
-        }
-
-        if (bytesSent > 0) {
-            requestBytesSent_ += bytesSent;
-        } else if (bytesSent == 0) {
-            // Got EOF
-            return true;
-        } else if (bytesSent < 0) {
-            if (isSecure_) {
-                int err = SSL_get_error(ssl_, bytesSent);
-                if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
-                    return false;
-                }
-            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                return false;
-            }
-
-            // TODO: error logging
-            perror("HTTP Connection send request data");
-            state_ = State::SocketError;
-            Close();
-            return false;
-        }
-    } while (requestBytesSent_ < rawRequest_.size());
-
-    // Request fully written, now into reading headers phase
-    state_ = State::ReadingHeaders;
-
-    return false;
+    if (isSecure_) {
+        return WriteToSocketSSL();
+    } else {
+        return WriteToSocketRaw();
+    }
 }
 
 bool Connection::ProcessReceive() {
-    bool gotEof = ReadFromSocket();
+    bool gotEof;
+    if (isSecure_) {
+        gotEof = ReadFromSocketSSL();
+    } else {
+        gotEof = ReadFromSocketRaw();
+    }
 
     // Process based on current state
     switch (state_) {

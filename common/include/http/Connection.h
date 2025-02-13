@@ -103,7 +103,12 @@ private:
     bool ProcessSend();
     bool ProcessReceive();
 
-    bool ReadFromSocket();
+    bool WriteToSocketRaw();
+    bool WriteToSocketSSL();
+
+    bool ReadFromSocketRaw();
+    bool ReadFromSocketSSL();
+
     void ProcessHeaders();
     void ProcessBody();
     void ProcessChunks();
