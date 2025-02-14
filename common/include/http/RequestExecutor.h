@@ -5,6 +5,7 @@
 #include "http/Request.h"
 #include "http/Response.h"
 
+#include <cstddef>
 #include <list>
 #include <string_view>
 #include <unordered_map>
@@ -28,6 +29,7 @@ namespace mithril::http {
 
 struct RequestState {
     int redirects{0};
+    long startTime{0};
 };
 
 struct CompleteResponse {
@@ -43,6 +45,7 @@ enum class RequestError : uint8_t {
 
     RedirectError,
     TooManyRedirects,
+    TimedOut,
 };
 
 struct FailedRequest {
@@ -63,6 +66,8 @@ constexpr std::string_view StringOfRequestError(RequestError e) {
         return "RedirectError"sv;
     case RequestError::TooManyRedirects:
         return "TooManyRedirects"sv;
+    case RequestError::TimedOut:
+        return "TimedOut"sv;
     default:
         return "Unkown"sv;
     }
@@ -111,6 +116,13 @@ private:
         Connection conn;
         RequestState state;
     };
+
+    /**
+     * @brief Check all requests with configured timeouts for having timed out.
+     *
+     * @return size_t Number of requests timed out and failed.
+     */
+    size_t CheckRequestTimeouts();
 
     bool HandleConnEOF(std::unordered_map<int, ReqConn>::iterator connIt);
     bool HandleConnReady(std::unordered_map<int, ReqConn>::iterator connIt);

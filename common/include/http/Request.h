@@ -12,6 +12,7 @@ enum class Method : uint8_t { GET };
 
 struct RequestOptions {
     int followRedirects{0};
+    int timeout{0};
 };
 
 class Request {

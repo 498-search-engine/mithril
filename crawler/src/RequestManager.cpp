@@ -9,7 +9,6 @@
 #include <atomic>
 #include <cassert>
 #include <cstddef>
-#include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -17,8 +16,14 @@
 
 namespace mithril {
 
-RequestManager::RequestManager(size_t targetConcurrentReqs, UrlFrontier* frontier, DocumentQueue* docQueue)
-    : targetConcurrentReqs_(targetConcurrentReqs), frontier_(frontier), docQueue_(docQueue) {}
+RequestManager::RequestManager(size_t targetConcurrentReqs,
+                               long requestTimeout,
+                               UrlFrontier* frontier,
+                               DocumentQueue* docQueue)
+    : targetConcurrentReqs_(targetConcurrentReqs),
+      requestTimeout_(requestTimeout),
+      frontier_(frontier),
+      docQueue_(docQueue) {}
 
 void RequestManager::Run() {
     std::vector<std::string> urls;
@@ -38,7 +43,10 @@ void RequestManager::Run() {
             for (const auto& url : urls) {
                 if (auto parsed = http::ParseURL(url)) {
                     SPDLOG_TRACE("starting crawl request: {}", url);
-                    requestExecutor_.Add(http::Request::GET(std::move(*parsed)));
+                    requestExecutor_.Add(http::Request::GET(std::move(*parsed),
+                                                            http::RequestOptions{
+                                                                .timeout = 5,  // seconds
+                                                            }));
                 } else {
                     spdlog::info("frontier failed to parse url {}", url);
                 }
