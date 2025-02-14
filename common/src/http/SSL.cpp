@@ -2,10 +2,10 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <iostream>
 #include <stdexcept>
 #include <unistd.h>
 #include <openssl/ssl.h>
+#include <spdlog/spdlog.h>
 
 namespace mithril::http {
 
@@ -20,7 +20,7 @@ void SSLKeyLogFunction(const SSL* /*ssl*/, const char* line) {
     FILE* fp;
     fp = fopen("key_log.log", "a");
     if (fp == nullptr) {
-        std::cerr << "failed to open ssl key log file" << std::endl;
+        spdlog::error("failed to open ssl key log file");
         return;
     }
     fprintf(fp, "%s\n", line);

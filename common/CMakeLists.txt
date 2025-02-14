@@ -18,4 +18,8 @@ add_library(common STATIC
 
 target_include_directories(common PUBLIC include)
 
-target_link_libraries(common OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(common
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)

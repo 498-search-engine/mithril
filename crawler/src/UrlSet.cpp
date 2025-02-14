@@ -2,9 +2,9 @@
 
 #include "http/URL.h"
 
-#include <iostream>
 #include <string>
 #include <utility>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -13,7 +13,7 @@ void UrlSet::Put(const std::string& url) {
         auto normalized = http::CanonicalizeURL(*parsed);
         set_.insert(std::move(normalized));
     } else {
-        std::cerr << "bad url: " << url << std::endl;
+        spdlog::warn("url set got bad url: {}", url);
     }
 }
 

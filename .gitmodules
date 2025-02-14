@@ -1,3 +1,6 @@
 [submodule "lib"]
 	path = lib
 	url = https://github.com/498-search-engine/lib.git
+[submodule "external/spdlog"]
+	path = external/spdlog
+	url = https://github.com/gabime/spdlog.git

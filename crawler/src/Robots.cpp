@@ -12,12 +12,12 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -361,6 +361,7 @@ RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost
 }
 
 void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
+    SPDLOG_TRACE("starting robots.txt request: {}", canonicalHost.host);
     executor_.Add(http::Request::GET(
         http::URL{
             .url = canonicalHost.url + "/robots.txt",
@@ -406,6 +407,7 @@ void RobotRulesCache::ProcessPendingRequests() {
 
 void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
     auto canonicalHost = CanonicalizeHost(r.req.Url());
+    SPDLOG_TRACE("successful robots.txt request: {}", canonicalHost.host);
 
     // TODO: when this is an LRU cache, could it be possible we don't find it?
     // Would it matter?
@@ -414,28 +416,20 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
         return;
     }
 
-    auto header = http::ParseResponseHeader(r.res);
-    if (!header) {
-        std::cerr << "failed to parse robots.txt response for " << r.req.Url().url << std::endl;
-        it->second.rules = RobotRules{true};
-        it->second.valid = false;
-        it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
-        return;
-    }
-
-    switch (header->status) {
+    switch (r.header.status) {
     case http::StatusCode::OK:
-        HandleRobotsOK(*header, r.res, it->second);
+        HandleRobotsOK(r.header, r.res, it->second);
         break;
 
     case http::StatusCode::NotFound:
         HandleRobotsNotFound(it->second);
         break;
 
+    case http::StatusCode::BadRequest:
     case http::StatusCode::Unauthorized:
     case http::StatusCode::Forbidden:
     default:
-        std::cerr << "got robots.txt status " << header->status << " for " << canonicalHost.url << std::endl;
+        spdlog::info("got robots.txt status {} for {}", r.header.status, canonicalHost.url);
         it->second.rules = RobotRules{true};
         it->second.valid = true;
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
@@ -447,12 +441,12 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
 
 void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& failed) {
     auto canonicalHost = CanonicalizeHost(failed.req.Url());
+    SPDLOG_TRACE("failed robots.txt request: {} {}", canonicalHost.host, http::StringOfRequestError(failed.error));
+
     auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
         return;
     }
-
-    std::cerr << "request for robots.txt at " << canonicalHost.url << " failed" << std::endl;
 
     it->second.rules = RobotRules{};
     it->second.valid = false;

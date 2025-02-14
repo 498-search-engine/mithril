@@ -14,6 +14,7 @@ add_library(crawler STATIC
 target_include_directories(crawler PUBLIC src)
 
 target_link_libraries(crawler PUBLIC
+    spdlog::spdlog
     lib::core
     common
 )
@@ -22,4 +23,7 @@ add_executable(mithril_crawler
     src/main.cpp
 )
 
-target_link_libraries(mithril_crawler PRIVATE crawler)
+target_link_libraries(mithril_crawler PRIVATE
+    spdlog::spdlog
+    crawler
+)
