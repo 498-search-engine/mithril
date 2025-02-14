@@ -531,16 +531,16 @@ bool Connection::IsReading() const {
 }
 
 void Connection::ProcessHeaders() {
-    if (buffer_.size() > MaxHeaderSize) {
-        // Header is too big
-        state_ = State::ResponseTooBigError;
-        return;
-    }
-
     // Look for header delimiter
     auto headerEnd = std::search(buffer_.begin(), buffer_.end(), HeaderDelimiter, HeaderDelimiter + 4);
 
     if (headerEnd == buffer_.end()) {
+        if (buffer_.size() > MaxHeaderSize) {
+            // Header is too big
+            spdlog::debug("header length for response {} exceeds max header size {}", buffer_.size(), MaxHeaderSize);
+            state_ = State::ResponseTooBigError;
+            return;
+        }
         return;  // Haven't received full headers yet
     }
 

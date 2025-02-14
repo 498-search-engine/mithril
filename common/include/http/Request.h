@@ -11,8 +11,22 @@ namespace mithril::http {
 enum class Method : uint8_t { GET };
 
 struct RequestOptions {
+    /**
+     * @brief Max number of redirects to follow. If zero, no redirects will be
+     * followed.
+     */
     int followRedirects{0};
+
+    /**
+     * @brief Timeout in seconds for a response. Refreshes per-redirect. If
+     * zero, no timeout is enforced.
+     */
     int timeout{0};
+
+    /**
+     * @brief Max respones body size in bytes. If zero, no max response size is
+     * enforced.
+     */
     int maxResponseSize{0};
 };
 
