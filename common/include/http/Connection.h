@@ -5,6 +5,7 @@
 #include "http/Response.h"
 #include "http/URL.h"
 
+#include <cstdint>
 #include <netdb.h>
 #include <optional>
 #include <vector>
@@ -12,14 +13,13 @@
 
 namespace mithril::http {
 
-enum class Scheme : uint8_t { HTTP, HTTPS };
-
 class RequestExecutor;
+enum class RequestError : uint8_t;
 
 class Connection {
 public:
     static std::optional<Connection> NewFromRequest(const Request& req);
-    static std::optional<Connection> NewFromURL(Method method, const URL& url);
+    static std::optional<Connection> NewFromURL(Method method, const URL& url, const RequestOptions& options = {});
 
     ~Connection();
 
@@ -57,6 +57,12 @@ public:
     bool IsError() const;
 
     /**
+     * @brief Returns the RequestError associated with the encountered error.
+     * Result is unspecified if IsError() is false.
+     */
+    RequestError GetError() const;
+
+    /**
      * @brief Returns whether the HTTP response is ready to be consumed.
      */
     bool IsComplete() const;
@@ -81,9 +87,10 @@ private:
         Complete,        // HTTP response complete
         Closed,          // Socket closed
 
-        ConnectError,        // Error while establishing connection
-        SocketError,         // Error while reading/writing from socket
-        UnexpectedEOFError,  // Got unexpected EOF while reading response
+        ConnectError,         // Error while establishing connection
+        SocketError,          // Error while reading/writing from socket
+        UnexpectedEOFError,   // Got unexpected EOF while reading response
+        ResponseTooBigError,  // Response body or header was too big
     };
 
     /**
@@ -94,7 +101,7 @@ private:
      * addrinfo and will call freeaddrinfo when appropriate.
      * @param req Request to be executed on the connection
      */
-    Connection(int fd, struct addrinfo* address, Method method, const URL& url);
+    Connection(int fd, struct addrinfo* address, Method method, const URL& url, const RequestOptions& options);
 
     void InitializeSSL();
 
@@ -123,6 +130,7 @@ private:
     State state_;
 
     URL url_;
+    RequestOptions reqOptions_;
     std::string rawRequest_;
     size_t requestBytesSent_;
 

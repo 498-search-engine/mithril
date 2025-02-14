@@ -299,7 +299,7 @@ void RequestExecutor::ProcessPendingConnections() {
             // Connection failed in some way
             failedRequests_.push_back(FailedRequest{
                 .req = std::move(it->req),
-                .error = RequestError::ConnectionError,
+                .error = it->conn.GetError(),
             });
             it = pendingConnection_.erase(it);
         } else if (it->conn.IsActive()) {
@@ -320,6 +320,8 @@ bool RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator c
     if (connIt->second.conn.IsComplete()) {
         // Socket contained rest of response data after closing
         return HandleConnComplete(connIt);
+    } else if (connIt->second.conn.IsError()) {
+        return HandleConnError(connIt, connIt->second.conn.GetError());
     }
 
     // Socket has been closed without finishing response, mark as failed
@@ -335,7 +337,7 @@ bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator
     if (connIt->second.conn.IsComplete()) {
         return HandleConnComplete(connIt);
     } else if (connIt->second.conn.IsError()) {
-        return HandleConnError(connIt, RequestError::ConnectionError);
+        return HandleConnError(connIt, connIt->second.conn.GetError());
     }
 
     // Connection is still working on sending request/getting response
@@ -385,7 +387,7 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
                     return HandleConnError(connIt, RequestError::InvalidResponseData);
                 }
 
-                auto newConn = Connection::NewFromURL(req.GetMethod(), *parsedRedirect);
+                auto newConn = Connection::NewFromURL(req.GetMethod(), *parsedRedirect, req.Options());
                 if (!newConn) {
                     return HandleConnError(connIt, RequestError::RedirectError);
                 }
