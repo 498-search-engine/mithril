@@ -8,19 +8,22 @@
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
 
-#include <iostream>
+#include <string>
+#include <utility>
 #include <vector>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
 Worker::Worker(DocumentQueue* docQueue, UrlFrontier* frontier) : docQueue_(docQueue), frontier_(frontier) {}
 
 void Worker::Run() {
+    spdlog::info("worker starting");
     while (true) {
         auto doc = docQueue_->Pop();
         if (!doc) {
             // Closed
-            std::cout << "worker terminating" << std::endl;
+            spdlog::info("worker terminating");
             return;
         }
 
@@ -42,11 +45,14 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
     html::Parser parser(res.body.data(), res.body.size());
 
     // TODO: do better logging, tracking
-    std::cout << req.Url().url << " ";
+    std::string title;
     for (auto& w : parser.titleWords) {
-        std::cout << w << " ";
+        title.append(w);
+        title.push_back(' ');
     }
-    std::cout << std::endl << std::endl;
+    title.pop_back();
+
+    spdlog::info("processing {} ({})", req.Url().url, title);
 
     std::vector<std::string> absoluteURLs;
     for (auto& l : parser.links) {
@@ -65,13 +71,13 @@ void Worker::ProcessDocument(const http::Request& req, const http::Response& res
     switch (header.status) {
     case http::StatusCode::OK:
         if (!header.ContentType) {
-            std::cout << "no content-type header" << std::endl;
+            SPDLOG_TRACE("missing content-type header for {}", req.Url().url);
             return;
         }
         if (header.ContentType->value.starts_with("text/html")) {
             ProcessHTMLDocument(req, res, header);
         } else {
-            std::cout << "unsupported content-type: " << header.ContentType->value << std::endl;
+            spdlog::debug("unsupported content-type {} for {}", header.ContentType->value, req.Url().url);
         }
         break;
 
@@ -82,26 +88,24 @@ void Worker::ProcessDocument(const http::Request& req, const http::Response& res
     case http::StatusCode::PermanentRedirect:
         {
             if (!header.Location) {
-                std::cout << "redirect without Location header: " << req.Url().url << std::endl;
                 return;
             }
 
             std::string location{header.Location->value};
-            auto new_url = html::MakeAbsoluteLink(req.Url(),
-                                                  "",  // No base tag for redirects
-                                                  location);
+            auto newUrl = html::MakeAbsoluteLink(req.Url(),
+                                                 "",  // No base tag for redirects
+                                                 location);
 
-            if (!new_url) {
-                std::cout << "invalid redirect Location: '" << location << "' from " << req.Url().url << std::endl;
+            if (!newUrl) {
                 return;
             }
 
-            frontier_->PutURL(std::move(*new_url));
+            frontier_->PutURL(std::move(*newUrl));
             break;
         }
 
     default:
-        std::cout << "unhandled status " << header.status << std::endl;
+        spdlog::info("unhandled status {} for {}", header.status, req.Url().url);
         break;
     }
 }

@@ -1,9 +1,11 @@
 #ifndef COMMON_HTTP_RESPONSE_H
 #define COMMON_HTTP_RESPONSE_H
 
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <vector>
+#include <spdlog/spdlog.h>
 
 namespace mithril::http {
 
@@ -55,5 +57,13 @@ struct ResponseHeader {
 std::optional<ResponseHeader> ParseResponseHeader(const Response& res);
 
 }  // namespace mithril::http
+
+
+template<>
+struct fmt::formatter<mithril::http::StatusCode> : fmt::formatter<uint16_t> {
+    auto format(mithril::http::StatusCode code, format_context& ctx) const -> decltype(ctx.out()) {
+        return fmt::format_to(ctx.out(), "{}", static_cast<uint16_t>(code));
+    }
+};
 
 #endif

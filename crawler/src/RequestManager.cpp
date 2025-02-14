@@ -1,15 +1,19 @@
 #include "RequestManager.h"
 
 #include "DocumentQueue.h"
+#include "UrlFrontier.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/URL.h"
 
 #include <atomic>
 #include <cassert>
+#include <cstddef>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -33,9 +37,10 @@ void RequestManager::Run() {
 
             for (const auto& url : urls) {
                 if (auto parsed = http::ParseURL(url)) {
+                    SPDLOG_TRACE("starting crawl request: {}", url);
                     requestExecutor_.Add(http::Request::GET(std::move(*parsed)));
                 } else {
-                    std::cerr << "bad url: " << url << std::endl;
+                    spdlog::info("frontier failed to parse url {}", url);
                 }
             }
         }
@@ -65,7 +70,7 @@ void RequestManager::Run() {
         }
     }
 
-    std::cout << "request manager terminating" << std::endl;
+    spdlog::info("request manager terminating");
 }
 
 void RequestManager::Stop() {
@@ -73,11 +78,12 @@ void RequestManager::Stop() {
 }
 
 void RequestManager::DispatchReadyResponse(http::CompleteResponse res) {
+    SPDLOG_TRACE("successful crawl request: {}", res.req.Url().url);
     docQueue_->Push(std::move(res));
 }
 
 void RequestManager::DispatchFailedRequest(http::FailedRequest failed) {
-    std::cout << "failed " << failed.req.Url().url << ": " << http::StringOfRequestError(failed.error) << std::endl;
+    spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, http::StringOfRequestError(failed.error));
     // TODO: pass off to whatever
 }
 

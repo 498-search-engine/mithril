@@ -13,14 +13,17 @@
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
-#include <iostream>
 #include <netdb.h>
+#include <optional>
 #include <stdexcept>
 #include <unistd.h>
 #include <utility>
+#include <vector>
 #include <netinet/in.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+#include <spdlog/spdlog.h>
+#include <sys/fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -36,14 +39,14 @@ constexpr const char* CRLF = "\r\n";
 
 void PrintSSLError(SSL* ssl, int status, const char* operation) {
     int sslErr = SSL_get_error(ssl, status);
-    std::cerr << operation << " failed with error code: " << sslErr << "\n";
+    spdlog::warn("connection: {} failed with error code {}", operation, sslErr);
 
     // Print the entire error queue
     unsigned long err;
     while ((err = ERR_get_error()) != 0) {
         char errBuf[256];
         ERR_error_string_n(err, errBuf, sizeof(errBuf));
-        std::cerr << "SSL Error: " << errBuf << "\n";
+        spdlog::warn("ssl error: {}", errBuf);
     }
 }
 
@@ -53,7 +56,7 @@ void PrintSSLConnectError(SSL* ssl, int status) {
     // Print verification errors if any
     long verifyResult = SSL_get_verify_result(ssl);
     if (verifyResult != X509_V_OK) {
-        std::cerr << "Certificate verification error: " << X509_verify_cert_error_string(verifyResult) << "\n";
+        spdlog::warn("certificate verification error: {}", X509_verify_cert_error_string(verifyResult));
     }
 
     // Print peer certificate info if available
@@ -61,9 +64,7 @@ void PrintSSLConnectError(SSL* ssl, int status) {
     if (cert != nullptr) {
         char* subject = X509_NAME_oneline(X509_get_subject_name(cert), nullptr, 0);
         char* issuer = X509_NAME_oneline(X509_get_issuer_name(cert), nullptr, 0);
-        std::cerr << "Peer certificate:\n";
-        std::cerr << "  Subject: " << subject << "\n";
-        std::cerr << "  Issuer: " << issuer << "\n";
+        spdlog::warn("peer certificate: subject={} issuer={}", subject, issuer);
         OPENSSL_free(subject);
         OPENSSL_free(issuer);
         X509_free(cert);
@@ -89,21 +90,19 @@ std::optional<Connection> Connection::NewFromURL(Method method, const URL& url) 
 
     int status = getaddrinfo(url.host.c_str(), port, &hints, &address);
     if (status == -1 || address == nullptr) {
-        // TODO: better logging
-        std::cerr << "failed to get addr for " << url.host << ":" << port << std::endl;
+        spdlog::warn("failed to get addr for {}:{}", url.host, port);
         return std::nullopt;
     }
 
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (fd == -1) {
         freeaddrinfo(address);
-        // TODO: better logging
-        std::cerr << "failed to create socket" << std::endl;
+        spdlog::error("failed to create socket: {}", strerror(errno));
         return std::nullopt;
     }
 
     if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
-        std::cerr << "failed to put socket into non-blocking mode" << std::endl;
+        spdlog::error("failed to put socket into non-blocking mode");
         // continue anyway
     }
 
@@ -277,9 +276,7 @@ bool Connection::WriteToSocketRaw() {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 return false;
             }
-
-            perror("mithril::http::Connection::WriteToSocketRaw(): write bytes");
-            // TODO: error logging
+            spdlog::error("connection: write to socket: {}", strerror(errno));
             state_ = State::SocketError;
             Close();
             return false;
@@ -343,7 +340,7 @@ bool Connection::ReadFromSocketRaw() {
                 return false;
             }
             // TODO: error logging
-            perror("mithril::http::Connection::ReadFromSocketRaw(): read bytes");
+            spdlog::error("connection: read from socket: {}", strerror(errno));
             state_ = State::SocketError;
             Close();
             return false;
@@ -396,7 +393,7 @@ void Connection::Connect() {
                 state_ = isSecure_ ? State::SSLConnecting : State::Sending;
             } else {
                 // Some other error occurred
-                perror("mithril::http::Connection::Connect() connect");
+                spdlog::warn("connection: connect: {}", strerror(errno));
                 state_ = State::ConnectError;
                 Close();
                 return;
@@ -444,8 +441,7 @@ void Connection::Process(bool gotEof) {
         if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
             (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
             state_ = State::UnexpectedEOFError;
-            // TODO: error logging
-            std::cerr << "conn: closed before receiveing complete response" << std::endl;
+            spdlog::warn("connection: closed before receiving complete response from {}:{}", url_.host, url_.port);
         } else if (!IsError()) {
             state_ = State::Complete;
         }

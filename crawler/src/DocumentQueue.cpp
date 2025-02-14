@@ -4,6 +4,9 @@
 
 #include <cassert>
 #include <mutex>
+#include <optional>
+#include <utility>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -20,6 +23,7 @@ void DocumentQueue::Close() {
 void DocumentQueue::Push(http::CompleteResponse res) {
     std::unique_lock lock(mu_);
     readyResponses_.push(std::move(res));
+    SPDLOG_TRACE("document queue size increased = {}", readyResponses_.size());
     cv_.notify_one();
 }
 
@@ -33,6 +37,7 @@ std::optional<http::CompleteResponse> DocumentQueue::Pop() {
 
     auto res = std::move(readyResponses_.front());
     readyResponses_.pop();
+    SPDLOG_TRACE("document queue size decreased = {}", readyResponses_.size());
 
     return {std::move(res)};
 }

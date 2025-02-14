@@ -5,10 +5,10 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
-#include <iostream>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <spdlog/spdlog.h>
 
 namespace mithril::http {
 
@@ -71,9 +71,7 @@ std::optional<URL> ParseURL(std::string_view s) {
     // Scheme validation
     size_t schemeEnd = uv.find(':');
     if (schemeEnd == std::string_view::npos || schemeEnd == 0) {
-#ifndef NDEBUG
-        std::cerr << "URL parse error: Missing or invalid scheme in " << uv << "\n";
-#endif
+        SPDLOG_DEBUG("parse url: missing or invalid scheme in {}", uv);
         return std::nullopt;
     }
 
@@ -81,9 +79,7 @@ std::optional<URL> ParseURL(std::string_view s) {
     std::transform(u.scheme.begin(), u.scheme.end(), u.scheme.begin(), [](unsigned char c) { return std::tolower(c); });
 
     if (u.scheme != "http" && u.scheme != "https") {
-#ifndef NDEBUG
-        std::cerr << "URL parse error: Unsupported scheme: " << u.scheme << " in " << uv << "\n";
-#endif
+        SPDLOG_DEBUG("parse url: unsupported scheme {} in {}", u.scheme, uv);
         return std::nullopt;
     }
 
@@ -95,9 +91,7 @@ std::optional<URL> ParseURL(std::string_view s) {
         i += 2;
         authorityStart = i;
     } else if (u.scheme == "http" || u.scheme == "https") {
-#ifndef NDEBUG
-        std::cerr << "URL parse error: Missing authority component in " << uv << "\n";
-#endif
+        SPDLOG_DEBUG("parse url: missing authority component in {}", uv);
         return std::nullopt;
     }
 
@@ -115,16 +109,12 @@ std::optional<URL> ParseURL(std::string_view s) {
 
     u.host = uv.substr(authorityStart, hostEnd - authorityStart);
     if (u.host.empty()) {
-#ifndef NDEBUG
-        std::cerr << "URL parse error: Empty host in " << uv << "\n";
-#endif
+        SPDLOG_DEBUG("parse url: empty host in {}", uv);
         return std::nullopt;
     }
 
     if (!IsValidDomain(u.host)) {
-#ifndef NDEBUG
-        std::cerr << "URL parse error: Invalid host: " << u.host << " in " << uv << "\n";
-#endif
+        SPDLOG_DEBUG("parse url: invalid host {} in {}", u.host, uv);
         return std::nullopt;
     }
 
@@ -139,24 +129,18 @@ std::optional<URL> ParseURL(std::string_view s) {
 
         u.port = uv.substr(portStart, i - portStart);
         if (u.port.empty()) {
-#ifndef NDEBUG
-            std::cerr << "URL parse error: Empty port in " << uv << "\n";
-#endif
+            SPDLOG_DEBUG("parse url: empty port in {}", uv);
             return std::nullopt;
         }
 
         if (!std::all_of(u.port.begin(), u.port.end(), ::isdigit)) {
-#ifndef NDEBUG
-            std::cerr << "URL parse error: Non-numeric port: " << u.port << " in " << uv << "\n";
-#endif
+            SPDLOG_DEBUG("parse url: non-numeric port {} in {}", u.port, uv);
             return std::nullopt;
         }
 
         const int portNum = std::stoi(u.port);
         if (portNum < 1 || portNum > 65535) {
-#ifndef NDEBUG
-            std::cerr << "URL parse error: Port out of range: " << u.port << " in " << uv << "\n";
-#endif
+            SPDLOG_DEBUG("parse url: port {} out of range in {}", u.port, uv);
             return std::nullopt;
         }
     }
