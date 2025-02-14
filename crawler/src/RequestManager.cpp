@@ -45,7 +45,8 @@ void RequestManager::Run() {
                     SPDLOG_TRACE("starting crawl request: {}", url);
                     requestExecutor_.Add(http::Request::GET(std::move(*parsed),
                                                             http::RequestOptions{
-                                                                .timeout = 5,  // seconds
+                                                                .timeout = 30,                       // seconds
+                                                                .maxResponseSize = 2 * 1024 * 1024,  // 2 MB
                                                             }));
                 } else {
                     spdlog::info("frontier failed to parse url {}", url);
