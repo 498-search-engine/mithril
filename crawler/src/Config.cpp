@@ -1,18 +1,22 @@
 #include "Config.h"
 
+#include <cstddef>
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace mithril {
 
 namespace {
-std::string trim(std::string_view str) {
+
+std::string Trim(std::string_view str) {
     size_t first = str.find_first_not_of(" \t");
     size_t last = str.find_last_not_of(" \t");
     return std::string(str.substr(first, last - first + 1));
 }
-}
+
+}  // namespace
 
 CrawlerConfig LoadConfigFromFile(const std::string& path) {
     CrawlerConfig config;
@@ -22,24 +26,22 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
     }
 
     std::string line;
-    size_t line_number = 0;
+    size_t lineNumber = 0;
     while (std::getline(file, line)) {
-        line_number++;
-        
+        lineNumber++;
+
         // Skip empty lines and comments
         if (line.empty() || line[0] == '#') {
             continue;
         }
 
-        auto eq_pos = line.find('=');
-        if (eq_pos == std::string::npos) {
-            throw std::runtime_error(
-                "Invalid config line " + std::to_string(line_number) + 
-                ": missing '='");
+        auto eqPos = line.find('=');
+        if (eqPos == std::string::npos) {
+            throw std::runtime_error("Invalid config line " + std::to_string(lineNumber) + ": missing '='");
         }
 
-        auto key = trim(std::string_view(line.data(), eq_pos));
-        auto value = trim(std::string_view(line.data() + eq_pos + 1));
+        auto key = Trim(std::string_view(line.data(), eqPos));
+        auto value = Trim(std::string_view(line.data() + eqPos + 1));
 
         if (key == "workers") {
             config.num_workers = std::stoul(std::string(value));
@@ -55,6 +57,8 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
             if (!value.empty()) {
                 config.seed_urls.push_back(std::string(value));
             }
+        } else if (key == "request_timeout") {
+            config.request_timeout = std::stoul(std::string(value));
         }
     }
 
@@ -65,4 +69,4 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
     return config;
 }
 
-} // namespace mithril
+}  // namespace mithril

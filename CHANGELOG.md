@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - robots.txt handling (#25)
 - google test capabilities (#28)
 - add spdlog (#32)
+- request timeout and max response size (#33)
 
 ### Fixed
 - Fix copying body data from buffer (#24)

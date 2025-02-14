@@ -5,8 +5,10 @@
 #include "UrlFrontier.h"
 #include "Worker.h"
 
+#include <cstddef>
 #include <memory>
 #include <thread>
+#include <vector>
 
 namespace mithril {
 
@@ -16,7 +18,8 @@ constexpr size_t ConcurrentRequests = 10;
 Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     frontier_ = std::make_unique<UrlFrontier>();
     docQueue_ = std::make_unique<DocumentQueue>();
-    requestManager_ = std::make_unique<RequestManager>(config_.concurrent_requests, frontier_.get(), docQueue_.get());
+    requestManager_ = std::make_unique<RequestManager>(
+        config_.concurrent_requests, config_.request_timeout, frontier_.get(), docQueue_.get());
 }
 
 void Coordinator::Run() {

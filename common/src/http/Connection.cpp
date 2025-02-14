@@ -2,6 +2,7 @@
 
 #include "Util.h"
 #include "http/Request.h"
+#include "http/RequestExecutor.h"
 #include "http/Response.h"
 #include "http/SSL.h"
 #include "http/URL.h"
@@ -31,6 +32,7 @@ namespace mithril::http {
 
 namespace {
 
+constexpr size_t MaxHeaderSize = 8192;
 constexpr size_t BufferSize = 8192;
 constexpr const char* ContentLengthHeader = "Content-Length: ";
 constexpr const char* TransferEncodingChunkedHeader = "Transfer-Encoding: chunked";
@@ -74,10 +76,10 @@ void PrintSSLConnectError(SSL* ssl, int status) {
 }  // namespace
 
 std::optional<Connection> Connection::NewFromRequest(const Request& req) {
-    return Connection::NewFromURL(req.GetMethod(), req.Url());
+    return Connection::NewFromURL(req.GetMethod(), req.Url(), req.Options());
 }
 
-std::optional<Connection> Connection::NewFromURL(Method method, const URL& url) {
+std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, const RequestOptions& options) {
     struct addrinfo* address;
     struct addrinfo hints {};
     memset(&hints, 0, sizeof(hints));
@@ -106,14 +108,15 @@ std::optional<Connection> Connection::NewFromURL(Method method, const URL& url) 
         // continue anyway
     }
 
-    return Connection{fd, address, method, url};
+    return Connection{fd, address, method, url, options};
 }
 
-Connection::Connection(int fd, struct addrinfo* address, Method method, const URL& url)
+Connection::Connection(int fd, struct addrinfo* address, Method method, const URL& url, const RequestOptions& options)
     : fd_(fd),
       address_(address),
       state_(State::TCPConnecting),
       url_(url),
+      reqOptions_(options),
       rawRequest_(BuildRawRequestString(method, url)),
       requestBytesSent_(0),
       contentLength_(0),
@@ -137,6 +140,7 @@ Connection::Connection(Connection&& other) noexcept
       address_(other.address_),
       state_(other.state_),
       url_(std::move(other.url_)),
+      reqOptions_(other.reqOptions_),
       rawRequest_(std::move(other.rawRequest_)),
       requestBytesSent_(other.requestBytesSent_),
       contentLength_(other.contentLength_),
@@ -161,6 +165,7 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     address_ = other.address_;
     state_ = other.state_;
     url_ = std::move(other.url_);
+    reqOptions_ = other.reqOptions_;
     rawRequest_ = std::move(other.rawRequest_);
     requestBytesSent_ = other.requestBytesSent_;
     contentLength_ = other.contentLength_;
@@ -438,12 +443,14 @@ void Connection::Process(bool gotEof) {
     }
 
     if (gotEof) {
-        if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
-            (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
-            state_ = State::UnexpectedEOFError;
-            spdlog::warn("connection: closed before receiving complete response from {}:{}", url_.host, url_.port);
-        } else if (!IsError()) {
-            state_ = State::Complete;
+        if (!IsError()) {
+            if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
+                (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
+                state_ = State::UnexpectedEOFError;
+                spdlog::warn("connection: closed before receiving complete response from {}:{}", url_.host, url_.port);
+            } else {
+                state_ = State::Complete;
+            }
         }
         Close();
     }
@@ -495,7 +502,20 @@ bool Connection::IsActive() const {
 }
 
 bool Connection::IsError() const {
-    return state_ == State::ConnectError || state_ == State::SocketError || state_ == State::UnexpectedEOFError;
+    return state_ == State::ConnectError || state_ == State::SocketError || state_ == State::UnexpectedEOFError ||
+           state_ == State::ResponseTooBigError;
+}
+
+RequestError Connection::GetError() const {
+    switch (state_) {
+    case State::ResponseTooBigError:
+        return RequestError::ResponseTooBig;
+    case State::ConnectError:
+    case State::SocketError:
+    case State::UnexpectedEOFError:
+    default:
+        return RequestError::ConnectionError;
+    }
 }
 
 bool Connection::IsSecure() const {
@@ -515,6 +535,12 @@ void Connection::ProcessHeaders() {
     auto headerEnd = std::search(buffer_.begin(), buffer_.end(), HeaderDelimiter, HeaderDelimiter + 4);
 
     if (headerEnd == buffer_.end()) {
+        if (buffer_.size() > MaxHeaderSize) {
+            // Header is too big
+            spdlog::debug("header length for response {} exceeds max header size {}", buffer_.size(), MaxHeaderSize);
+            state_ = State::ResponseTooBigError;
+            return;
+        }
         return;  // Haven't received full headers yet
     }
 
@@ -537,6 +563,12 @@ void Connection::ProcessHeaders() {
         contentLength_ = std::stoul(headers.substr(contentLengthPos, lengthEnd - contentLengthPos));
         buffer_.reserve(buffer_.size() + contentLength_);
         body_.reserve(contentLength_);
+        if (reqOptions_.maxResponseSize > 0 && contentLength_ > reqOptions_.maxResponseSize) {
+            // Response is too big
+            spdlog::debug("content-length {} for response {} exceeds max response size", contentLength_, url_.url);
+            state_ = State::ResponseTooBigError;
+            return;
+        }
     }
 
     state_ = State::ReadingBody;
@@ -584,6 +616,14 @@ void Connection::ProcessChunks() {
                 state_ = State::Complete;
                 return;
             }
+        }
+
+        if (reqOptions_.maxResponseSize > 0 && bodyBytesRead_ > reqOptions_.maxResponseSize) {
+            // Response is too big
+            spdlog::debug(
+                "chunked response with size {} for request {} exceeds max response size", bodyBytesRead_, url_.url);
+            state_ = State::ResponseTooBigError;
+            return;
         }
 
         size_t availableBytes = buffer_.size() - (headersLength_ + bodyBytesRead_);

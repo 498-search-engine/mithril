@@ -1,5 +1,6 @@
 #include "http/RequestExecutor.h"
 
+#include "Clock.h"
 #include "html/Link.h"
 #include "http/Connection.h"
 #include "http/Request.h"
@@ -9,11 +10,17 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <unistd.h>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
-#if defined(USE_KQUEUE)
+#if defined(USE_EPOLL)
+#    include <sys/epoll.h>
+#elif defined(USE_KQUEUE)
 #    include <ctime>
+#    include <sys/event.h>
 #endif
 
 namespace mithril::http {
@@ -227,6 +234,9 @@ void RequestExecutor::ProcessConnections() {
     }
 #endif
 
+    // Check requests with a configured timeout
+    nRemoved += CheckRequestTimeouts();
+
     for (size_t i = 0; i < nRemoved; ++i) {
         events_.pop_back();
     }
@@ -234,21 +244,62 @@ void RequestExecutor::ProcessConnections() {
     assert(events_.size() == activeConnections_.size());
 }
 
+size_t RequestExecutor::CheckRequestTimeouts() {
+    size_t timedOut = 0;
+    auto now = MonotonicTime();
+
+    auto it = activeConnections_.begin();
+    while (it != activeConnections_.end()) {
+        if (it->second.req.Options().timeout > 0) {
+            assert(it->second.state.startTime > 0);
+            auto elapsed = now - it->second.state.startTime;
+            if (elapsed >= it->second.req.Options().timeout) {
+                // Request has timed out
+                failedRequests_.push_back(FailedRequest{
+                    .req = std::move(it->second.req),
+                    .error = RequestError::TimedOut,
+                });
+                it = activeConnections_.erase(it);
+                ++timedOut;
+                continue;
+            }
+        }
+        ++it;
+    }
+
+    return timedOut;
+}
+
 void RequestExecutor::ProcessPendingConnections() {
     if (pendingConnection_.empty()) {
         return;
     }
 
+    auto now = MonotonicTime();
     auto it = pendingConnection_.begin();
     while (it != pendingConnection_.end()) {
         assert(it->conn.IsConnecting());
         it->conn.Connect();
+        if (it->state.startTime == 0) {
+            it->state.startTime = now;
+        } else if (it->req.Options().timeout > 0) {
+            auto elapsed = now - it->state.startTime;
+            if (elapsed >= it->req.Options().timeout) {
+                // Request has timed out
+                failedRequests_.push_back(FailedRequest{
+                    .req = std::move(it->req),
+                    .error = RequestError::TimedOut,
+                });
+                it = pendingConnection_.erase(it);
+                continue;
+            }
+        }
 
         if (it->conn.IsError()) {
             // Connection failed in some way
             failedRequests_.push_back(FailedRequest{
                 .req = std::move(it->req),
-                .error = RequestError::ConnectionError,
+                .error = it->conn.GetError(),
             });
             it = pendingConnection_.erase(it);
         } else if (it->conn.IsActive()) {
@@ -269,6 +320,8 @@ bool RequestExecutor::HandleConnEOF(std::unordered_map<int, ReqConn>::iterator c
     if (connIt->second.conn.IsComplete()) {
         // Socket contained rest of response data after closing
         return HandleConnComplete(connIt);
+    } else if (connIt->second.conn.IsError()) {
+        return HandleConnError(connIt, connIt->second.conn.GetError());
     }
 
     // Socket has been closed without finishing response, mark as failed
@@ -284,7 +337,7 @@ bool RequestExecutor::HandleConnReady(std::unordered_map<int, ReqConn>::iterator
     if (connIt->second.conn.IsComplete()) {
         return HandleConnComplete(connIt);
     } else if (connIt->second.conn.IsError()) {
-        return HandleConnError(connIt, RequestError::ConnectionError);
+        return HandleConnError(connIt, connIt->second.conn.GetError());
     }
 
     // Connection is still working on sending request/getting response
@@ -334,7 +387,7 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
                     return HandleConnError(connIt, RequestError::InvalidResponseData);
                 }
 
-                auto newConn = Connection::NewFromURL(req.GetMethod(), *parsedRedirect);
+                auto newConn = Connection::NewFromURL(req.GetMethod(), *parsedRedirect, req.Options());
                 if (!newConn) {
                     return HandleConnError(connIt, RequestError::RedirectError);
                 }
