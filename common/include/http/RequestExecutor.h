@@ -6,6 +6,7 @@
 #include "http/Response.h"
 
 #include <list>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -48,6 +49,24 @@ struct FailedRequest {
     Request req;
     RequestError error{RequestError::None};
 };
+
+constexpr std::string_view StringOfRequestError(RequestError e) {
+    using namespace std::string_view_literals;
+    switch (e) {
+    case RequestError::None:
+        return "None"sv;
+    case RequestError::ConnectionError:
+        return "ConnectionError"sv;
+    case RequestError::InvalidResponseData:
+        return "InvalidResponseData"sv;
+    case RequestError::RedirectError:
+        return "RedirectError"sv;
+    case RequestError::TooManyRedirects:
+        return "TooManyRedirects"sv;
+    default:
+        return "Unkown"sv;
+    }
+}
 
 /**
  * @brief RequestExecutor processes many HTTP Connection instances concurrently,

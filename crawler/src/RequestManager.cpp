@@ -77,7 +77,7 @@ void RequestManager::DispatchReadyResponse(http::CompleteResponse res) {
 }
 
 void RequestManager::DispatchFailedRequest(http::FailedRequest failed) {
-    std::cout << "failed " << failed.req.Url().url << std::endl;
+    std::cout << "failed " << failed.req.Url().url << ": " << http::StringOfRequestError(failed.error) << std::endl;
     // TODO: pass off to whatever
 }
 
