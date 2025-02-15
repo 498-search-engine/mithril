@@ -1,5 +1,6 @@
 #include "Worker.h"
 
+#include "Clock.h"
 #include "DocumentQueue.h"
 #include "UrlFrontier.h"
 #include "html/Link.h"
@@ -27,7 +28,13 @@ void Worker::Run() {
             return;
         }
 
+        auto start = MonotonicTimeMs();
         ProcessDocument(doc->req, doc->res, doc->header);
+        auto end = MonotonicTimeMs();
+        spdlog::debug("worker took {} ms to process document {} ({} bytes)",
+                      end - start,
+                      doc->req.Url().url,
+                      doc->res.body.size());
     }
 }
 
