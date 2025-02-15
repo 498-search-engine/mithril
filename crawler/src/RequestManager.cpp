@@ -42,7 +42,7 @@ void RequestManager::Run() {
 
             for (const auto& url : urls) {
                 if (auto parsed = http::ParseURL(url)) {
-                    SPDLOG_TRACE("starting crawl request: {}", url);
+                    SPDLOG_DEBUG("starting crawl request: {}", url);
                     requestExecutor_.Add(http::Request::GET(std::move(*parsed),
                                                             http::RequestOptions{
                                                                 .timeout = 30,                       // seconds
@@ -63,9 +63,7 @@ void RequestManager::Run() {
         // Process ready responses
         auto& ready = requestExecutor_.ReadyResponses();
         if (!ready.empty()) {
-            for (auto& r : ready) {
-                DispatchReadyResponse(std::move(r));
-            }
+            docQueue_->PushAll(ready);
             ready.clear();
         }
 
@@ -84,11 +82,6 @@ void RequestManager::Run() {
 
 void RequestManager::Stop() {
     stopped_.store(true, std::memory_order_release);
-}
-
-void RequestManager::DispatchReadyResponse(http::CompleteResponse res) {
-    SPDLOG_TRACE("successful crawl request: {}", res.req.Url().url);
-    docQueue_->Push(std::move(res));
 }
 
 void RequestManager::DispatchFailedRequest(http::FailedRequest failed) {

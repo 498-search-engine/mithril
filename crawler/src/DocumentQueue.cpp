@@ -6,6 +6,7 @@
 #include <mutex>
 #include <optional>
 #include <utility>
+#include <vector>
 #include <spdlog/spdlog.h>
 
 namespace mithril {
@@ -25,6 +26,16 @@ void DocumentQueue::Push(http::CompleteResponse res) {
     readyResponses_.push(std::move(res));
     SPDLOG_TRACE("document queue size increased = {}", readyResponses_.size());
     cv_.notify_one();
+}
+
+void DocumentQueue::PushAll(std::vector<http::CompleteResponse>& res) {
+    std::unique_lock lock(mu_);
+    for (auto& r : res) {
+        SPDLOG_DEBUG("ready document added to queue: {}", r.req.Url().url);
+        readyResponses_.push(std::move(r));
+    }
+    SPDLOG_TRACE("document queue size increased = {}", readyResponses_.size());
+    cv_.notify_all();
 }
 
 std::optional<http::CompleteResponse> DocumentQueue::Pop() {

@@ -3,11 +3,14 @@
 
 #include "Robots.h"
 #include "UrlSet.h"
+#include "http/URL.h"
 
 #include <condition_variable>
 #include <mutex>
 #include <queue>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace mithril {
 
@@ -57,9 +60,13 @@ private:
      */
     bool PutURLInternal(std::string u);
 
-    mutable std::mutex mu_;
-    mutable std::condition_variable cv_;        // Notifies when URL is available in queue
-    mutable std::condition_variable robotsCv_;  // Notifies when new request is available for processing
+    mutable std::mutex urlQueueMu_;     // Lock for urls_
+    mutable std::mutex seenMu_;         // Lock for seen_
+    mutable std::mutex robotsCacheMu_;  // Lock for robotRulesCache_
+    mutable std::mutex waitingUrlsMu_;  // Lock for urlsWaitingForRobots_
+
+    std::condition_variable urlQueueCv_;  // Notifies when URL is available in queue
+    std::condition_variable robotsCv_;    // Notifies when new request is available for processing
 
     std::queue<std::string> urls_;
     UrlSet seen_;

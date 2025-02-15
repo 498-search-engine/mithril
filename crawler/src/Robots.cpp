@@ -26,6 +26,7 @@ using namespace std::string_view_literals;
 constexpr size_t MaxRobotsTxtSize = 500L * 1024L;  // 500 KB
 constexpr auto MaxInFlightRobotsTxtRequests = 100;
 constexpr int MaxRobotsTxtRedirects = 5;
+constexpr long RobotsTxtRequestTimeoutSeconds = 10;
 
 namespace {
 
@@ -332,10 +333,8 @@ bool RobotRules::Allowed(std::string_view path) const {
 RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
     auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
-        if (executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
-            cache_.try_emplace(canonicalHost.url);
-            Fetch(canonicalHost);
-        }
+        cache_.try_emplace(canonicalHost.url);
+        QueueFetch(canonicalHost);
         return nullptr;
     }
 
@@ -347,9 +346,7 @@ RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost
     auto now = MonotonicTime();
     if (now >= it->second.expiresAt) {
         it->second.expiresAt = 0;  // Mark as already fetching
-        if (executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
-            Fetch(canonicalHost);
-        }
+        QueueFetch(canonicalHost);
         return nullptr;
     }
 
@@ -358,6 +355,10 @@ RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost
     }
 
     return nullptr;
+}
+
+void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost) {
+    queuedFetches_.push(canonicalHost);
 }
 
 void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
@@ -372,14 +373,21 @@ void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
         },
         http::RequestOptions{
             .followRedirects = MaxRobotsTxtRedirects,
+            .timeout = RobotsTxtRequestTimeoutSeconds,
+            .maxResponseSize = MaxRobotsTxtSize,
         }));
 }
 
 size_t RobotRulesCache::PendingRequests() const {
-    return executor_.InFlightRequests();
+    return executor_.InFlightRequests() + queuedFetches_.size();
 }
 
 void RobotRulesCache::ProcessPendingRequests() {
+    while (!queuedFetches_.empty() && executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
+        Fetch(queuedFetches_.front());
+        queuedFetches_.pop();
+    }
+
     if (executor_.InFlightRequests() == 0) {
         return;
     }

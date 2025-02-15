@@ -5,9 +5,15 @@
 #include "http/Response.h"
 #include "http/URL.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <queue>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace mithril {
@@ -151,6 +157,13 @@ private:
     };
 
     /**
+     * @brief Enqueues a host for robots.txt fetching.
+     *
+     * @param canonicalHost Canonical host to fetch for
+     */
+    void QueueFetch(const http::CanonicalHost& canonicalHost);
+
+    /**
      * @brief Triggers a fetch for the robots.txt page of a host.
      *
      * @param canonicalHost Canonical host to fetch for.
@@ -165,6 +178,7 @@ private:
 
     // TODO: Use an LRU cache
     std::unordered_map<std::string, RobotCacheEntry> cache_;
+    std::queue<http::CanonicalHost> queuedFetches_;
     http::RequestExecutor executor_;
 };
 
