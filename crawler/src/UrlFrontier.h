@@ -43,23 +43,9 @@ public:
      *
      * @param urls URLs to add to frontier.
      */
-    void PutURLs(std::vector<std::string> urls);
+    void PutURLs(std::vector<std::string>& urls);
 
 private:
-    /**
-     * @brief Puts a url onto the frontier (if not already visited). Assumes
-     * caller holds required lock.
-     *
-     * If the canonical host for the URL has a cached robots.txt ruleset, the
-     * URL will be immediately pushed onto the active queue. Otherwise, a
-     * request to fetch the robots.txt page is scheduled and the URL is put on a
-     * waiting queue.
-     *
-     * @param u URL to add to frontier.
-     * @return Whether the URL was accepted into the frontier.
-     */
-    bool PutURLInternal(std::string u);
-
     mutable std::mutex urlQueueMu_;     // Lock for urls_
     mutable std::mutex seenMu_;         // Lock for seen_
     mutable std::mutex robotsCacheMu_;  // Lock for robotRulesCache_

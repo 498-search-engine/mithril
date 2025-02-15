@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -57,7 +59,7 @@ void UrlFrontier::ProcessRobotsRequests() {
     while (it != urlsWaitingForRobots_.end()) {
         {
             std::unique_lock robotsLock(robotsCacheMu_);
-            auto* robots = robotRulesCache_.GetOrFetch(it->first);
+            const auto* robots = robotRulesCache_.GetOrFetch(it->first);
             if (robots == nullptr) {
                 // Still fetching...
                 ++it;
@@ -116,71 +118,118 @@ void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out, bool atLeas
 }
 
 void UrlFrontier::PutURL(std::string u) {
-    if (PutURLInternal(std::move(u))) {
-        urlQueueCv_.notify_one();
-    }
+    std::vector v = {std::move(u)};
+    PutURLs(v);
 }
 
-void UrlFrontier::PutURLs(std::vector<std::string> urls) {
-    int i = 0;
-    for (auto& u : urls) {
-        if (PutURLInternal(std::move(u))) {
-            ++i;
+void UrlFrontier::PutURLs(std::vector<std::string>& urls) {
+    std::vector<http::URL> validURLs;
+    validURLs.reserve(urls.size());
+
+    // 1. Validate and parse URLs
+    for (const auto& url : urls) {
+        if (!IsValidUrl(url)) {
+            continue;
         }
+        auto parsed = http::ParseURL(url);
+        if (!parsed) {
+            continue;
+        }
+        validURLs.push_back(std::move(*parsed));
     }
 
-    if (i > 0) {
-        urlQueueCv_.notify_all();
-    }
-}
-
-bool UrlFrontier::PutURLInternal(std::string u) {
-    if (!IsValidUrl(u)) {
-        return false;
+    if (validURLs.empty()) {
+        return;
     }
 
+    // 2. Discard already seen URLs
+    std::vector<http::URL*> newURLs;
+    newURLs.reserve(validURLs.size());
     {
         std::unique_lock seenLock(seenMu_);
-        if (seen_.Contains(u)) {
-            return false;
+        for (auto& url : validURLs) {
+            if (seen_.Contains(url.url)) {
+                continue;
+            }
+            seen_.Put(url.url);
+            newURLs.push_back(&url);
         }
-        seen_.Put(u);
     }
 
-    auto parsed = http::ParseURL(u);
-    if (!parsed) {
-        return false;
+    if (newURLs.empty()) {
+        return;
     }
 
-    // Add to URLs seen set before we go any further.
-    auto canonicalHost = http::CanonicalizeHost(*parsed);
+    // 3. Compute canonical host names for robots.txt lookup
+    std::vector<http::CanonicalHost> canonicalHosts;
+    canonicalHosts.reserve(newURLs.size());
+    std::transform(newURLs.begin(),
+                   newURLs.end(),
+                   std::back_inserter(canonicalHosts),
+                   [](const http::URL* url) -> http::CanonicalHost { return http::CanonicalizeHost(*url); });
 
-    RobotRules* robots = nullptr;
+    enum class RobotsLookupResult : uint8_t { NotCached, Allowed, Disallowed };
+
+    // 4. Look up robots.txt ruleset (if in memory)
+    assert(newURLs.size() == canonicalHosts.size());
+    std::vector<RobotsLookupResult> robotResults;
+    robotResults.reserve(canonicalHosts.size());
     {
         std::unique_lock robotsLock(robotsCacheMu_);
-        robots = robotRulesCache_.GetOrFetch(canonicalHost);
-    }
-
-    if (robots == nullptr) {
-        std::unique_lock waitingLock(waitingUrlsMu_);
-        auto it = urlsWaitingForRobots_.find(canonicalHost);
-        if (it == urlsWaitingForRobots_.end()) {
-            // This is the first pending URL for this canonical host
-            auto insertResult = urlsWaitingForRobots_.try_emplace(std::move(canonicalHost));
-            assert(insertResult.second);
-            it = insertResult.first;
-            // Notify that a new request for a robots.txt page is available
-            robotsCv_.notify_one();
+        for (size_t i = 0; i < canonicalHosts.size(); ++i) {
+            const auto* robots = robotRulesCache_.GetOrFetch(canonicalHosts[i]);
+            if (robots == nullptr) {
+                robotResults.push_back(RobotsLookupResult::NotCached);
+            } else if (robots->Allowed(newURLs[i]->path)) {
+                robotResults.push_back(RobotsLookupResult::Allowed);
+            } else {
+                robotResults.push_back(RobotsLookupResult::Disallowed);
+            }
         }
-        it->second.push_back(std::move(*parsed));
-        return false;
-    } else if (!robots->Allowed(parsed->path)) {
-        return false;
     }
 
-    std::unique_lock queueLock(urlQueueMu_);
-    urls_.push(std::move(u));
-    return true;
+    // 5. Enqueue URLs that aren't ready to waiting list and discard disallowed URLs
+    assert(newURLs.size() == robotResults.size());
+    std::vector<http::URL*> pushURLs;
+    pushURLs.reserve(newURLs.size());
+    {
+        std::unique_lock waitingLock(waitingUrlsMu_);
+        for (size_t i = 0; i < newURLs.size(); ++i) {
+            switch (robotResults[i]) {
+            case RobotsLookupResult::NotCached:
+                {
+                    // robots.txt rules are not cached in memory. Push onto waiting
+                    // queue.
+                    size_t sizeBefore = urlsWaitingForRobots_.size();
+                    urlsWaitingForRobots_[canonicalHosts[i]].push_back(std::move(*newURLs[i]));
+                    if (sizeBefore != urlsWaitingForRobots_.size()) {
+                        // Notify that a new request for a robots.txt page is available
+                        robotsCv_.notify_one();
+                    }
+                    break;
+                }
+            case RobotsLookupResult::Allowed:
+                pushURLs.push_back(newURLs[i]);
+                break;
+            case RobotsLookupResult::Disallowed:
+                // Do nothing
+                break;
+            }
+        }
+    }
+
+    if (pushURLs.empty()) {
+        return;
+    }
+
+    // 6. Push all allowed, ready to fetch URLs onto frontier
+    {
+        std::unique_lock queueLock(urlQueueMu_);
+        for (auto* url : pushURLs) {
+            urls_.push(std::move(url->url));
+        }
+    }
+    urlQueueCv_.notify_all();
 }
 
 }  // namespace mithril

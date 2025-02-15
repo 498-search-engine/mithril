@@ -137,7 +137,7 @@ public:
      * @param canonicalHost Canonical host URL to get the ruleset for
      * @return RobotRules* The ruleset, or nullptr if not yet in the cache.
      */
-    RobotRules* GetOrFetch(const http::CanonicalHost& canonicalHost);
+    const RobotRules* GetOrFetch(const http::CanonicalHost& canonicalHost);
 
     /**
      * @brief Returns the number of pending robots.txt requests.

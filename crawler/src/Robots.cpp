@@ -330,7 +330,7 @@ bool RobotRules::Allowed(std::string_view path) const {
     return trie_->IsAllowed(path);
 }
 
-RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
+const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
     auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
         cache_.try_emplace(canonicalHost.url);
