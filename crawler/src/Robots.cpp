@@ -383,9 +383,11 @@ size_t RobotRulesCache::PendingRequests() const {
 }
 
 void RobotRulesCache::ProcessPendingRequests() {
+    // size_t i = 0;
     while (!queuedFetches_.empty() && executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
         Fetch(queuedFetches_.front());
         queuedFetches_.pop();
+        // ++i;
     }
 
     if (executor_.InFlightRequests() == 0) {

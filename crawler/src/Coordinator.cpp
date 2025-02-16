@@ -41,14 +41,20 @@ void Coordinator::Run() {
     std::thread requestThread([r = requestManager_.get()] { r->Run(); });
 
     // TODO: shutdown strategy for threads
-    std::thread frontierThread([f = frontier_.get()] {
+    std::thread robotsThread([f = frontier_.get()] {
         while (true) {
             f->ProcessRobotsRequests();
         }
     });
+    std::thread freshURLsThread([f = frontier_.get()] {
+        while (true) {
+            f->ProcessFreshURLs();
+        }
+    });
 
     requestThread.join();
-    frontierThread.join();
+    robotsThread.join();
+    freshURLsThread.join();
 
     docQueue_->Close();
 

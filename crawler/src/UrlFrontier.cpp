@@ -118,11 +118,31 @@ void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out, bool atLeas
 }
 
 void UrlFrontier::PutURL(std::string u) {
-    std::vector v = {std::move(u)};
-    PutURLs(v);
+    std::unique_lock lock(freshURLsMu_);
+    freshURLs_.push_back(std::move(u));
+    freshURLsCv_.notify_one();
 }
 
 void UrlFrontier::PutURLs(std::vector<std::string>& urls) {
+    std::unique_lock lock(freshURLsMu_);
+    for (auto& url : urls) {
+        freshURLs_.push_back(std::move(url));
+    }
+    freshURLsCv_.notify_all();
+}
+
+void UrlFrontier::ProcessFreshURLs() {
+    // 0. Wait for fresh URLs
+    std::vector<std::string> urls;
+    {
+        std::unique_lock freshLock(freshURLsMu_);
+        freshURLsCv_.wait(freshLock, [this]() { return !freshURLs_.empty(); });
+        urls = std::move(freshURLs_);
+        freshURLs_.clear();
+    }
+
+    SPDLOG_TRACE("starting processing of {} fresh urls", urls.size());
+
     std::vector<http::URL> validURLs;
     validURLs.reserve(urls.size());
 
@@ -139,6 +159,7 @@ void UrlFrontier::PutURLs(std::vector<std::string>& urls) {
     }
 
     if (validURLs.empty()) {
+        SPDLOG_TRACE("finished processing of fresh urls: no valid urls");
         return;
     }
 
@@ -157,6 +178,7 @@ void UrlFrontier::PutURLs(std::vector<std::string>& urls) {
     }
 
     if (newURLs.empty()) {
+        SPDLOG_TRACE("finished processing of fresh urls: no new urls");
         return;
     }
 
@@ -219,6 +241,7 @@ void UrlFrontier::PutURLs(std::vector<std::string>& urls) {
     }
 
     if (pushURLs.empty()) {
+        SPDLOG_TRACE("finished processing of fresh urls: no ready urls, {} awaiting robots.txt", newURLs.size());
         return;
     }
 
@@ -230,6 +253,10 @@ void UrlFrontier::PutURLs(std::vector<std::string>& urls) {
         }
     }
     urlQueueCv_.notify_all();
+
+    SPDLOG_TRACE("finished processing of fresh urls: {} urls pushed, {} awaiting robots.txt",
+                 pushURLs.size(),
+                 newURLs.size() - pushURLs.size());
 }
 
 }  // namespace mithril

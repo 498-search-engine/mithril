@@ -22,6 +22,8 @@ public:
 
     void ProcessRobotsRequests();
 
+    void ProcessFreshURLs();
+
     /**
      * @brief Gets at least one URL from the frontier, up to max
      *
@@ -50,15 +52,19 @@ private:
     mutable std::mutex seenMu_;         // Lock for seen_
     mutable std::mutex robotsCacheMu_;  // Lock for robotRulesCache_
     mutable std::mutex waitingUrlsMu_;  // Lock for urlsWaitingForRobots_
+    mutable std::mutex freshURLsMu_;    // Lock for freshURLs_
 
-    std::condition_variable urlQueueCv_;  // Notifies when URL is available in queue
-    std::condition_variable robotsCv_;    // Notifies when new request is available for processing
+    std::condition_variable urlQueueCv_;   // Notifies when URL is available in queue
+    std::condition_variable robotsCv_;     // Notifies when new request is available for processing
+    std::condition_variable freshURLsCv_;  // Notifies when fresh URL added
 
     std::queue<std::string> urls_;
     UrlSet seen_;
 
     RobotRulesCache robotRulesCache_;
     std::unordered_map<http::CanonicalHost, std::vector<http::URL>> urlsWaitingForRobots_;
+
+    std::vector<std::string> freshURLs_;
 };
 
 }  // namespace mithril
