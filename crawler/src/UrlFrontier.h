@@ -56,6 +56,15 @@ public:
     void PushURLs(std::vector<std::string>& urls);
 
 private:
+    /**
+     * @brief Pushes the URL, which has been approved to enter the frontier,
+     * onto the actual frontier structure. Requires any necessary locks to be
+     * held by the caller.
+     *
+     * @param url URL to push into the frontier.
+     */
+    void PushAcceptedURL(std::string url);
+
     mutable std::mutex urlQueueMu_;     // Lock for urls_
     mutable std::mutex seenMu_;         // Lock for seen_
     mutable std::mutex robotsCacheMu_;  // Lock for robotRulesCache_

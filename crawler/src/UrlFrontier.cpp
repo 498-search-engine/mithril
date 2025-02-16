@@ -45,8 +45,8 @@ void UrlFrontier::ProcessRobotsRequests() {
     }
 
     // Process waiting URLs
-    std::unique_lock waitingLock(waitingUrlsMu_);
     std::vector<std::string> allowedURLs;
+    std::unique_lock waitingLock(waitingUrlsMu_);
 
     auto it = urlsWaitingForRobots_.begin();
     while (it != urlsWaitingForRobots_.end()) {
@@ -66,17 +66,20 @@ void UrlFrontier::ProcessRobotsRequests() {
                     allowedURLs.push_back(url.url);
                 }
             }
-
-            if (!allowedURLs.empty()) {
-                std::unique_lock queueLock(urlQueueMu_);
-                for (auto& url : allowedURLs) {
-                    urls_.push(std::move(url));
-                }
-                allowedURLs.clear();
-                urlQueueCv_.notify_all();
-            }
         }
         it = urlsWaitingForRobots_.erase(it);
+    }
+
+    // Release the waitingUrlsMu_ mutex -- we have determined which URLs can go
+    // onto the frontier immediately.
+    waitingLock.unlock();
+
+    if (!allowedURLs.empty()) {
+        std::unique_lock queueLock(urlQueueMu_);
+        for (auto& url : allowedURLs) {
+            PushAcceptedURL(std::move(url));
+        }
+        urlQueueCv_.notify_all();
     }
 }
 
@@ -242,7 +245,7 @@ void UrlFrontier::ProcessFreshURLs() {
     {
         std::unique_lock queueLock(urlQueueMu_);
         for (auto* url : pushURLs) {
-            urls_.push(std::move(url->url));
+            PushAcceptedURL(std::move(url->url));
         }
     }
     urlQueueCv_.notify_all();
@@ -250,6 +253,10 @@ void UrlFrontier::ProcessFreshURLs() {
     SPDLOG_TRACE("finished processing of fresh urls: {} urls pushed, {} awaiting robots.txt",
                  pushURLs.size(),
                  newURLs.size() - pushURLs.size());
+}
+
+void UrlFrontier::PushAcceptedURL(std::string url) {
+    urls_.push(std::move(url));
 }
 
 }  // namespace mithril
