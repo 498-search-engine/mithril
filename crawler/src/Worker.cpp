@@ -53,11 +53,13 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
 
     // TODO: do better logging, tracking
     std::string title;
-    for (auto& w : parser.titleWords) {
-        title.append(w);
-        title.push_back(' ');
+    if (!parser.titleWords.empty()) {
+        for (auto& w : parser.titleWords) {
+            title.append(w);
+            title.push_back(' ');
+        }
+        title.pop_back();
     }
-    title.pop_back();
 
     spdlog::info("processing {} ({})", req.Url().url, title);
 
