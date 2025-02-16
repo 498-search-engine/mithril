@@ -29,18 +29,11 @@ bool IsValidUrl(std::string_view url) {
 
 }  //  namespace
 
-UrlFrontier::UrlFrontier() {}
-
-bool UrlFrontier::Empty() const {
-    std::unique_lock lock(urlQueueMu_);
-    return urls_.empty();
-}
-
 void UrlFrontier::ProcessRobotsRequests() {
     {
         std::unique_lock lock(robotsCacheMu_);
         // Wait until we have requests to execute. We only ever get new requests
-        // to process when PutURLInternal is called.
+        // to process when ProcessRobotsRequests processes fresh URLs.
         robotsCv_.wait(lock, [this]() { return robotRulesCache_.PendingRequests() > 0; });
 
         size_t before = robotRulesCache_.PendingRequests();
@@ -117,13 +110,13 @@ void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out, bool atLeas
     }
 }
 
-void UrlFrontier::PutURL(std::string u) {
+void UrlFrontier::PushURL(std::string u) {
     std::unique_lock lock(freshURLsMu_);
     freshURLs_.push_back(std::move(u));
     freshURLsCv_.notify_one();
 }
 
-void UrlFrontier::PutURLs(std::vector<std::string>& urls) {
+void UrlFrontier::PushURLs(std::vector<std::string>& urls) {
     std::unique_lock lock(freshURLsMu_);
     for (auto& url : urls) {
         freshURLs_.push_back(std::move(url));

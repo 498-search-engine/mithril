@@ -72,7 +72,7 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
     }
 
     if (!absoluteURLs.empty()) {
-        frontier_->PutURLs(absoluteURLs);
+        frontier_->PushURLs(absoluteURLs);
         absoluteURLs.clear();
     }
 }
@@ -110,7 +110,7 @@ void Worker::ProcessDocument(const http::Request& req, const http::Response& res
                 return;
             }
 
-            frontier_->PutURL(std::move(*newUrl));
+            frontier_->PushURL(std::move(*newUrl));
             break;
         }
 

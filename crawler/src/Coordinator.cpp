@@ -25,7 +25,7 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
 void Coordinator::Run() {
     // Add all seed URLs
     for (const auto& url : config_.seed_urls) {
-        frontier_->PutURL(url);
+        frontier_->PushURL(url);
     }
 
     std::vector<std::thread> workerThreads;

@@ -6,6 +6,7 @@
 #include "http/URL.h"
 
 #include <condition_variable>
+#include <cstddef>
 #include <mutex>
 #include <queue>
 #include <string>
@@ -16,12 +17,19 @@ namespace mithril {
 
 class UrlFrontier {
 public:
-    UrlFrontier();
+    UrlFrontier() = default;
 
-    bool Empty() const;
-
+    /**
+     * @brief Processes in-flight and pending robots.txt requests for URLs
+     * waiting to get into the frontier.
+     */
     void ProcessRobotsRequests();
 
+    /**
+     * @brief Processes freshly-added URLs from PushURL and PushURLs,
+     * determining whether each URL is valid, has been seen before, and is
+     * allowed by robots.txt before pushing the URL onto the frontier.
+     */
     void ProcessFreshURLs();
 
     /**
@@ -34,18 +42,18 @@ public:
     void GetURLs(size_t max, std::vector<std::string>& out, bool atLeastOne = false);
 
     /**
-     * @brief Puts a url onto the frontier (if not already visited).
+     * @brief Pushes a url onto the frontier (if not already visited).
      *
      * @param u URL to add to frontier.
      */
-    void PutURL(std::string u);
+    void PushURL(std::string u);
 
     /**
-     * @brief Puts multiple urls onto the frontier (if not already visited)
+     * @brief Pushes multiple urls onto the frontier (if not already visited).
      *
      * @param urls URLs to add to frontier.
      */
-    void PutURLs(std::vector<std::string>& urls);
+    void PushURLs(std::vector<std::string>& urls);
 
 private:
     mutable std::mutex urlQueueMu_;     // Lock for urls_
@@ -56,14 +64,21 @@ private:
 
     std::condition_variable urlQueueCv_;   // Notifies when URL is available in queue
     std::condition_variable robotsCv_;     // Notifies when new request is available for processing
-    std::condition_variable freshURLsCv_;  // Notifies when fresh URL added
+    std::condition_variable freshURLsCv_;  // Notifies when a fresh URL is available for processing
 
+    // Queue of validated and allowed URLs for us to crawl
     std::queue<std::string> urls_;
+    // Set of visited/currently-processing URLs, including those we chose not to
+    // crawl
     UrlSet seen_;
 
+    // Cache for robots.txt rulesets
     RobotRulesCache robotRulesCache_;
+    // URLs waiting for a robots.txt request to complete
     std::unordered_map<http::CanonicalHost, std::vector<http::URL>> urlsWaitingForRobots_;
 
+    // List of fresh URLs to consider for placement into the frontier, pushed by
+    // workers
     std::vector<std::string> freshURLs_;
 };
 
