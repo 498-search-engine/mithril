@@ -7,6 +7,7 @@
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <vector>
 
 namespace mithril {
 
@@ -17,6 +18,7 @@ public:
     void Close();
 
     void Push(http::CompleteResponse res);
+    void PushAll(std::vector<http::CompleteResponse>& res);
     std::optional<http::CompleteResponse> Pop();
 
 private:

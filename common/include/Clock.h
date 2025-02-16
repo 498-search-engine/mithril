@@ -6,4 +6,9 @@
  */
 long MonotonicTime();
 
+/**
+ * @brief Gets a monotonic timestamp, in milliseconds.
+ */
+long MonotonicTimeMs();
+
 #endif

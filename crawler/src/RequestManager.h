@@ -5,6 +5,7 @@
 #include "UrlFrontier.h"
 #include "http/RequestExecutor.h"
 
+#include <atomic>
 #include <cstddef>
 
 namespace mithril {
@@ -17,7 +18,6 @@ public:
     void Stop();
 
 private:
-    void DispatchReadyResponse(http::CompleteResponse res);
     void DispatchFailedRequest(http::FailedRequest failed);
 
     size_t targetConcurrentReqs_;

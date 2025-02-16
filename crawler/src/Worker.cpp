@@ -1,5 +1,6 @@
 #include "Worker.h"
 
+#include "Clock.h"
 #include "DocumentQueue.h"
 #include "UrlFrontier.h"
 #include "html/Link.h"
@@ -27,7 +28,13 @@ void Worker::Run() {
             return;
         }
 
+        auto start = MonotonicTimeMs();
         ProcessDocument(doc->req, doc->res, doc->header);
+        auto end = MonotonicTimeMs();
+        spdlog::debug("worker took {} ms to process document {} ({} bytes)",
+                      end - start,
+                      doc->req.Url().url,
+                      doc->res.body.size());
     }
 }
 
@@ -46,11 +53,13 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
 
     // TODO: do better logging, tracking
     std::string title;
-    for (auto& w : parser.titleWords) {
-        title.append(w);
-        title.push_back(' ');
+    if (!parser.titleWords.empty()) {
+        for (auto& w : parser.titleWords) {
+            title.append(w);
+            title.push_back(' ');
+        }
+        title.pop_back();
     }
-    title.pop_back();
 
     spdlog::info("processing {} ({})", req.Url().url, title);
 
@@ -63,7 +72,8 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
     }
 
     if (!absoluteURLs.empty()) {
-        frontier_->PutURLs(std::move(absoluteURLs));
+        frontier_->PushURLs(absoluteURLs);
+        absoluteURLs.clear();
     }
 }
 
@@ -100,7 +110,7 @@ void Worker::ProcessDocument(const http::Request& req, const http::Response& res
                 return;
             }
 
-            frontier_->PutURL(std::move(*newUrl));
+            frontier_->PushURL(std::move(*newUrl));
             break;
         }
 
