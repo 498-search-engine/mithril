@@ -3,9 +3,7 @@ add_library(index STATIC
     src/InvertedIndex.cpp
     src/PostingBlock.cpp
 )
-
 target_include_directories(index PUBLIC src)
-
 target_link_libraries(index PUBLIC
     spdlog::spdlog
     lib::core
@@ -15,8 +13,14 @@ target_link_libraries(index PUBLIC
 add_executable(mithril_indexer
     src/main.cpp
 )
-
 target_link_libraries(mithril_indexer PRIVATE
     spdlog::spdlog
+    index
+)
+
+add_executable(index_debug
+    src/debugPrintIndex.cpp
+)
+target_link_libraries(index_debug PRIVATE
     index
 )

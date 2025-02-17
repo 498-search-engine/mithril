@@ -8,12 +8,8 @@
 
 namespace mithril {
 
-// using data::Document;
-struct Document {
-    uint32_t id;
-    std::string url;
-    std::string title;
-};
+using Document = data::Document;
+using docid_t = data::docid_t;
 
 class IndexBuilder {
 public:
@@ -21,12 +17,13 @@ public:
     ~IndexBuilder();
 
     void add_document(const std::string& words_path, const std::string& links_path);
-    void add_document(const Document& doc);  // TODO ?
+    void add_document(const std::string& doc_path);
+    // void add_document(const Document& doc);
     void finalize();
 
 private:
     // doc
-    std::vector<Document> documents_;
+    std::vector<data::Document> documents_;
     std::unordered_map<std::string, uint32_t> url_to_id_;
 
     // Current block
@@ -43,6 +40,14 @@ private:
     void merge_blocks();
     void save_document_map();
     std::string block_path(int block_num) const;
+    void process_document(const Document& doc);
+    
+     // helpers
+    void add_terms(data::docid_t doc_id, const std::unordered_map<std::string, uint32_t>& term_freqs);
+    std::string join_title(const std::vector<std::string>& title_words);
+    size_t estimate_memory_usage(const Document& doc);
+    bool should_flush(const Document& doc);
+    std::string StringVecToString(const std::vector<std::string>& vec);
 
     // File parsing helpers
     static bool parse_link_line(const std::string& line, std::string& url, std::string& title);

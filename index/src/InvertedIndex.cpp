@@ -1,6 +1,9 @@
 #include "InvertedIndex.h"
 
 #include "TextPreprocessor.h"
+#include "data/Deserialize.h"
+#include "data/Gzip.h"
+#include "data/Reader.h"
 
 #include <filesystem>
 #include <fstream>
@@ -73,80 +76,173 @@ std::vector<std::string> IndexBuilder::read_words(const std::string& path) {
     return words;
 }
 
-void IndexBuilder::add_document(const std::string& words_path, const std::string& links_path) {
-    auto task = [this, words_path, links_path]() {
-        // Read first line from links file.
-        std::ifstream links_file(links_path);
-        std::string line;
-        if (!std::getline(links_file, line)) {
-            std::cerr << "Empty links file: " << links_path << std::endl;
-            return;
-        }
+size_t IndexBuilder::estimate_memory_usage(const Document& doc) {
+    static constexpr size_t AVG_BYTES_PER_WORD = 20;  // Includes all overhead
+    size_t total_words = doc.title.size() + doc.words.size();
+    return total_words * AVG_BYTES_PER_WORD;
+}
 
-        std::string url, title;
-        if (!parse_link_line(line, url, title)) {
-            std::cerr << "Invalid link format: " << line << std::endl;
-            return;
-        }
+bool IndexBuilder::should_flush(const Document& doc) {
+    return (current_block_size_ + estimate_memory_usage(doc)) >= MAX_BLOCK_SIZE;
+}
 
-        // Assign document ID (thread-safe)
-        uint32_t doc_id;
-        {
-            std::unique_lock<std::mutex> lock(document_mutex_);
-            auto it = url_to_id_.find(url);
-            if (it == url_to_id_.end()) {
-                doc_id = documents_.size();
-                url_to_id_[url] = doc_id;
-                documents_.push_back({doc_id, url, title});
-            } else {
-                doc_id = it->second;
-            }
-        }
+void IndexBuilder::add_terms(data::docid_t doc_id, const std::unordered_map<std::string, uint32_t>& term_freqs) {
+    for (const auto& [term, freq] : term_freqs) {
+        auto& postings = dictionary_.get_or_create(term);
+        postings.add({doc_id, freq});
+        current_block_size_ += sizeof(Posting) + term.size();
+    }
+}
 
-        // Build a combined frequency map from the title and the words file.
-        std::unordered_map<std::string, uint32_t> term_freqs;
-        {
-            // Process title from the links file.
-            std::istringstream iss(title);
-            std::string word;
-            while (iss >> word) {
-                std::string normalized = TokenNormalizer::normalize(word);
-                if (!normalized.empty()) {
-                    term_freqs[normalized]++;
-                }
-            }
+std::string IndexBuilder::StringVecToString(const std::vector<std::string>& vec) {
+    std::string result;
+    for (size_t i = 0; i < vec.size(); ++i) {
+        result += vec[i];
+        if (i < vec.size() - 1) {
+            result += " ";
         }
-        {
-            // Process additional words from the words file.
-            auto extra_words = read_words(words_path);
-            for (const auto& w : extra_words) {
-                term_freqs[w]++;
-            }
-        }
+    }
+    return result;
+}
 
-        // Add terms to the current block (thread-safe)
-        {
-            std::unique_lock<std::mutex> lock(block_mutex_);
-            for (const auto& [term, freq] : term_freqs) {
-                // current_block_[term].push_back({doc_id, freq});
-                auto& postings = dictionary_.get_or_create(term);
-                postings.add({doc_id, freq});
-                current_block_size_ += sizeof(Posting) + term.size();
-            }
+void IndexBuilder::process_document(const Document& doc) {
+    // Check if we need to flush the current block
+    if (should_flush(doc)) {
+        auto future = flush_block();
+        future.wait();
+    }
 
-            // Check if block is full
-            if (current_block_size_ >= MAX_BLOCK_SIZE) {
-                flush_block();
+    // Build term frequency map from title and content
+    std::unordered_map<std::string, uint32_t> term_freqs;
+
+    // Helper to process word vectors
+    auto process_words = [&](const std::vector<std::string>& words) {
+        for (const auto& word : words) {
+            std::string normalized = TokenNormalizer::normalize(word);
+            if (!normalized.empty()) {
+                term_freqs[normalized]++;
             }
         }
     };
 
+    // Process both title and content words
+    process_words(doc.title);
+    process_words(doc.words);
+
+    // Update document map
     {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        tasks_.emplace(task);
+        std::lock_guard<std::mutex> lock(document_mutex_);
+        if (url_to_id_.find(doc.url) == url_to_id_.end()) {
+            Document stored_doc{.id = doc.id, .url = doc.url, .title = doc.title, .words = {}};
+            documents_.push_back(std::move(stored_doc));
+        }
     }
-    condition_.notify_one();
+
+    // Add terms to current block with lock
+    {
+        std::lock_guard<std::mutex> lock(block_mutex_);
+        add_terms(doc.id, term_freqs);
+    }
 }
+
+std::string IndexBuilder::join_title(const std::vector<std::string>& title_words) {
+    std::string result;
+    for (size_t i = 0; i < title_words.size(); ++i) {
+        result += title_words[i];
+        if (i < title_words.size() - 1) {
+            result += " ";
+        }
+    }
+    return result;
+}
+
+void IndexBuilder::add_document(const std::string& doc_path) {
+    Document doc;
+    {
+        data::FileReader file{doc_path.c_str()};
+        data::GzipReader gzip{file};
+        if (!data::DeserializeValue(doc, gzip)) {
+            throw std::runtime_error("Failed to deserialize document: " + doc_path);
+        }
+    }
+
+    process_document(doc);
+}
+
+// void IndexBuilder::add_document(const std::string& words_path, const std::string& links_path) {
+//     auto task = [this, words_path, links_path]() {
+//         // Read first line from links file.
+//         std::ifstream links_file(links_path);
+//         std::string line;
+//         if (!std::getline(links_file, line)) {
+//             std::cerr << "Empty links file: " << links_path << std::endl;
+//             return;
+//         }
+
+//         std::string url, title;
+//         if (!parse_link_line(line, url, title)) {
+//             std::cerr << "Invalid link format: " << line << std::endl;
+//             return;
+//         }
+
+//         // Assign document ID (thread-safe)
+//         uint32_t doc_id;
+//         {
+//             std::unique_lock<std::mutex> lock(document_mutex_);
+//             auto it = url_to_id_.find(url);
+//             if (it == url_to_id_.end()) {
+//                 doc_id = documents_.size();
+//                 url_to_id_[url] = doc_id;
+//                 documents_.push_back({doc_id, url, title});
+//             } else {
+//                 doc_id = it->second;
+//             }
+//         }
+
+//         // Build a combined frequency map from the title and the words file.
+//         std::unordered_map<std::string, uint32_t> term_freqs;
+//         {
+//             // Process title from the links file.
+//             std::istringstream iss(title);
+//             std::string word;
+//             while (iss >> word) {
+//                 std::string normalized = TokenNormalizer::normalize(word);
+//                 if (!normalized.empty()) {
+//                     term_freqs[normalized]++;
+//                 }
+//             }
+//         }
+//         {
+//             // Process additional words from the words file.
+//             auto extra_words = read_words(words_path);
+//             for (const auto& w : extra_words) {
+//                 term_freqs[w]++;
+//             }
+//         }
+
+//         // Add terms to the current block (thread-safe)
+//         {
+//             std::unique_lock<std::mutex> lock(block_mutex_);
+//             for (const auto& [term, freq] : term_freqs) {
+//                 // current_block_[term].push_back({doc_id, freq});
+//                 auto& postings = dictionary_.get_or_create(term);
+//                 postings.add({doc_id, freq});
+//                 current_block_size_ += sizeof(Posting) + term.size();
+//             }
+
+//             // Check if block is full
+//             if (current_block_size_ >= MAX_BLOCK_SIZE) {
+//                 flush_block();
+//             }
+//         }
+//     };
+
+//     {
+//         std::unique_lock<std::mutex> lock(queue_mutex_);
+//         tasks_.emplace(task);
+//     }
+//     condition_.notify_one();
+// }
 
 std::future<void> IndexBuilder::flush_block() {
     if (current_block_size_ == 0) {
@@ -278,13 +374,20 @@ void IndexBuilder::save_document_map() {
 
     for (const auto& doc : documents_) {
         uint32_t url_len = doc.url.size();
-        uint32_t title_len = doc.title.size();
-
         out.write(reinterpret_cast<const char*>(&doc.id), sizeof(doc.id));
         out.write(reinterpret_cast<const char*>(&url_len), sizeof(url_len));
         out.write(doc.url.c_str(), url_len);
+
+        std::string joined_title;
+        for (size_t i = 0; i < doc.title.size(); ++i) {
+            joined_title += doc.title[i];
+            if (i < doc.title.size() - 1)
+                joined_title += " ";
+        }
+
+        uint32_t title_len = joined_title.size();
         out.write(reinterpret_cast<const char*>(&title_len), sizeof(title_len));
-        out.write(doc.title.c_str(), title_len);
+        out.write(joined_title.c_str(), title_len);
     }
 }
 
