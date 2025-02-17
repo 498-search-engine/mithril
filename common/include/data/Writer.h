@@ -32,6 +32,7 @@ public:
 
     void Write(const void* data, size_t size);
     void Flush();
+    void Close();
 
 private:
     FILE* file_;

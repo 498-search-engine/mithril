@@ -1,5 +1,6 @@
 #include "data/Writer.h"
 
+#include <cassert>
 #include <cstdio>
 #include <stdexcept>
 #include <string>
@@ -21,8 +22,8 @@ FileWriter::FileWriter(FILE* f, bool takeOwnership) : file_(f), owned_(takeOwner
 }
 
 FileWriter::~FileWriter() {
-    if (owned_ && file_) {
-        fclose(file_);
+    if (owned_) {
+        Close();
     }
 }
 
@@ -45,14 +46,23 @@ FileWriter& FileWriter::operator=(FileWriter&& other) noexcept {
 }
 
 void FileWriter::Write(const void* data, size_t size) {
+    assert(file_ != nullptr);
     if (fwrite(data, 1, size, file_) != size) {
         throw std::runtime_error("Failed to write to file");
     }
 }
 
 void FileWriter::Flush() {
+    assert(file_ != nullptr);
     if (fflush(file_) != 0) {
         throw std::runtime_error("Failed to flush file");
+    }
+}
+
+void FileWriter::Close() {
+    if (file_) {
+        fclose(file_);
+        file_ = nullptr;
     }
 }
 
