@@ -75,11 +75,6 @@ struct Deserialize<std::vector<T>> {
             return false;
         }
 
-        // Check if the length is reasonable before allocating
-        if (length > reader.Remaining()) {
-            return false;
-        }
-
         val.clear();
         val.reserve(length);
 
@@ -101,11 +96,6 @@ struct Deserialize<std::vector<std::string>> {
     static bool Read(std::vector<std::string>& val, R& reader) {
         uint32_t length;
         if (!Deserialize<uint32_t>::Read(length, reader)) {
-            return false;
-        }
-
-        // Check if the length is reasonable before allocating
-        if (length > reader.Remaining()) {
             return false;
         }
 

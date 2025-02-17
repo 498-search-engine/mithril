@@ -13,7 +13,6 @@ template<typename T>
 concept Reader = requires(T reader, void* data, size_t size) {
     // Read exactly 'size' bytes into data, returns false if couldn't read enough
     { reader.Read(data, size) } -> std::same_as<bool>;
-
     // How many bytes remain
     { reader.Remaining() } -> std::same_as<size_t>;
 };

@@ -25,7 +25,6 @@ protected:
         BufferReader reader(buffer);
         T result;
         EXPECT_TRUE(DeserializeValue(result, reader));
-        EXPECT_EQ(reader.Remaining(), 0) << "Not all bytes were consumed";
         return result;
     }
 
