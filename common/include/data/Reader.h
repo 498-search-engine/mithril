@@ -24,13 +24,25 @@ struct NopReader {
 
 class FileReader {
 public:
-    FileReader(FILE* f);
+    FileReader(const char* filename);
+    FileReader(FILE* f, bool takeOwnership = false);
+    ~FileReader();
+
+    // Disable copying
+    FileReader(const FileReader&) = delete;
+    FileReader& operator=(const FileReader&) = delete;
+    // Allow moving
+    FileReader(FileReader&& other) noexcept;
+    FileReader& operator=(FileReader&& other) noexcept;
 
     bool Read(void* data, size_t size);
     size_t Remaining();
 
+    void Close();
+
 private:
     FILE* file_;
+    bool owned_;
 };
 
 class BufferReader {

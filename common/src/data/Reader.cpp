@@ -4,10 +4,43 @@
 #include <cstdio>
 #include <cstring>
 #include <span>
+#include <stdexcept>
+#include <string>
 
 namespace mithril::data {
 
-FileReader::FileReader(FILE* f) : file_(f) {}
+FileReader::FileReader(const char* filename) : file_(fopen(filename, "rb")), owned_(true) {
+    if (file_ == nullptr) {
+        throw std::runtime_error("Failed to open file: " + std::string{filename});
+    }
+}
+
+FileReader::FileReader(FILE* f, bool takeOwnership) : file_(f), owned_(takeOwnership) {}
+
+
+FileReader::~FileReader() {
+    if (owned_) {
+        Close();
+    }
+}
+
+FileReader::FileReader(FileReader&& other) noexcept : file_(other.file_), owned_(other.owned_) {
+    other.file_ = nullptr;
+    other.owned_ = false;
+}
+
+FileReader& FileReader::operator=(FileReader&& other) noexcept {
+    if (this != &other) {
+        if (owned_ && file_) {
+            fclose(file_);
+        }
+        file_ = other.file_;
+        owned_ = other.owned_;
+        other.file_ = nullptr;
+        other.owned_ = false;
+    }
+    return *this;
+}
 
 bool FileReader::Read(void* data, size_t size) {
     return fread(data, 1, size, file_) == size;
@@ -19,6 +52,13 @@ size_t FileReader::Remaining() {
     long end = ftell(file_);
     fseek(file_, current, SEEK_SET);
     return end - current;
+}
+
+void FileReader::Close() {
+    if (file_ != nullptr) {
+        fclose(file_);
+        file_ = nullptr;
+    }
 }
 
 BufferReader::BufferReader(std::span<const char> d) : data_(d) {}
@@ -35,5 +75,6 @@ bool BufferReader::Read(void* out, size_t size) {
 size_t BufferReader::Remaining() {
     return data_.size() - position_;
 }
+
 
 }  // namespace mithril::data
