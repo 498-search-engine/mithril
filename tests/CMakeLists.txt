@@ -10,6 +10,7 @@ FetchContent_MakeAvailable(googletest)
 
 set(TEST_SOURCES
     src/Robots.cpp
+    src/Serialization.cpp
     src/URL.cpp
 )
 
