@@ -3,18 +3,36 @@
 #include "Clock.h"
 #include "DocumentQueue.h"
 #include "UrlFrontier.h"
+#include "data/Document.h"
+#include "data/Gzip.h"
+#include "data/Serialize.h"
+#include "data/Writer.h"
 #include "html/Link.h"
 #include "html/Parser.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
 
+#include <atomic>
 #include <string>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
 
 namespace mithril {
+
+namespace {
+
+std::atomic<data::docid_t> DocumentID{0};
+
+void WriteDocumentToFile(const std::string& fileName, const data::Document& doc) {
+    auto fWriter = data::FileWriter{fileName.c_str()};
+    auto zipWriter = data::GzipWriter{fWriter};
+    data::SerializeValue(doc, zipWriter);
+    zipWriter.Finish();
+}
+
+}  // namespace
 
 Worker::Worker(DocumentQueue* docQueue, UrlFrontier* frontier) : docQueue_(docQueue), frontier_(frontier) {}
 
@@ -70,6 +88,17 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
             absoluteURLs.push_back(std::move(*absoluteLink));
         }
     }
+
+    data::docid_t docID = DocumentID.fetch_add(1);
+    auto fileName = std::string{"docs/doc_"} + std::to_string(docID);
+
+    WriteDocumentToFile(fileName,
+                        data::Document{
+                            .id = docID,
+                            .url = req.Url().url,
+                            .title = std::move(parser.titleWords),
+                            .words = std::move(parser.words),
+                        });
 
     if (!absoluteURLs.empty()) {
         frontier_->PushURLs(absoluteURLs);
