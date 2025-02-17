@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - google test capabilities (#28)
 - add spdlog (#32)
 - request timeout and max response size (#33)
+- serialize/deserialize documents (#37)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
