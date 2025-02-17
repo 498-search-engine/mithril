@@ -16,7 +16,7 @@ public:
     explicit IndexBuilder(const std::string& output_dir, size_t num_threads = std::thread::hardware_concurrency());
     ~IndexBuilder();
 
-    void add_document(const std::string& words_path, const std::string& links_path);
+    void add_document(const std::string& words_path, const std::string& links_path); // remnant
     void add_document(const std::string& doc_path);
     // void add_document(const Document& doc);
     void finalize();
@@ -33,7 +33,7 @@ private:
 
     // Output config
     const std::string output_dir_;
-    static constexpr size_t MAX_BLOCK_SIZE = 64 * 1024 * 1024;  // 64 MB
+    static constexpr size_t MAX_BLOCK_SIZE = 128 * 1024 * 1024;  // 64 MB
 
     // core methods
     std::future<void> flush_block();
@@ -41,8 +41,8 @@ private:
     void save_document_map();
     std::string block_path(int block_num) const;
     void process_document(const Document& doc);
-    
-     // helpers
+
+    // helpers
     void add_terms(data::docid_t doc_id, const std::unordered_map<std::string, uint32_t>& term_freqs);
     std::string join_title(const std::vector<std::string>& title_words);
     size_t estimate_memory_usage(const Document& doc);

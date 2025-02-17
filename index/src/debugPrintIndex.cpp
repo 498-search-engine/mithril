@@ -1,6 +1,7 @@
 #include "InvertedIndex.h"
-#include <iostream>
+
 #include <fstream>
+#include <iostream>
 #include <vector>
 
 using namespace mithril;
@@ -20,10 +21,10 @@ void print_document_map(const std::string& path) {
         uint32_t doc_id, url_len, title_len;
         in.read(reinterpret_cast<char*>(&doc_id), sizeof(doc_id));
         in.read(reinterpret_cast<char*>(&url_len), sizeof(url_len));
-        
+
         std::string url(url_len, '\0');
         in.read(&url[0], url_len);
-        
+
         in.read(reinterpret_cast<char*>(&title_len), sizeof(title_len));
         std::string title(title_len, '\0');
         in.read(&title[0], title_len);
@@ -47,28 +48,29 @@ void print_index(const std::string& path) {
         // Read term
         uint32_t term_len;
         in.read(reinterpret_cast<char*>(&term_len), sizeof(term_len));
-        
+
         std::string term(term_len, '\0');
         in.read(&term[0], term_len);
 
         // Read posting count
         uint32_t postings_size;
         in.read(reinterpret_cast<char*>(&postings_size), sizeof(postings_size));
-        
+
         // Read compressed postings
         std::cout << term << " -> ";
         uint32_t last_doc_id = 0;
         for (uint32_t j = 0; j < postings_size; j++) {
-            if (j > 0) std::cout << ", ";
-            
+            if (j > 0)
+                std::cout << ", ";
+
             // Decode delta-encoded doc_id
             uint32_t doc_id_delta = VByteCodec::decode(in);
             uint32_t doc_id = last_doc_id + doc_id_delta;
             last_doc_id = doc_id;
-            
+
             // Decode frequency
             uint32_t freq = VByteCodec::decode(in);
-            
+
             std::cout << doc_id << ":" << freq;
         }
         std::cout << '\n';

@@ -111,38 +111,34 @@ void IndexBuilder::process_document(const Document& doc) {
         auto future = flush_block();
         future.wait();
     }
+    
+    auto task = [this, doc]() {
+        std::unordered_map<std::string, uint32_t> term_freqs;
 
-    // Build term frequency map from title and content
-    std::unordered_map<std::string, uint32_t> term_freqs;
-
-    // Helper to process word vectors
-    auto process_words = [&](const std::vector<std::string>& words) {
-        for (const auto& word : words) {
-            std::string normalized = TokenNormalizer::normalize(word);
-            if (!normalized.empty()) {
-                term_freqs[normalized]++;
+        auto process_words = [&](const std::vector<std::string>& words) {
+            for (const auto& word : words) {
+                std::string normalized = TokenNormalizer::normalize(word);
+                if (!normalized.empty()) {
+                    term_freqs[normalized]++;
+                }
             }
+        };
+
+        process_words(doc.title);
+        process_words(doc.words);
+
+        // Add terms to the dictionary
+        {
+            std::lock_guard<std::mutex> lock(block_mutex_);
+            add_terms(doc.id, term_freqs);
         }
     };
 
-    // Process both title and content words
-    process_words(doc.title);
-    process_words(doc.words);
-
-    // Update document map
     {
-        std::lock_guard<std::mutex> lock(document_mutex_);
-        if (url_to_id_.find(doc.url) == url_to_id_.end()) {
-            Document stored_doc{.id = doc.id, .url = doc.url, .title = doc.title, .words = {}};
-            documents_.push_back(std::move(stored_doc));
-        }
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        tasks_.emplace(task);
     }
-
-    // Add terms to current block with lock
-    {
-        std::lock_guard<std::mutex> lock(block_mutex_);
-        add_terms(doc.id, term_freqs);
-    }
+    condition_.notify_one();
 }
 
 std::string IndexBuilder::join_title(const std::vector<std::string>& title_words) {
@@ -169,6 +165,7 @@ void IndexBuilder::add_document(const std::string& doc_path) {
     process_document(doc);
 }
 
+// remnant
 // void IndexBuilder::add_document(const std::string& words_path, const std::string& links_path) {
 //     auto task = [this, words_path, links_path]() {
 //         // Read first line from links file.
