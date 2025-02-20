@@ -1,10 +1,10 @@
 #ifndef CRAWLER_URLSET_H
 #define CRAWLER_URLSET_H
 
+#include "http/URL.h"
+
 #include <string>
 #include <unordered_set>
-
-#include "http/URL.h"
 
 namespace mithril {
 
