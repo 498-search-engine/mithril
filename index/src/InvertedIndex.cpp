@@ -127,6 +127,12 @@ void IndexBuilder::process_document(const Document& doc) {
         process_words(doc.title);
         process_words(doc.words);
 
+        // Assign into document map
+        {
+            std::unique_lock<std::mutex> lock(document_mutex_);
+            url_to_id_[doc.url] = doc.id;
+            documents_.push_back(doc);
+        }
         // Add terms to the dictionary
         {
             std::lock_guard<std::mutex> lock(block_mutex_);
