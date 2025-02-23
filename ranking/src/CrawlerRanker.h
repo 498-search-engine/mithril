@@ -7,17 +7,6 @@
 
 namespace mithril {
 
-/**
-    Parameters considered
-* Site TLD (whitelist) (10%)
-* Domain whitelist (10%)
-* Domain name length (20%)
-* URL length (10%)
-* Number of parameters (10%)
-* Depth of page (30%)
-* HTTPS (10%)
-*/
-
 namespace crawler_ranker {
 // * HTTPS (50%)
 // a debuff for sites that don't have HTTPS by 50 points.
