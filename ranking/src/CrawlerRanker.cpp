@@ -1,4 +1,4 @@
-#include "Crawler.h"
+#include "CrawlerRanker.h"
 
 namespace mithril { namespace crawler_ranker {
 uint32_t GetUrlRank(const std::string& url) {
