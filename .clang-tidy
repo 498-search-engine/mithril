@@ -15,6 +15,7 @@ Checks: >
   -readability-implicit-bool-conversion,
   -readability-magic-numbers,
   -readability-function-cognitive-complexity,
+  -misc-non-private-member-variables-in-classes,
   -modernize-use-nodiscard,
   -modernize-use-ranges,
   performance-for-range-copy,

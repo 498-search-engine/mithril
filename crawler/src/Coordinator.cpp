@@ -25,15 +25,21 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
         exit(1);
     }
 
+    frontier_ = std::make_unique<UrlFrontier>(config.frontierDirectory);
     docQueue_ = std::make_unique<DocumentQueue>();
     requestManager_ = std::make_unique<RequestManager>(
         config_.concurrent_requests, config_.request_timeout, frontier_.get(), docQueue_.get());
 }
 
 void Coordinator::Run() {
-    // Add all seed URLs
-    for (const auto& url : config_.seed_urls) {
-        frontier_->PushURL(url);
+    if (frontier_->TotalSize() == 0) {
+        spdlog::info("frontier is fresh - seeding with {} seed URLs", config_.seed_urls.size());
+        // Add all seed URLs
+        for (const auto& url : config_.seed_urls) {
+            frontier_->PushURL(url);
+        }
+    } else {
+        spdlog::info("resuming crawl with {} documents in frontier", frontier_->TotalSize());
     }
 
     std::vector<std::thread> workerThreads;

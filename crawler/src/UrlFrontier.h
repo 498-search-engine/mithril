@@ -1,15 +1,15 @@
 #ifndef CRAWLER_URLFRONTIER_H
 #define CRAWLER_URLFRONTIER_H
 
+#include "PriorityURLQueue.h"
 #include "Robots.h"
-#include "UrlSet.h"
 #include "http/URL.h"
 
 #include <condition_variable>
 #include <cstddef>
 #include <mutex>
-#include <queue>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -17,7 +17,14 @@ namespace mithril {
 
 class UrlFrontier {
 public:
-    UrlFrontier() = default;
+    UrlFrontier(const std::string& frontierDirectory);
+
+    /**
+     * @brief Returns the total size of the frontier, i.e. the number of
+     * previously visited documents plus the number of planned-to-visit
+     * documents.
+     */
+    size_t TotalSize() const;
 
     /**
      * @brief Processes in-flight and pending robots.txt requests for URLs
@@ -56,17 +63,12 @@ public:
     void PushURLs(std::vector<std::string>& urls);
 
 private:
-    /**
-     * @brief Pushes the URL, which has been approved to enter the frontier,
-     * onto the actual frontier structure. Requires any necessary locks to be
-     * held by the caller.
-     *
-     * @param url URL to push into the frontier.
-     */
-    void PushAcceptedURL(std::string url);
+    struct Scorer {
+        // TODO: integrate URL scoring
+        static int Score(std::string_view /*url*/) { return 0; }
+    };
 
     mutable std::mutex urlQueueMu_;     // Lock for urls_
-    mutable std::mutex seenMu_;         // Lock for seen_
     mutable std::mutex robotsCacheMu_;  // Lock for robotRulesCache_
     mutable std::mutex waitingUrlsMu_;  // Lock for urlsWaitingForRobots_
     mutable std::mutex freshURLsMu_;    // Lock for freshURLs_
@@ -75,11 +77,7 @@ private:
     std::condition_variable robotsCv_;     // Notifies when new request is available for processing
     std::condition_variable freshURLsCv_;  // Notifies when a fresh URL is available for processing
 
-    // Queue of validated and allowed URLs for us to crawl
-    std::queue<std::string> urls_;
-    // Set of visited/currently-processing URLs, including those we chose not to
-    // crawl
-    UrlSet seen_;
+    PriorityURLQueue<Scorer> urlQueue_;
 
     // Cache for robots.txt rulesets
     RobotRulesCache robotRulesCache_;

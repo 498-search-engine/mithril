@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <iterator>
 #include <mutex>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -29,6 +30,13 @@ bool IsValidUrl(std::string_view url) {
 
 }  //  namespace
 
+UrlFrontier::UrlFrontier(const std::string& frontierDirectory) : urlQueue_(frontierDirectory) {}
+
+size_t UrlFrontier::TotalSize() const {
+    std::unique_lock queueLock(urlQueueMu_);
+    return urlQueue_.TotalSize();
+}
+
 void UrlFrontier::ProcessRobotsRequests() {
     {
         std::unique_lock lock(robotsCacheMu_);
@@ -45,7 +53,7 @@ void UrlFrontier::ProcessRobotsRequests() {
     }
 
     // Process waiting URLs
-    std::vector<std::string> allowedURLs;
+    std::set<std::string> allowedURLs;
     std::unique_lock waitingLock(waitingUrlsMu_);
 
     auto it = urlsWaitingForRobots_.begin();
@@ -63,7 +71,7 @@ void UrlFrontier::ProcessRobotsRequests() {
             // canonical host. Process all queued URLs.
             for (auto& url : it->second) {
                 if (robots->Allowed(url.path)) {
-                    allowedURLs.push_back(url.url);
+                    allowedURLs.insert(url.url);
                 }
             }
         }
@@ -76,8 +84,8 @@ void UrlFrontier::ProcessRobotsRequests() {
 
     if (!allowedURLs.empty()) {
         std::unique_lock queueLock(urlQueueMu_);
-        for (auto& url : allowedURLs) {
-            PushAcceptedURL(std::move(url));
+        for (const auto& url : allowedURLs) {
+            urlQueue_.PushURL(url);
         }
         urlQueueCv_.notify_all();
     }
@@ -93,24 +101,19 @@ void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out, bool atLeas
         // The caller wants at least one URL, we need to wait until we have at
         // least one.
         lock.lock();
-        urlQueueCv_.wait(lock, [this]() { return !urls_.empty(); });
+        urlQueueCv_.wait(lock, [this]() { return !urlQueue_.Empty(); });
     } else {
         // The caller doesn't care if we can't get a URL. If we can't grab the
         // lock right now, we won't wait around.
         if (!lock.try_lock()) {
             return;
         }
-        if (urls_.empty()) {
+        if (urlQueue_.Empty()) {
             return;
         }
     }
 
-    out.reserve(std::min(max, urls_.size()));
-    while (!urls_.empty() && max != 0) {
-        out.push_back(std::move(urls_.front()));
-        urls_.pop();
-        --max;
-    }
+    urlQueue_.PopURLs(max, out);
 }
 
 void UrlFrontier::PushURL(std::string u) {
@@ -163,12 +166,13 @@ void UrlFrontier::ProcessFreshURLs() {
     std::vector<http::URL*> newURLs;
     newURLs.reserve(validURLs.size());
     {
-        std::unique_lock seenLock(seenMu_);
+        auto seen = std::set<std::string_view>{};
+        std::unique_lock queueLock(urlQueueMu_);
         for (auto& url : validURLs) {
-            if (seen_.Contains(url.url)) {
+            if (seen.contains(url.url) || urlQueue_.Seen(url.url)) {
                 continue;
             }
-            seen_.Put(url.url);
+            seen.insert(url.url);
             newURLs.push_back(&url);
         }
     }
@@ -245,7 +249,7 @@ void UrlFrontier::ProcessFreshURLs() {
     {
         std::unique_lock queueLock(urlQueueMu_);
         for (auto* url : pushURLs) {
-            PushAcceptedURL(std::move(url->url));
+            urlQueue_.PushURL(url->url);
         }
     }
     urlQueueCv_.notify_all();
@@ -253,10 +257,6 @@ void UrlFrontier::ProcessFreshURLs() {
     SPDLOG_TRACE("finished processing of fresh urls: {} urls pushed, {} awaiting robots.txt",
                  pushURLs.size(),
                  newURLs.size() - pushURLs.size());
-}
-
-void UrlFrontier::PushAcceptedURL(std::string url) {
-    urls_.push(std::move(url));
 }
 
 }  // namespace mithril
