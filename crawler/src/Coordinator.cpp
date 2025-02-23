@@ -1,14 +1,18 @@
 #include "Coordinator.h"
 
+#include "Config.h"
 #include "DocumentQueue.h"
+#include "FileSystem.h"
 #include "RequestManager.h"
 #include "UrlFrontier.h"
 #include "Worker.h"
 
 #include <cstddef>
+#include <cstdlib>
 #include <memory>
 #include <thread>
 #include <vector>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -16,7 +20,11 @@ constexpr size_t NumWorkers = 2;
 constexpr size_t ConcurrentRequests = 10;
 
 Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
-    frontier_ = std::make_unique<UrlFrontier>();
+    if (!DirectoryExists(config.frontierDirectory.c_str())) {
+        spdlog::error("configured frontier_directory does not exist: {}", config.frontierDirectory);
+        exit(1);
+    }
+
     docQueue_ = std::make_unique<DocumentQueue>();
     requestManager_ = std::make_unique<RequestManager>(
         config_.concurrent_requests, config_.request_timeout, frontier_.get(), docQueue_.get());

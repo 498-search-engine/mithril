@@ -17,6 +17,7 @@ add_library(common STATIC
     src/http/URL.cpp
 
     src/Clock.cpp
+    src/FileSystem.cpp
     src/Util.cpp
 )
 
