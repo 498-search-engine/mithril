@@ -1,18 +1,18 @@
 #include "CrawlerRanker.h"
 
-namespace mithril { namespace crawler_ranker {
+#include <iostream>
+
+namespace mithril::crawler_ranker {
+
 uint32_t GetUrlRank(const std::string& url) {
     CrawlerRankingsStruct ranker{
         .tld = "", .domainName = "", .urlLength = 0, .parameterCount = 0, .pageDepth = 0, .isHttps = false};
 
+    std::cout << url << std::endl;
+
     crawler_ranker::GetStringRankings(url.data(), ranker);
 
     uint32_t score = 0;
-
-    // * HTTPS
-    if (ranker.isHttps) {
-        score += HttpsScore;
-    }
 
     // * Site TLD (whitelist)
     if (WhitelistTld.find(ranker.tld) != WhitelistTld.end()) {
@@ -56,6 +56,11 @@ uint32_t GetUrlRank(const std::string& url) {
     }
     score += DepthPageScore - std::min(depthPagePenalty, DepthPageScore);
 
+    // * HTTPS
+    if (!ranker.isHttps) {
+        score -= std::min(score, HttpsDebuffScore);
+    }
+
     return score;
 }
 
@@ -69,7 +74,7 @@ void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker) {
     };
 
     // Get rid of two slashes after : (//)
-    url = url + 2;
+    url = url + 3;
 
     bool readTld = false;
     // Read until the domain part is over
@@ -87,6 +92,10 @@ void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker) {
         url++;
     }
 
+    if (ranker.domainName.starts_with("www.")) {
+        ranker.domainName.erase(0, 4);
+    }
+
     // Read until the URL is over
     while (*url) {
         if (*url == '?' || *url == '&') {
@@ -98,5 +107,12 @@ void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker) {
         ranker.urlLength++;
         url++;
     }
+
+    url++;
+    
+    // if it ended in a /, depth should not increase
+    if (*(url--) == '/') {
+        ranker.pageDepth--;
+    }
 }
-}}  // namespace mithril::crawler_ranker
+}  // namespace mithril::crawler_ranker

@@ -19,28 +19,32 @@ namespace mithril {
 */
 
 namespace crawler_ranker {
-// * HTTPS (10%)
-constexpr uint32_t HttpsScore = 10;
+// * HTTPS (50%)
+// a debuff for sites that don't have HTTPS by 50 points.
+constexpr uint32_t HttpsDebuffScore = 50;
 // * Site TLD (whitelist) (10%)
 constexpr uint32_t WhitelistTldScore = 10;
 // * Domain whitelist (10%)
 constexpr uint32_t WhitelistDomainScore = 10;
-// * Domain name length (20%)
-constexpr uint32_t DomainNameScore = 20;
-constexpr uint32_t DomainLengthAcceptable = 8;
+// * Domain name length (10%)
+// note: includes TLD length
+// note: ignores www.
+constexpr uint32_t DomainNameScore = 10;
+constexpr uint32_t DomainLengthAcceptable = 11;
 constexpr uint32_t DomainPenaltyPerExtraLength = 5;
-// * URL length (note: URL length does not include domain name) (10%)
+// * URL length (10%)
+// note: URL length does not include domain name length
 constexpr uint32_t UrlLengthScore = 10;
 constexpr uint32_t UrlLengthAcceptable = 60;
 constexpr uint32_t UrlPenaltyPerExtraLength = 5;
-// * Number of parameters (10%)
-constexpr uint32_t NumberParamScore = 10;
+// * Number of parameters (20%)
+constexpr uint32_t NumberParamScore = 20;
 constexpr uint32_t NumberParamAcceptable = 1;
 constexpr uint32_t NumberParamPenaltyPerExtraParam = 5;
-// * Depth of page (30%)
-constexpr uint32_t DepthPageScore = 30;
+// * Depth of page (40%)
+constexpr uint32_t DepthPageScore = 40;
 constexpr uint32_t DepthPageAcceptable = 2;
-constexpr uint32_t DepthPagePenalty = 10;
+constexpr uint32_t DepthPagePenalty = 15;
 
 struct CrawlerRankingsStruct {
     std::string tld;
@@ -53,19 +57,17 @@ struct CrawlerRankingsStruct {
 
 uint32_t GetUrlRank(const std::string& url);
 
-// NOLINTNEXTLINE(misc-definitions-in-headers)
-std::unordered_set<std::string> WhitelistTld = {
-    ".com",  // Commercial (most trusted and widely used)
-    ".co",
-    ".org",  // Organizations (non-profits, open-source projects, etc.)
-    ".net",  // Network infrastructure (widely trusted)
-    ".edu",  // Educational institutions (highly trusted)
-    ".gov",  // U.S. government entities (highly trusted)
-    ".int",  // International organizations (e.g., NATO, UN)
+const std::unordered_set<std::string> WhitelistTld = {
+    "com",  // Commercial (most trusted and widely used)
+    "co",
+    "org",  // Organizations (non-profits, open-source projects, etc.)
+    "net",  // Network infrastructure (widely trusted)
+    "edu",  // Educational institutions (highly trusted)
+    "gov",  // U.S. government entities (highly trusted)
+    "int",  // International organizations (e.g., NATO, UN)
 };
 
-// NOLINTNEXTLINE(misc-definitions-in-headers)
-std::unordered_set<std::string> WhitelistDomain = {
+const std::unordered_set<std::string> WhitelistDomain = {
     // News and Media
     "bbc.com",             // British Broadcasting Corporation (global news)
     "nytimes.com",         // The New York Times (US and international news)
