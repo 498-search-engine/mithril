@@ -1,13 +1,11 @@
-#ifndef CRAWLER_RANKER_H
-#define CRAWLER_RANKER_H
+#ifndef COMMON_RANKING_CRAWLERRANKER_H
+#define COMMON_RANKING_CRAWLERRANKER_H
 
 #include <cstdint>
 #include <string>
 #include <unordered_set>
 
-namespace mithril {
-
-namespace crawler_ranker {
+namespace mithril::ranking {
 // * HTTPS (50%)
 // a debuff for sites that don't have HTTPS by 50 points.
 constexpr uint32_t HttpsDebuffScore = 50;
@@ -154,8 +152,6 @@ const std::unordered_set<std::string> WhitelistDomain = {
  * Gets all relevant ranking info in one pass of the URL string.
  */
 static void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker);
-};  // namespace crawler_ranker
-
-};  // namespace mithril
+}  // namespace mithril::ranking
 
 #endif

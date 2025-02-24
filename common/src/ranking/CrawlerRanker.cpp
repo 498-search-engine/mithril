@@ -1,12 +1,16 @@
-#include "CrawlerRanker.h"
+#include "ranking/CrawlerRanker.h"
 
-namespace mithril::crawler_ranker {
+#include <algorithm>
+#include <cstdint>
+#include <string>
+
+namespace mithril::ranking {
 
 uint32_t GetUrlRank(const std::string& url) {
     CrawlerRankingsStruct ranker{
         .tld = "", .domainName = "", .urlLength = 0, .parameterCount = 0, .pageDepth = 0, .isHttps = false};
 
-    crawler_ranker::GetStringRankings(url.data(), ranker);
+    GetStringRankings(url.data(), ranker);
 
     uint32_t score = 0;
 
@@ -103,10 +107,10 @@ void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker) {
         ranker.urlLength++;
         url++;
     }
-    
+
     // if it ended in a /, depth should not increase
     if (*(--url) == '/') {
         ranker.pageDepth--;
     }
 }
-}  // namespace mithril::crawler_ranker
+}  // namespace mithril::ranking
