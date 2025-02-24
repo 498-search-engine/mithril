@@ -4,15 +4,29 @@
 #include "DocumentQueue.h"
 #include "FileSystem.h"
 #include "RequestManager.h"
+#include "State.h"
 #include "UrlFrontier.h"
 #include "Worker.h"
+#include "core/memory.h"
+#include "core/thread.h"
+#include "data/Deserialize.h"
+#include "data/Reader.h"
+#include "data/Serialize.h"
+#include "data/Writer.h"
 
+#include <cerrno>
+#include <csignal>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
-#include <memory>
-#include <thread>
+#include <cstring>
+#include <pthread.h>
+#include <string>
+#include <unistd.h>
 #include <vector>
 #include <spdlog/spdlog.h>
+#include <sys/signal.h>
+#include <sys/stat.h>
 
 namespace mithril {
 
@@ -20,15 +34,25 @@ constexpr size_t NumWorkers = 2;
 constexpr size_t ConcurrentRequests = 10;
 
 Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
-    if (!DirectoryExists(config.frontierDirectory.c_str())) {
-        spdlog::error("configured frontier_directory does not exist: {}", config.frontierDirectory);
+    if (!DirectoryExists(config.data_directory.c_str())) {
+        spdlog::error("configured data_directory does not exist: {}", config.data_directory);
         exit(1);
     }
 
-    frontier_ = std::make_unique<UrlFrontier>(config.frontierDirectory);
-    docQueue_ = std::make_unique<DocumentQueue>();
-    requestManager_ = std::make_unique<RequestManager>(
-        config_.concurrent_requests, config_.request_timeout, frontier_.get(), docQueue_.get());
+    auto frontierDirectory = config.data_directory + "/frontier";
+    if (!DirectoryExists(frontierDirectory.c_str())) {
+        // Create frontier directory
+        mkdir(frontierDirectory.c_str(), 0755);
+    }
+
+    state_ = core::UniquePtr<LiveState>(new LiveState{});
+
+    docQueue_ = core::UniquePtr<DocumentQueue>(new DocumentQueue{state_->threadSync});
+    frontier_ = core::UniquePtr<UrlFrontier>(new UrlFrontier{frontierDirectory});
+    requestManager_ = core::UniquePtr<RequestManager>(
+        new RequestManager{config_.concurrent_requests, config_.request_timeout, frontier_.Get(), docQueue_.Get()});
+
+    RecoverState();
 }
 
 void Coordinator::Run() {
@@ -42,38 +66,106 @@ void Coordinator::Run() {
         spdlog::info("resuming crawl with {} documents in frontier", frontier_->TotalSize());
     }
 
-    std::vector<std::thread> workerThreads;
+    if (frontier_->Empty()) {
+        spdlog::warn("no pending urls in frontier, exiting");
+        return;
+    }
+
+    size_t threadCount = 0;
+    std::vector<core::Thread> workerThreads;
     workerThreads.reserve(config_.num_workers);
 
     for (size_t i = 0; i < config_.num_workers; ++i) {
-        workerThreads.emplace_back([docQueue = docQueue_.get(), frontier = frontier_.get()] {
-            Worker w(docQueue, frontier);
+        workerThreads.emplace_back([&] {
+            Worker w(*state_, docQueue_.Get(), frontier_.Get());
             w.Run();
         });
+        ++threadCount;
     }
 
-    std::thread requestThread([r = requestManager_.get()] { r->Run(); });
+    core::Thread requestThread([&] { requestManager_->Run(state_->threadSync); });
+    ++threadCount;
+    core::Thread robotsThread([&] { frontier_->RobotsRequestsThread(state_->threadSync); });
+    ++threadCount;
+    core::Thread freshURLsThread([&] { frontier_->FreshURLsThread(state_->threadSync); });
+    ++threadCount;
 
-    // TODO: shutdown strategy for threads
-    std::thread robotsThread([f = frontier_.get()] {
-        while (true) {
-            f->ProcessRobotsRequests();
-        }
-    });
-    std::thread freshURLsThread([f = frontier_.get()] {
-        while (true) {
-            f->ProcessFreshURLs();
-        }
-    });
+    // Wait for SIGINT or SIGTERM
+    sigset_t signals;
+    sigemptyset(&signals);
+    sigaddset(&signals, SIGINT);
+    sigaddset(&signals, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &signals, nullptr);
 
-    requestThread.join();
-    robotsThread.join();
-    freshURLsThread.join();
+    int sig;
+    sigwait(&signals, &sig);
 
-    docQueue_->Close();
+    spdlog::info("received signal {}, shutting down", strsignal(sig));
 
+    // Send shutdown to threads
+    state_->threadSync.Shutdown();
+
+    // Wait for threads to finish
+    requestThread.Join();
+    robotsThread.Join();
+    freshURLsThread.Join();
     for (auto& t : workerThreads) {
-        t.join();
+        t.Join();
+    }
+
+    spdlog::info("worker threads stopped, saving crawler state");
+    DumpState();
+    spdlog::info("shutdown complete, goodbye!");
+}
+
+std::string Coordinator::StatePath() const {
+    return config_.data_directory + "/state.dat";
+}
+
+void Coordinator::DumpState() {
+    auto stateFilePath = StatePath();
+    auto stateFileTempPath = stateFilePath + ".tmp";
+
+    PersistentState state;
+    state.nextDocumentID = state_->nextDocumentID.load();
+    frontier_->DumpPendingURLs(state.pendingURLs);
+
+    spdlog::debug("saved state: next document id = {}", state.nextDocumentID);
+    spdlog::debug("saved state: pending url count = {}", state.pendingURLs.size());
+
+    {
+        // Write state to file
+        // TODO: Should we gzip the crawler state?
+        auto f = data::FileWriter{stateFileTempPath.c_str()};
+        data::SerializeValue(state, f);
+    }
+
+    // Replace any old state file
+    int status = rename(stateFileTempPath.c_str(), stateFilePath.c_str());
+    if (status == -1) {
+        spdlog::error("failed to dump crawler state to disk: {}", std::strerror(errno));
     }
 }
+
+void Coordinator::RecoverState() {
+    auto stateFilePath = StatePath();
+    if (!FileExists(stateFilePath.c_str())) {
+        spdlog::info("no state file found at {}", stateFilePath);
+        return;
+    }
+
+    PersistentState state;
+    {
+        auto f = data::FileReader{stateFilePath.c_str()};
+        data::DeserializeValue(state, f);
+    }
+
+    spdlog::debug("loaded state: next document id = {}", state.nextDocumentID);
+    spdlog::debug("loaded state: pending url count = {}", state.pendingURLs.size());
+
+    state_->nextDocumentID.store(state.nextDocumentID);
+    frontier_->PushURLs(state.pendingURLs);
+}
+
+
 }  // namespace mithril

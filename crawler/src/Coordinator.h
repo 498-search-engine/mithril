@@ -4,9 +4,11 @@
 #include "Config.h"
 #include "DocumentQueue.h"
 #include "RequestManager.h"
+#include "State.h"
 #include "UrlFrontier.h"
+#include "core/memory.h"
 
-#include <memory>
+#include <string>
 
 namespace mithril {
 
@@ -16,10 +18,18 @@ public:
     void Run();
 
 private:
+    std::string StatePath() const;
+
+    void DumpState();
+    void RecoverState();
+
     const CrawlerConfig config_;
-    std::unique_ptr<UrlFrontier> frontier_;
-    std::unique_ptr<RequestManager> requestManager_;
-    std::unique_ptr<DocumentQueue> docQueue_;
+
+    core::UniquePtr<LiveState> state_;
+
+    core::UniquePtr<DocumentQueue> docQueue_;
+    core::UniquePtr<UrlFrontier> frontier_;
+    core::UniquePtr<RequestManager> requestManager_;
 };
 
 }  // namespace mithril

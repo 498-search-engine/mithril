@@ -1,6 +1,8 @@
 #include "UrlFrontier.h"
 
 #include "Robots.h"
+#include "ThreadSync.h"
+#include "core/locks.h"
 #include "http/URL.h"
 
 #include <algorithm>
@@ -8,7 +10,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
-#include <mutex>
 #include <set>
 #include <string>
 #include <string_view>
@@ -32,17 +33,64 @@ bool IsValidUrl(std::string_view url) {
 
 UrlFrontier::UrlFrontier(const std::string& frontierDirectory) : urlQueue_(frontierDirectory) {}
 
+void UrlFrontier::InitSync(ThreadSync& sync) {
+    sync.RegisterCV(&robotsCv_);
+    sync.RegisterCV(&freshURLsCv_);
+    sync.RegisterCV(&urlQueueCv_);
+}
+
 size_t UrlFrontier::TotalSize() const {
-    std::unique_lock queueLock(urlQueueMu_);
+    core::LockGuard queueLock(urlQueueMu_);
     return urlQueue_.TotalSize();
 }
 
-void UrlFrontier::ProcessRobotsRequests() {
+bool UrlFrontier::Empty() const {
     {
-        std::unique_lock lock(robotsCacheMu_);
+        core::LockGuard queueLock(urlQueueMu_);
+        if (!urlQueue_.Empty()) {
+            return false;
+        }
+    }
+    {
+        core::LockGuard lock(freshURLsMu_);
+        if (!freshURLs_.empty()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
+    while (true) {
+        ProcessRobotsRequests(sync);
+        if (sync.ShouldShutdown()) {
+            return;
+        }
+        sync.MaybePause();
+    }
+    spdlog::info("frontier robots thread terminating");
+}
+
+void UrlFrontier::FreshURLsThread(ThreadSync& sync) {
+    while (true) {
+        ProcessFreshURLs(sync);
+        if (sync.ShouldShutdown()) {
+            return;
+        }
+        sync.MaybePause();
+    }
+    spdlog::info("frontier fresh urls thread terminating");
+}
+
+void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
+    {
+        core::LockGuard lock(robotsCacheMu_);
         // Wait until we have requests to execute. We only ever get new requests
         // to process when ProcessRobotsRequests processes fresh URLs.
-        robotsCv_.wait(lock, [this]() { return robotRulesCache_.PendingRequests() > 0; });
+        robotsCv_.Wait(lock, [&]() { return robotRulesCache_.PendingRequests() > 0 || sync.ShouldSynchronize(); });
+        if (sync.ShouldSynchronize()) {
+            return;
+        }
 
         size_t before = robotRulesCache_.PendingRequests();
         robotRulesCache_.ProcessPendingRequests();
@@ -54,12 +102,12 @@ void UrlFrontier::ProcessRobotsRequests() {
 
     // Process waiting URLs
     std::set<std::string> allowedURLs;
-    std::unique_lock waitingLock(waitingUrlsMu_);
+    core::LockGuard waitingLock(waitingUrlsMu_);
 
     auto it = urlsWaitingForRobots_.begin();
     while (it != urlsWaitingForRobots_.end()) {
         {
-            std::unique_lock robotsLock(robotsCacheMu_);
+            core::LockGuard robotsLock(robotsCacheMu_);
             const auto* robots = robotRulesCache_.GetOrFetch(it->first);
             if (robots == nullptr) {
                 // Still fetching...
@@ -80,32 +128,32 @@ void UrlFrontier::ProcessRobotsRequests() {
 
     // Release the waitingUrlsMu_ mutex -- we have determined which URLs can go
     // onto the frontier immediately.
-    waitingLock.unlock();
+    waitingLock.Unlock();
 
     if (!allowedURLs.empty()) {
-        std::unique_lock queueLock(urlQueueMu_);
+        core::LockGuard queueLock(urlQueueMu_);
         for (const auto& url : allowedURLs) {
             urlQueue_.PushURL(url);
         }
-        urlQueueCv_.notify_all();
+        urlQueueCv_.Broadcast();
     }
 }
 
-void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out, bool atLeastOne) {
+void UrlFrontier::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne) {
     if (max == 0) {
         return;
     }
 
-    std::unique_lock lock(urlQueueMu_, std::defer_lock);
+    core::LockGuard lock(urlQueueMu_, core::DeferLock);
     if (atLeastOne) {
         // The caller wants at least one URL, we need to wait until we have at
         // least one.
-        lock.lock();
-        urlQueueCv_.wait(lock, [this]() { return !urlQueue_.Empty(); });
+        lock.Lock();
+        urlQueueCv_.Wait(lock, [&]() { return !urlQueue_.Empty() || sync.ShouldSynchronize(); });
     } else {
         // The caller doesn't care if we can't get a URL. If we can't grab the
         // lock right now, we won't wait around.
-        if (!lock.try_lock()) {
+        if (!lock.TryLock()) {
             return;
         }
         if (urlQueue_.Empty()) {
@@ -113,29 +161,36 @@ void UrlFrontier::GetURLs(size_t max, std::vector<std::string>& out, bool atLeas
         }
     }
 
+    if (sync.ShouldSynchronize() || urlQueue_.Empty()) {
+        return;
+    }
     urlQueue_.PopURLs(max, out);
 }
 
 void UrlFrontier::PushURL(std::string u) {
-    std::unique_lock lock(freshURLsMu_);
+    core::LockGuard lock(freshURLsMu_);
     freshURLs_.push_back(std::move(u));
-    freshURLsCv_.notify_one();
+    freshURLsCv_.Signal();
 }
 
 void UrlFrontier::PushURLs(std::vector<std::string>& urls) {
-    std::unique_lock lock(freshURLsMu_);
+    core::LockGuard lock(freshURLsMu_);
     for (auto& url : urls) {
         freshURLs_.push_back(std::move(url));
     }
-    freshURLsCv_.notify_all();
+    freshURLsCv_.Broadcast();
 }
 
-void UrlFrontier::ProcessFreshURLs() {
+void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
     // 0. Wait for fresh URLs
     std::vector<std::string> urls;
     {
-        std::unique_lock freshLock(freshURLsMu_);
-        freshURLsCv_.wait(freshLock, [this]() { return !freshURLs_.empty(); });
+        core::LockGuard freshLock(freshURLsMu_);
+        freshURLsCv_.Wait(freshLock, [&]() { return !freshURLs_.empty() || sync.ShouldSynchronize(); });
+        if (sync.ShouldSynchronize()) {
+            return;
+        }
+
         urls = std::move(freshURLs_);
         freshURLs_.clear();
     }
@@ -167,7 +222,7 @@ void UrlFrontier::ProcessFreshURLs() {
     newURLs.reserve(validURLs.size());
     {
         auto seen = std::set<std::string_view>{};
-        std::unique_lock queueLock(urlQueueMu_);
+        core::LockGuard queueLock(urlQueueMu_);
         for (auto& url : validURLs) {
             if (seen.contains(url.url) || urlQueue_.Seen(url.url)) {
                 continue;
@@ -197,7 +252,7 @@ void UrlFrontier::ProcessFreshURLs() {
     std::vector<RobotsLookupResult> robotResults;
     robotResults.reserve(canonicalHosts.size());
     {
-        std::unique_lock robotsLock(robotsCacheMu_);
+        core::LockGuard robotsLock(robotsCacheMu_);
         for (size_t i = 0; i < canonicalHosts.size(); ++i) {
             const auto* robots = robotRulesCache_.GetOrFetch(canonicalHosts[i]);
             if (robots == nullptr) {
@@ -215,7 +270,7 @@ void UrlFrontier::ProcessFreshURLs() {
     std::vector<http::URL*> pushURLs;
     pushURLs.reserve(newURLs.size());
     {
-        std::unique_lock waitingLock(waitingUrlsMu_);
+        core::LockGuard waitingLock(waitingUrlsMu_);
         for (size_t i = 0; i < newURLs.size(); ++i) {
             switch (robotResults[i]) {
             case RobotsLookupResult::NotCached:
@@ -226,7 +281,7 @@ void UrlFrontier::ProcessFreshURLs() {
                     urlsWaitingForRobots_[canonicalHosts[i]].push_back(std::move(*newURLs[i]));
                     if (sizeBefore != urlsWaitingForRobots_.size()) {
                         // Notify that a new request for a robots.txt page is available
-                        robotsCv_.notify_one();
+                        robotsCv_.Signal();
                     }
                     break;
                 }
@@ -247,16 +302,33 @@ void UrlFrontier::ProcessFreshURLs() {
 
     // 6. Push all allowed, ready to fetch URLs onto frontier
     {
-        std::unique_lock queueLock(urlQueueMu_);
+        core::LockGuard queueLock(urlQueueMu_);
         for (auto* url : pushURLs) {
             urlQueue_.PushURL(url->url);
         }
     }
-    urlQueueCv_.notify_all();
+    urlQueueCv_.Broadcast();
 
     SPDLOG_TRACE("finished processing of fresh urls: {} urls pushed, {} awaiting robots.txt",
                  pushURLs.size(),
                  newURLs.size() - pushURLs.size());
+}
+
+void UrlFrontier::DumpPendingURLs(std::vector<std::string>& urls) {
+    {
+        core::LockGuard freshLock(freshURLsMu_);
+        for (const auto& url : freshURLs_) {
+            urls.push_back(url);
+        }
+    }
+    {
+        core::LockGuard waitingLock(waitingUrlsMu_);
+        for (const auto& entry : urlsWaitingForRobots_) {
+            for (const auto& url : entry.second) {
+                urls.push_back(url.url);
+            }
+        }
+    }
 }
 
 }  // namespace mithril

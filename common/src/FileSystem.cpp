@@ -2,6 +2,8 @@
 
 #include <cerrno>
 #include <dirent.h>
+#include <unistd.h>
+#include <sys/unistd.h>
 
 bool DirectoryExists(const char* path) {
     auto* dir = opendir(path);
@@ -10,4 +12,8 @@ bool DirectoryExists(const char* path) {
         return true;
     }
     return false;
+}
+
+bool FileExists(const char* path) {
+    return access(path, F_OK) != -1;
 }

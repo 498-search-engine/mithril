@@ -2,6 +2,8 @@
 
 #include "Clock.h"
 #include "DocumentQueue.h"
+#include "State.h"
+#include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "data/Document.h"
 #include "data/Gzip.h"
@@ -23,8 +25,6 @@ namespace mithril {
 
 namespace {
 
-std::atomic<data::docid_t> DocumentID{0};
-
 void WriteDocumentToFile(const std::string& fileName, const data::Document& doc) {
     auto fWriter = data::FileWriter{fileName.c_str()};
     auto zipWriter = data::GzipWriter{fWriter};
@@ -34,16 +34,16 @@ void WriteDocumentToFile(const std::string& fileName, const data::Document& doc)
 
 }  // namespace
 
-Worker::Worker(DocumentQueue* docQueue, UrlFrontier* frontier) : docQueue_(docQueue), frontier_(frontier) {}
+Worker::Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier)
+    : state_(state), docQueue_(docQueue), frontier_(frontier) {}
 
 void Worker::Run() {
     spdlog::info("worker starting");
-    while (true) {
+    while (!state_.threadSync.ShouldShutdown()) {
+        state_.threadSync.MaybePause();
         auto doc = docQueue_->Pop();
         if (!doc) {
-            // Closed
-            spdlog::info("worker terminating");
-            return;
+            continue;
         }
 
         auto start = MonotonicTimeMs();
@@ -54,6 +54,7 @@ void Worker::Run() {
                       doc->req.Url().url,
                       doc->res.body.size());
     }
+    spdlog::info("worker terminating");
 }
 
 /**
@@ -89,7 +90,7 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
         }
     }
 
-    data::docid_t docID = DocumentID.fetch_add(1);
+    data::docid_t docID = state_.nextDocumentID.fetch_add(1);
     auto fileName = std::string{"docs/doc_"} + std::to_string(docID);
 
     WriteDocumentToFile(fileName,

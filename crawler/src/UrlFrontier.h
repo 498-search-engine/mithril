@@ -3,6 +3,9 @@
 
 #include "PriorityURLQueue.h"
 #include "Robots.h"
+#include "ThreadSync.h"
+#include "core/cv.h"
+#include "core/mutex.h"
 #include "http/URL.h"
 
 #include <condition_variable>
@@ -20,6 +23,13 @@ public:
     UrlFrontier(const std::string& frontierDirectory);
 
     /**
+     * @brief Initializes notifications on cv instances for ThreadSync.
+     *
+     * @param sync ThreadSync instance to be used for operations.
+     */
+    void InitSync(ThreadSync& sync);
+
+    /**
      * @brief Returns the total size of the frontier, i.e. the number of
      * previously visited documents plus the number of planned-to-visit
      * documents.
@@ -27,26 +37,35 @@ public:
     size_t TotalSize() const;
 
     /**
-     * @brief Processes in-flight and pending robots.txt requests for URLs
-     * waiting to get into the frontier.
+     * @brief Returns whether the frontier is empty in terms of fresh documents
+     * to process.
      */
-    void ProcessRobotsRequests();
+    bool Empty() const;
 
     /**
-     * @brief Processes freshly-added URLs from PushURL and PushURLs,
-     * determining whether each URL is valid, has been seen before, and is
-     * allowed by robots.txt before pushing the URL onto the frontier.
+     * @brief Runs the robots requests processing thread until an indicated
+     * shutdown.
+     *
+     * @param sync ThreadSync to communicate shutdown.
      */
-    void ProcessFreshURLs();
+    void RobotsRequestsThread(ThreadSync& sync);
+
+    /**
+     * @brief Runs the fresh url processing thread until an indicated shutdown.
+     *
+     * @param sync ThreadSync to communicate shutdown.
+     */
+    void FreshURLsThread(ThreadSync& sync);
 
     /**
      * @brief Gets at least one URL from the frontier, up to max
      *
+     * @param sync ThreadSync to cancel/pause waiting operations
      * @param max Max URLs to get
      * @param out Output vector to put URLs into
      * @param atLeastOne Wait for at least one URL
      */
-    void GetURLs(size_t max, std::vector<std::string>& out, bool atLeastOne = false);
+    void GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne = false);
 
     /**
      * @brief Pushes a url onto the frontier (if not already visited).
@@ -62,20 +81,35 @@ public:
      */
     void PushURLs(std::vector<std::string>& urls);
 
+    void DumpPendingURLs(std::vector<std::string>& urls);
+
 private:
+    /**
+     * @brief Processes in-flight and pending robots.txt requests for URLs
+     * waiting to get into the frontier.
+     */
+    void ProcessRobotsRequests(ThreadSync& sync);
+
+    /**
+     * @brief Processes freshly-added URLs from PushURL and PushURLs,
+     * determining whether each URL is valid, has been seen before, and is
+     * allowed by robots.txt before pushing the URL onto the frontier.
+     */
+    void ProcessFreshURLs(ThreadSync& sync);
+
     struct Scorer {
         // TODO: integrate URL scoring
         static int Score(std::string_view /*url*/) { return 0; }
     };
 
-    mutable std::mutex urlQueueMu_;     // Lock for urls_
-    mutable std::mutex robotsCacheMu_;  // Lock for robotRulesCache_
-    mutable std::mutex waitingUrlsMu_;  // Lock for urlsWaitingForRobots_
-    mutable std::mutex freshURLsMu_;    // Lock for freshURLs_
+    mutable core::Mutex urlQueueMu_;     // Lock for urls_
+    mutable core::Mutex robotsCacheMu_;  // Lock for robotRulesCache_
+    mutable core::Mutex waitingUrlsMu_;  // Lock for urlsWaitingForRobots_
+    mutable core::Mutex freshURLsMu_;    // Lock for freshURLs_
 
-    std::condition_variable urlQueueCv_;   // Notifies when URL is available in queue
-    std::condition_variable robotsCv_;     // Notifies when new request is available for processing
-    std::condition_variable freshURLsCv_;  // Notifies when a fresh URL is available for processing
+    core::cv urlQueueCv_;   // Notifies when URL is available in queue
+    core::cv robotsCv_;     // Notifies when new request is available for processing
+    core::cv freshURLsCv_;  // Notifies when a fresh URL is available for processing
 
     PriorityURLQueue<Scorer> urlQueue_;
 

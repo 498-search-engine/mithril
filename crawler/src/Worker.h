@@ -2,16 +2,16 @@
 #define CRAWLER_WORKER_H
 
 #include "DocumentQueue.h"
+#include "State.h"
 #include "UrlFrontier.h"
 #include "http/Request.h"
-#include "http/RequestExecutor.h"
 #include "http/Response.h"
 
 namespace mithril {
 
 class Worker {
 public:
-    Worker(DocumentQueue* docQueue, UrlFrontier* frontier_);
+    Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier_);
 
     void Run();
 
@@ -19,6 +19,7 @@ private:
     void ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header);
     void ProcessHTMLDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header);
 
+    LiveState& state_;
     DocumentQueue* docQueue_;
     UrlFrontier* frontier_;
 };

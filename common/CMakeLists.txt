@@ -18,6 +18,7 @@ add_library(common STATIC
 
     src/Clock.cpp
     src/FileSystem.cpp
+    src/ThreadSync.cpp
     src/Util.cpp
 )
 
@@ -28,4 +29,5 @@ target_link_libraries(common
     OpenSSL::Crypto
     ZLIB::ZLIB
     spdlog::spdlog
+    lib::core
 )
