@@ -7,11 +7,13 @@
 #include "http/Request.h"
 #include "http/Response.h"
 
+#include <string>
+
 namespace mithril {
 
 class Worker {
 public:
-    Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier_);
+    Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier_, std::string docsDirectory_);
 
     void Run();
 
@@ -22,6 +24,8 @@ private:
     LiveState& state_;
     DocumentQueue* docQueue_;
     UrlFrontier* frontier_;
+
+    std::string docsDirectory_;
 };
 
 }  // namespace mithril

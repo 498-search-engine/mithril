@@ -39,16 +39,22 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
         exit(1);
     }
 
-    auto frontierDirectory = config.data_directory + "/frontier";
-    if (!DirectoryExists(frontierDirectory.c_str())) {
+    frontierDirectory_ = config.data_directory + "/frontier";
+    if (!DirectoryExists(frontierDirectory_.c_str())) {
         // Create frontier directory
-        mkdir(frontierDirectory.c_str(), 0755);
+        mkdir(frontierDirectory_.c_str(), 0755);
+    }
+
+    docsDirectory_ = config.data_directory + "/docs";
+    if (!DirectoryExists(docsDirectory_.c_str())) {
+        // Create docs directory
+        mkdir(docsDirectory_.c_str(), 0755);
     }
 
     state_ = core::UniquePtr<LiveState>(new LiveState{});
 
     docQueue_ = core::UniquePtr<DocumentQueue>(new DocumentQueue{state_->threadSync});
-    frontier_ = core::UniquePtr<UrlFrontier>(new UrlFrontier{frontierDirectory});
+    frontier_ = core::UniquePtr<UrlFrontier>(new UrlFrontier{frontierDirectory_});
     requestManager_ = core::UniquePtr<RequestManager>(
         new RequestManager{config_.concurrent_requests, config_.request_timeout, frontier_.Get(), docQueue_.Get()});
 
@@ -77,7 +83,7 @@ void Coordinator::Run() {
 
     for (size_t i = 0; i < config_.num_workers; ++i) {
         workerThreads.emplace_back([&] {
-            Worker w(*state_, docQueue_.Get(), frontier_.Get());
+            Worker w(*state_, docQueue_.Get(), frontier_.Get(), docsDirectory_);
             w.Run();
         });
         ++threadCount;
@@ -113,7 +119,7 @@ void Coordinator::Run() {
         t.Join();
     }
 
-    spdlog::info("worker threads stopped, saving crawler state");
+    spdlog::info("all threads stopped, saving crawler state");
     DumpState();
     spdlog::info("shutdown complete, goodbye!");
 }

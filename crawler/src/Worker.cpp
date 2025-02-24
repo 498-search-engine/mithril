@@ -34,8 +34,8 @@ void WriteDocumentToFile(const std::string& fileName, const data::Document& doc)
 
 }  // namespace
 
-Worker::Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier)
-    : state_(state), docQueue_(docQueue), frontier_(frontier) {}
+Worker::Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier, std::string docsDirectory)
+    : state_(state), docQueue_(docQueue), frontier_(frontier), docsDirectory_(std::move(docsDirectory)) {}
 
 void Worker::Run() {
     spdlog::info("worker starting");
@@ -91,7 +91,12 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
     }
 
     data::docid_t docID = state_.nextDocumentID.fetch_add(1);
-    auto fileName = std::string{"docs/doc_"} + std::to_string(docID);
+    auto idStr = std::to_string(docID);
+    auto fileName = docsDirectory_ + "/doc_";
+    for (int i = 0; i < 10 - idStr.size(); ++i) {
+        fileName.push_back('0');
+    }
+    fileName.append(idStr);
 
     WriteDocumentToFile(fileName,
                         data::Document{

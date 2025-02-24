@@ -25,6 +25,9 @@ private:
 
     const CrawlerConfig config_;
 
+    std::string frontierDirectory_;
+    std::string docsDirectory_;
+
     core::UniquePtr<LiveState> state_;
 
     core::UniquePtr<DocumentQueue> docQueue_;

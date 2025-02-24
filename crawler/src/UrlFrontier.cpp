@@ -64,7 +64,7 @@ void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
     while (true) {
         ProcessRobotsRequests(sync);
         if (sync.ShouldShutdown()) {
-            return;
+            break;
         }
         sync.MaybePause();
     }
@@ -75,7 +75,7 @@ void UrlFrontier::FreshURLsThread(ThreadSync& sync) {
     while (true) {
         ProcessFreshURLs(sync);
         if (sync.ShouldShutdown()) {
-            return;
+            break;
         }
         sync.MaybePause();
     }
