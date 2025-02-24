@@ -50,6 +50,23 @@ private:
 
     size_t hash(const std::string& term) const;
 
+    static constexpr size_t NUM_SHARDS = 8;
+    
+    struct Shard {
+        std::vector<Entry*> buckets;
+        std::vector<std::unique_ptr<Entry>> entries;
+        mutable std::mutex mutex_;
+        std::atomic<size_t> size{0};
+        Shard() = default;
+        void initialize(size_t bucket_size) {
+            buckets.resize(bucket_size/NUM_SHARDS);
+        }
+    };
+    
+    std::array<Shard, NUM_SHARDS> shards_;
+    size_t get_shard_index(const std::string& term) const { return (hash(term) >> 56) & (NUM_SHARDS - 1); }
+    size_t get_bucket_index(const std::string& term, size_t shard_size) const { return hash(term) % shard_size; }
+
     std::vector<Entry*> buckets_;
     std::vector<std::unique_ptr<Entry>> entries_;
     mutable std::mutex mutex_;
