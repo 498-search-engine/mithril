@@ -74,7 +74,7 @@ void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker) {
 
     bool readTld = false;
     // Read until the domain part is over
-    while (*url != '/') {
+    while (*url != '/' && *url) {
         if (readTld) {
             ranker.tld.push_back(*url);
         }
@@ -103,11 +103,9 @@ void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker) {
         ranker.urlLength++;
         url++;
     }
-
-    url++;
     
     // if it ended in a /, depth should not increase
-    if (*(url--) == '/') {
+    if (*(--url) == '/') {
         ranker.pageDepth--;
     }
 }
