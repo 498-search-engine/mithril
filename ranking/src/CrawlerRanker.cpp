@@ -1,14 +1,10 @@
 #include "CrawlerRanker.h"
 
-#include <iostream>
-
 namespace mithril::crawler_ranker {
 
 uint32_t GetUrlRank(const std::string& url) {
     CrawlerRankingsStruct ranker{
         .tld = "", .domainName = "", .urlLength = 0, .parameterCount = 0, .pageDepth = 0, .isHttps = false};
-
-    std::cout << url << std::endl;
 
     crawler_ranker::GetStringRankings(url.data(), ranker);
 
