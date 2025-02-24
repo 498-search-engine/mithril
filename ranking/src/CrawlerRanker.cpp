@@ -11,12 +11,12 @@ uint32_t GetUrlRank(const std::string& url) {
     uint32_t score = 0;
 
     // * Site TLD (whitelist)
-    if (WhitelistTld.find(ranker.tld) != WhitelistTld.end()) {
+    if (WhitelistTld.contains(ranker.tld)) {
         score += WhitelistTldScore;
     }
 
     // * Domain whitelist
-    if (WhitelistDomain.find(ranker.domainName) != WhitelistDomain.end()) {
+    if (WhitelistDomain.contains(ranker.domainName)) {
         score += WhitelistDomainScore;
     }
 
