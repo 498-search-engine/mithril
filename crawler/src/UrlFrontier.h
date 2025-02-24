@@ -7,10 +7,9 @@
 #include "core/cv.h"
 #include "core/mutex.h"
 #include "http/URL.h"
+#include "ranking/CrawlerRanker.h"
 
-#include <condition_variable>
 #include <cstddef>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -98,8 +97,8 @@ private:
     void ProcessFreshURLs(ThreadSync& sync);
 
     struct Scorer {
-        // TODO: integrate URL scoring
-        static int Score(std::string_view /*url*/) { return 0; }
+        // TODO: accept string_view instead?
+        static unsigned int Score(std::string_view url) { return ranking::GetUrlRank(std::string{url}); }
     };
 
     mutable core::Mutex urlQueueMu_;     // Lock for urls_

@@ -241,7 +241,7 @@ private:
 
 template<typename T>
 concept URLScorer = requires(std::string_view url) {
-    { T::Score(url) } -> std::same_as<int>;
+    { T::Score(url) } -> std::same_as<unsigned int>;
 };
 
 namespace {
@@ -292,12 +292,11 @@ std::vector<size_t> GenerateRandomIndicies(size_t N, size_t K) {
 template<URLScorer Scorer>
 class PriorityURLQueue {
     using url_id_t = uint32_t;
-    static constexpr auto SampleOverheadFactor = 3;  // TODO: tune this
-    static constexpr size_t MinConsideration = 100;
+    static constexpr auto SampleOverheadFactor = 2;  // TODO: tune this
 
     struct QueuedURL {
         url_id_t id;
-        int score;
+        unsigned int score;
     };
 
 public:
@@ -326,8 +325,7 @@ public:
             QueuedURL url;
         };
 
-        size_t targetSize = std::max(max * SampleOverheadFactor, MinConsideration);
-        targetSize = std::min(targetSize, queuedURLs_.Size());
+        size_t targetSize = std::min(max * SampleOverheadFactor, queuedURLs_.Size());
 
         std::vector<Candidate> candidates;
         candidates.reserve(targetSize);
