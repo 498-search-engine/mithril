@@ -221,7 +221,7 @@ public:
         auto id = static_cast<url_id_t>(stringFile_.Size());
         stringFile_.PushBack(url);
 
-        bool inserted = urlIndex_.Insert(id, 0);
+        bool inserted = urlIndex_.Insert(id, id);
         if (!inserted) {
             // String was already in the index, un-push from the string file
             stringFile_.PopBack();
@@ -236,7 +236,7 @@ public:
 
 private:
     internal::StringFile stringFile_;
-    core::OrderedMapFile<url_id_t, int, UrlTreeArity, internal::StringFileComparator> urlIndex_;
+    core::OrderedMapFile<url_id_t, url_id_t, UrlTreeArity, internal::StringFileComparator> urlIndex_;
 };
 
 template<typename T>
@@ -292,7 +292,7 @@ std::vector<size_t> GenerateRandomIndicies(size_t N, size_t K) {
 template<URLScorer Scorer>
 class PriorityURLQueue {
     using url_id_t = uint32_t;
-    static constexpr auto SampleOverheadFactor = 2;  // TODO: tune this
+    static constexpr auto SampleOverheadFactor = 1.5;  // TODO: tune this
 
     struct QueuedURL {
         url_id_t id;
@@ -325,7 +325,8 @@ public:
             QueuedURL url;
         };
 
-        size_t targetSize = std::min(max * SampleOverheadFactor, queuedURLs_.Size());
+        auto sampleSize = static_cast<size_t>(static_cast<double>(max) * SampleOverheadFactor);
+        size_t targetSize = std::min(sampleSize, queuedURLs_.Size());
 
         std::vector<Candidate> candidates;
         candidates.reserve(targetSize);
