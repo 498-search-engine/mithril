@@ -16,6 +16,8 @@ add_library(common STATIC
     src/http/SSL.cpp
     src/http/URL.cpp
 
+    src/ranking/CrawlerRanker.cpp
+
     src/Clock.cpp
     src/Util.cpp
 )
