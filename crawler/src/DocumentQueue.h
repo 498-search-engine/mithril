@@ -8,6 +8,7 @@
 
 #include <optional>
 #include <queue>
+#include <string>
 #include <vector>
 
 namespace mithril {
@@ -19,6 +20,8 @@ public:
     void Push(http::CompleteResponse res);
     void PushAll(std::vector<http::CompleteResponse>& res);
     std::optional<http::CompleteResponse> Pop();
+
+    void ExtractCompletedURLs(std::vector<std::string>& out);
 
 private:
     ThreadSync& sync_;

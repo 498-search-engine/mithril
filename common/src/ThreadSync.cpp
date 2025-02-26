@@ -43,11 +43,13 @@ void ThreadSync::DoPause() {
 }
 
 void ThreadSync::Shutdown() {
-    core::LockGuard lock(mu_);
-    if (shutdown_) {
-        return;
+    {
+        core::LockGuard lock(mu_);
+        if (shutdown_) {
+            return;
+        }
+        shutdown_.store(true);
     }
-    shutdown_.store(true);
     unpauseCv_.Broadcast();
     for (auto* cv : wantsNotifies_) {
         cv->Broadcast();
@@ -61,7 +63,9 @@ void ThreadSync::StartPause(int n) {
 }
 
 void ThreadSync::EndPause() {
-    core::LockGuard lock(mu_);
-    shouldPause_ = false;
+    {
+        core::LockGuard lock(mu_);
+        shouldPause_ = false;
+    }
     unpauseCv_.Broadcast();
 }

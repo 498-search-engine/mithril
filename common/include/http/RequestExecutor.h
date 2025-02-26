@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <list>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -112,6 +113,8 @@ public:
      * response.
      */
     std::vector<FailedRequest>& FailedRequests();
+
+    void DumpUnprocessedRequests(std::vector<std::string>& out) const;
 
 private:
     struct ReqConn {
