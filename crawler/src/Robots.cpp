@@ -1,6 +1,7 @@
 #include "Robots.h"
 
 #include "Clock.h"
+#include "CrawlerMetrics.h"
 #include "Util.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
@@ -414,6 +415,12 @@ void RobotRulesCache::ProcessPendingRequests() {
 }
 
 void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
+    RobotsResponseCodesMetric
+        .WithLabels({
+            {"status", std::to_string(r.header.status)}
+    })
+        .fetch_add(1);
+
     auto canonicalHost = CanonicalizeHost(r.req.Url());
     SPDLOG_TRACE("successful robots.txt request: {}", canonicalHost.host);
 

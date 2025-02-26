@@ -1,6 +1,7 @@
 #include "Worker.h"
 
 #include "Clock.h"
+#include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "State.h"
 #include "ThreadSync.h"
@@ -113,6 +114,13 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
 }
 
 void Worker::ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header) {
+    DocumentsProcessedMetric.Get().fetch_add(1);
+    CrawlResponseCodesMetric
+        .WithLabels({
+            {"status", std::to_string(header.status)}
+    })
+        .fetch_add(1);
+
     switch (header.status) {
     case http::StatusCode::OK:
         if (!header.ContentType) {

@@ -1,0 +1,30 @@
+#ifndef CRAWLER_CRAWLERMETRICS_H
+#define CRAWLER_CRAWLERMETRICS_H
+
+#include "metrics/Metrics.h"
+
+namespace mithril {
+
+using namespace metrics;
+
+inline auto DocumentsProcessedMetric = Metric{
+    "crawler_documents_processed",
+    "counter",
+    "Number of documents processed by the crawler",
+};
+
+inline auto CrawlResponseCodesMetric = Metric{
+    "crawler_crawl_response_codes",
+    "counter",
+    "Number of crawl responses with a HTTP status code",
+};
+
+inline auto RobotsResponseCodesMetric = Metric{
+    "crawler_robots_response_codes",
+    "counter",
+    "Number of robots.txt responses with a HTTP status code",
+};
+
+}  // namespace mithril
+
+#endif

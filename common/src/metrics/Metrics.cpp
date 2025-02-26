@@ -62,6 +62,7 @@ void Metric::Render(std::string& out) const {
         out.append(def_.name);
         out.push_back(' ');
         out.push_back('0');
+        out.push_back('\n');
     }
 
     for (const auto& entry : rawMetrics_) {

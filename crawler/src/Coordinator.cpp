@@ -1,6 +1,7 @@
 #include "Coordinator.h"
 
 #include "Config.h"
+#include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "FileSystem.h"
 #include "RequestManager.h"
@@ -13,6 +14,7 @@
 #include "data/Reader.h"
 #include "data/Serialize.h"
 #include "data/Writer.h"
+#include "metrics/MetricsServer.h"
 
 #include <cerrno>
 #include <csignal>
@@ -57,6 +59,11 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     frontier_ = core::UniquePtr<UrlFrontier>(new UrlFrontier{frontierDirectory_});
     requestManager_ = core::UniquePtr<RequestManager>(new RequestManager{frontier_.Get(), docQueue_.Get(), config});
 
+    metricsServer_ = core::UniquePtr<metrics::MetricsServer>(new metrics::MetricsServer{config.metrics_port});
+    metricsServer_->Register(&DocumentsProcessedMetric);
+    metricsServer_->Register(&CrawlResponseCodesMetric);
+    metricsServer_->Register(&RobotsResponseCodesMetric);
+
     RecoverState();
 }
 
@@ -94,6 +101,8 @@ void Coordinator::Run() {
     ++threadCount;
     core::Thread freshURLsThread([&] { frontier_->FreshURLsThread(state_->threadSync); });
     ++threadCount;
+    core::Thread metricsThread([&] { metricsServer_->Run(state_->threadSync); });
+    ++threadCount;
 
     // Wait for SIGINT or SIGTERM
     sigset_t signals;
@@ -119,6 +128,7 @@ void Coordinator::Run() {
     for (auto& t : workerThreads) {
         t.Join();
     }
+    metricsThread.Join();
 
     spdlog::info("all threads stopped, saving crawler state");
     DumpState();
