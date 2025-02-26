@@ -6,6 +6,7 @@
 
 #include <cassert>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
@@ -45,6 +46,14 @@ std::optional<http::CompleteResponse> DocumentQueue::Pop() {
     SPDLOG_TRACE("document queue size decreased = {}", readyResponses_.size());
 
     return {std::move(res)};
+}
+
+void DocumentQueue::ExtractCompletedURLs(std::vector<std::string>& out) {
+    core::LockGuard lock(mu_);
+    while (!readyResponses_.empty()) {
+        out.push_back(readyResponses_.front().req.Url().url);
+        readyResponses_.pop();
+    }
 }
 
 }  // namespace mithril

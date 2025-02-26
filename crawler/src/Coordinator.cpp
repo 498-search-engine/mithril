@@ -138,6 +138,7 @@ void Coordinator::DumpState() {
     state.nextDocumentID = state_->nextDocumentID.load();
     frontier_->DumpPendingURLs(state.pendingURLs);
     requestManager_->ExtractQueuedURLs(state.activeCrawlURLs);
+    docQueue_->ExtractCompletedURLs(state.activeCrawlURLs);
 
     spdlog::debug("saved state: next document id = {}", state.nextDocumentID);
     spdlog::debug("saved state: pending url count = {}", state.pendingURLs.size());
