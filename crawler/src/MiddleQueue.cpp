@@ -55,12 +55,15 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
     auto utilization = QueueUtilization();
     if (totalQueuedURLs_ < totalTargetQueuedURLs || utilization < QueueUtilizationTarget) {
         if (utilization < QueueUtilizationTarget) {
+            // This doesn't happen that frequently. Take this opportunity to
+            // clean up any empty hosts.
             CleanEmptyHosts();
         }
 
         std::vector<std::string> r;
         r.reserve(totalTargetQueuedURLs);
 
+        // Get URLs from the frontier that match the WantURL() predicate
         frontier_->GetURLsFiltered(
             sync, totalTargetQueuedURLs, r, [this](std::string_view url) { return WantURL(url); }, atLeastOne);
         if (sync.ShouldSynchronize()) {
@@ -70,14 +73,19 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
         spdlog::debug(
             "middle queue: got {} out of {} max atLeastOne = {}", r.size(), totalTargetQueuedURLs, atLeastOne);
 
+        // Push all obtained URLs into the middle queue
         now = MonotonicTimeMs();
         for (auto url : r) {
             AcceptURL(now, std::move(url));
         }
-    } else {
-        now = MonotonicTimeMs();
     }
 
+    now = MonotonicTimeMs();
+
+    // Try to return up to max URLs by going round-robin through the active
+    // queue set. A queue is only popped from if the time since the last crawl
+    // is acceptable.
+    size_t maxPossibleReady = std::min(max, n_);
     size_t added = 0;
     for (size_t i = 0; i < n_; ++i, k_ = (k_ + 1) % n_) {
         auto* record = queues_[k_];
@@ -91,13 +99,12 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 
         out.push_back(PopFromHost(now, *record));
         ++added;
-        if (added >= max) {
+        if (added >= maxPossibleReady) {
             k_ = (k_ + 1) % n_;
             break;
         }
     }
 }
-
 
 size_t MiddleQueue::ActiveQueueCount() const {
     return n_ - emptyQueues_.size();
@@ -163,6 +170,7 @@ std::string MiddleQueue::PopFromHost(long now, HostRecord& record) {
 
     record.earliestNextCrawl = now + record.crawlDelayMs;
     if (record.queue.empty()) {
+        // The host's queue is now empty, remove it from the active queue set
         queues_[*record.activeQueue] = nullptr;
         emptyQueues_.push_back(*record.activeQueue);
         record.activeQueue = core::nullopt;
@@ -207,6 +215,7 @@ void MiddleQueue::AssignFreeQueue(HostRecord* record) {
 }
 
 bool MiddleQueue::WantURL(std::string_view url) const {
+    // TODO: this may be a bit slow. How can we improve this?
     auto parsed = http::ParseURL(url);
     if (!parsed) {
         return true;
