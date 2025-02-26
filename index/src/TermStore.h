@@ -13,6 +13,9 @@ namespace mithril {
 class PostingList {
 public:
     void add(const Posting& posting);
+    void add(uint32_t doc_id, uint32_t freq);
+    void add_with_positions(uint32_t doc_id, uint32_t freq, const std::vector<uint32_t>& positions);
+    std::vector<uint32_t> get_positions(size_t posting_index) const;
     const std::vector<Posting>& postings() const;
     size_t size_bytes() const;
     void clear();
@@ -20,10 +23,11 @@ public:
     static constexpr uint32_t SYNC_INTERVAL = 1024;
     const std::vector<SyncPoint>& sync_points() const { return sync_points_; }
 
+    PositionsStore positions_store_;
 private:
     std::vector<Posting> postings_;
-    std::vector<SyncPoint> sync_points_;
     size_t size_bytes_{0};
+    std::vector<SyncPoint> sync_points_;
 };
 
 class Dictionary {

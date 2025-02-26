@@ -7,6 +7,28 @@ void PostingList::add(const Posting& posting) {
     size_bytes_ += sizeof(Posting);
 }
 
+void PostingList::add(uint32_t doc_id, uint32_t freq) {
+    postings_.push_back({doc_id, freq, UINT32_MAX});
+    size_bytes_ += sizeof(Posting);
+}
+
+void PostingList::add_with_positions(uint32_t doc_id, uint32_t freq, const std::vector<uint32_t>& positions) {
+    uint32_t pos_offset = positions_store_.all_positions.size();
+    postings_.push_back({doc_id, freq, pos_offset});
+    positions_store_.all_positions.insert(positions_store_.all_positions.end(), positions.begin(), positions.end());
+    size_bytes_ += sizeof(Posting) + positions.size() * sizeof(uint32_t);
+}
+
+std::vector<uint32_t> PostingList::get_positions(size_t posting_index) const {
+    if (posting_index >= postings_.size()) return {};
+    const Posting& posting = postings_[posting_index];
+    if (posting.positions_offset == UINT32_MAX) return {};
+    
+    size_t start = posting.positions_offset;
+    size_t end = (posting_index == postings_.size() - 1) ? positions_store_.all_positions.size() : postings_[posting_index + 1].positions_offset;
+    return {positions_store_.all_positions.begin() + start, positions_store_.all_positions.begin() + end};
+}
+
 const std::vector<Posting>& PostingList::postings() const {
     return postings_;
 }

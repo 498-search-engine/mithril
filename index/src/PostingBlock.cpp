@@ -134,10 +134,20 @@ void BlockReader::read_next() {
         return;
     }
 
-    // Read postings
     current_postings.resize(postings_size);
     std::memcpy(current_postings.data(), current, postings_size * sizeof(Posting));
     current += postings_size * sizeof(Posting);
+    
+    // Read positions
+    uint32_t positions_size;
+    std::memcpy(&positions_size, current, sizeof(positions_size));
+    current += sizeof(positions_size);
+    
+    current_positions.all_positions.resize(positions_size);
+    if (positions_size > 0) {
+        std::memcpy(current_positions.all_positions.data(), current, positions_size * sizeof(uint32_t));
+        current += positions_size * sizeof(uint32_t);
+    }
 }
 
 Posting* BlockReader::find_posting(uint32_t target_doc_id) {
@@ -177,6 +187,23 @@ Posting* BlockReader::find_posting(uint32_t target_doc_id) {
     }
 
     return nullptr;
+}
+
+std::vector<uint32_t> BlockReader::get_positions(uint32_t doc_id) {
+    Posting* posting = find_posting(doc_id);
+    if (!posting) return {};
+    
+    // If no positions stored
+    if (posting->positions_offset == UINT32_MAX) return {};
+    
+    // Calculate positions range
+    size_t index = posting - current_postings.data();
+    size_t start = posting->positions_offset;
+    size_t end = (index == current_postings.size() - 1) 
+               ? current_positions.all_positions.size() 
+               : current_postings[index + 1].positions_offset;
+    
+    return {current_positions.all_positions.begin() + start, current_positions.all_positions.begin() + end};
 }
 
 }  // namespace mithril

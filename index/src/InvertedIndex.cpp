@@ -113,30 +113,36 @@ void IndexBuilder::process_document(const Document& doc) {
     }
 
     auto task = [this, doc]() {
-        std::unordered_map<std::string, uint32_t> term_freqs;
-
-        auto process_words = [&](const std::vector<std::string>& words) {
-            for (const auto& word : words) {
-                std::string normalized = TokenNormalizer::normalize(word);
-                if (!normalized.empty()) {
-                    term_freqs[normalized]++;
-                }
+        std::unordered_map<std::string, std::vector<uint32_t>> term_positions;
+        uint32_t position = 0;
+        // Process title with position tracking
+        for (const auto& word : doc.title) {
+            std::string normalized = TokenNormalizer::normalize(word);
+            if (!normalized.empty()) {
+                term_positions[normalized].push_back(position++);
             }
-        };
-
-        process_words(doc.title);
-        process_words(doc.words);
-
+        }
+        // Process body with continued position counting
+        for (const auto& word : doc.words) {
+            std::string normalized = TokenNormalizer::normalize(word);
+            if (!normalized.empty()) {
+                term_positions[normalized].push_back(position++);
+            }
+        }
         // Assign into document map
         {
             std::unique_lock<std::mutex> lock(document_mutex_);
             url_to_id_[doc.url] = doc.id;
             documents_.push_back(doc);
         }
-        // Add terms to the dictionary
+        // Add terms to the dictionary with positions
         {
             std::lock_guard<std::mutex> lock(block_mutex_);
-            add_terms(doc.id, term_freqs);
+            for (const auto& [term, positions] : term_positions) {
+                auto& postings = dictionary_.get_or_create(term);
+                postings.add_with_positions(doc.id, positions.size(), positions);
+                current_block_size_ += sizeof(Posting) + positions.size() * sizeof(uint32_t);
+            }
         }
     };
 
@@ -253,11 +259,10 @@ std::future<void> IndexBuilder::flush_block() {
     }
 
     // Get sorted terms and their postings
-    std::vector<std::pair<std::string, std::vector<Posting>>> sorted_terms;
+    std::vector<std::tuple<std::string, std::vector<Posting>, std::vector<uint32_t>>> sorted_terms;
     dictionary_.iterate_terms([&](const std::string& term, const PostingList& postings) {
-        if (!postings.empty()) {
-            sorted_terms.emplace_back(term, postings.postings());
-        }
+        if (!postings.empty())
+            sorted_terms.emplace_back(term, postings.postings(), postings.positions_store_.all_positions);
     });
 
     if (sorted_terms.empty()) {
@@ -276,14 +281,14 @@ std::future<void> IndexBuilder::flush_block() {
         uint32_t num_terms = sorted_terms.size();
         out.write(reinterpret_cast<const char*>(&num_terms), sizeof(num_terms));
 
-        for (const auto& [term, postings] : sorted_terms) {
+        for (const auto& [term, postings, positions] : sorted_terms) {
             uint32_t term_len = term.size();
             out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
             out.write(term.c_str(), term_len);
-
+            
             uint32_t postings_size = postings.size();
             out.write(reinterpret_cast<const char*>(&postings_size), sizeof(postings_size));
-
+            
             // Calculate and write sync points
             std::vector<SyncPoint> sync_points;
             for (uint32_t i = 0; i < postings.size(); i += PostingList::SYNC_INTERVAL) {
@@ -292,7 +297,6 @@ std::future<void> IndexBuilder::flush_block() {
                     sync_points.push_back(sp);
                 }
             }
-
             uint32_t sync_points_size = sync_points.size();
             out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
             if (sync_points_size > 0) {
@@ -301,6 +305,11 @@ std::future<void> IndexBuilder::flush_block() {
 
             // Write the actual postings
             out.write(reinterpret_cast<const char*>(postings.data()), postings_size * sizeof(Posting));
+            // Write positions count and data 
+            uint32_t positions_size = positions.size();
+            out.write(reinterpret_cast<const char*>(&positions_size), sizeof(positions_size));
+            if (positions_size > 0)
+                out.write(reinterpret_cast<const char*>(positions.data()), positions_size * sizeof(uint32_t));
         }
     });
 }
@@ -337,15 +346,32 @@ void IndexBuilder::merge_blocks() {
     while (!pq.empty()) {
         std::string current_term = pq.top()->current_term;
         std::vector<Posting> merged_postings;
+        PositionsStore merged_positions;
 
         // Merge all postings for current term
         while (!pq.empty() && pq.top()->current_term == current_term) {
             BlockReaderPtr reader = std::move(const_cast<BlockReaderPtr&>(pq.top()));
             pq.pop();
 
-            merged_postings.insert(
-                merged_postings.end(), reader->current_postings.begin(), reader->current_postings.end());
+            // Adjust the positions offsets for the merged postings using the current merged positions count
+            size_t positions_offset_adjustment = merged_positions.all_positions.size();
+            for (auto& posting : reader->current_postings) {
+                Posting adjusted_posting = posting;
+                // UINT32_MAX indicates no positions stored.
+                if (posting.positions_offset != UINT32_MAX) {
+                    adjusted_posting.positions_offset += static_cast<uint32_t>(positions_offset_adjustment);
+                }
+                merged_postings.push_back(adjusted_posting);
+            }
 
+            // Append positions from the current block
+            merged_positions.all_positions.insert(
+                merged_positions.all_positions.end(),
+                reader->current_positions.all_positions.begin(),
+                reader->current_positions.all_positions.end()
+            );
+
+            // Read the next term from the block reader.
             try {
                 reader->read_next();
                 if (reader->has_next) {
@@ -359,20 +385,22 @@ void IndexBuilder::merge_blocks() {
         std::sort(merged_postings.begin(), merged_postings.end(), [](const Posting& a, const Posting& b) {
             return a.doc_id < b.doc_id;
         });
+
         // Write term
         uint32_t term_len = current_term.size();
         final_out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
         final_out.write(current_term.c_str(), term_len);
-        // Write compressed postings
+        
+        // Write postings count and sync points
         uint32_t postings_size = merged_postings.size();
         final_out.write(reinterpret_cast<const char*>(&postings_size), sizeof(postings_size));
-        // Write sync points
+
+        // Calculate sync points (based on postings and defined sync interval)
         std::vector<SyncPoint> sync_points;
-        for (uint32_t i = 0; i < merged_postings.size(); i += PostingList::SYNC_INTERVAL) {
-            if (i < merged_postings.size()) {
-                SyncPoint sp{merged_postings[i].doc_id, i};
-                sync_points.push_back(sp);
-            }
+        for (uint32_t i = 0; i < postings_size; i += PostingList::SYNC_INTERVAL) {
+            // i is valid because we use postings_size as upper bound.
+            SyncPoint sp{merged_postings[i].doc_id, i};
+            sync_points.push_back(sp);
         }
         uint32_t sync_points_size = sync_points.size();
         final_out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
@@ -380,6 +408,7 @@ void IndexBuilder::merge_blocks() {
             final_out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(SyncPoint));
         }
 
+        // Write compressed postings using VByte encoding for doc_id deltas and frequency
         uint32_t last_doc_id = 0;
         for (const auto& posting : merged_postings) {
             VByteCodec::encode(posting.doc_id - last_doc_id, final_out);
@@ -387,10 +416,16 @@ void IndexBuilder::merge_blocks() {
             last_doc_id = posting.doc_id;
         }
 
+        // Write positions count, positions array
+        uint32_t positions_size = merged_positions.all_positions.size();
+        final_out.write(reinterpret_cast<const char*>(&positions_size), sizeof(positions_size));
+        if (positions_size > 0)
+            final_out.write(reinterpret_cast<const char*>(merged_positions.all_positions.data()), positions_size * sizeof(uint32_t));
+
         total_terms++;
     }
 
-    // Update total terms count
+    // Update total terms count at the beginning of the file.
     final_out.seekp(0);
     final_out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
 

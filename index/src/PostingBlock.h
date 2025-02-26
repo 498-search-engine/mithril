@@ -9,11 +9,16 @@ namespace mithril {
 struct Posting {
     uint32_t doc_id;
     uint32_t freq;
+    uint32_t positions_offset;
 };
 
 struct SyncPoint {
     uint32_t doc_id;        // First document ID at this position
     uint32_t plist_offset;  // Offset from start of postings list
+};
+
+struct PositionsStore {
+    std::vector<uint32_t> all_positions;
 };
 
 class BlockReader {
@@ -28,6 +33,8 @@ public:
     void read_next();
 
     Posting* find_posting(uint32_t target_doc_id);
+    PositionsStore current_positions;
+    std::vector<uint32_t> get_positions(uint32_t doc_id);
 
     // Move support for priority queue
     BlockReader(BlockReader&& other) noexcept;

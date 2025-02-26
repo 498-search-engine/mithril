@@ -33,7 +33,7 @@ private:
 
     // Output config
     const std::string output_dir_;
-    static constexpr size_t MAX_BLOCK_SIZE = 128 * 1024 * 1024;  // 64 MB
+    static constexpr size_t MAX_BLOCK_SIZE = 512 * 1024 * 1024;
 
     // core methods
     std::future<void> flush_block();
