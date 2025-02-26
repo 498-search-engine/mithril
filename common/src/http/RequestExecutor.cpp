@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <unistd.h>
 #include <unordered_map>
 #include <utility>
@@ -439,6 +440,18 @@ std::vector<CompleteResponse>& RequestExecutor::ReadyResponses() {
 
 std::vector<FailedRequest>& RequestExecutor::FailedRequests() {
     return failedRequests_;
+}
+
+void RequestExecutor::DumpUnprocessedRequests(std::vector<std::string>& out) const {
+    for (const auto& conn : pendingConnection_) {
+        out.push_back(conn.req.Url().url);
+    }
+    for (const auto& entry : activeConnections_) {
+        out.push_back(entry.second.req.Url().url);
+    }
+    for (const auto& res : readyResponses_) {
+        out.push_back(res.req.Url().url);
+    }
 }
 
 }  // namespace mithril::http

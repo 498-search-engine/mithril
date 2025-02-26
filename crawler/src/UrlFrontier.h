@@ -5,6 +5,7 @@
 #include "Robots.h"
 #include "ThreadSync.h"
 #include "core/cv.h"
+#include "core/locks.h"
 #include "core/mutex.h"
 #include "http/URL.h"
 #include "ranking/CrawlerRanker.h"
@@ -65,6 +66,36 @@ public:
      * @param atLeastOne Wait for at least one URL
      */
     void GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne = false);
+
+    template<typename Filter>
+    void
+    GetURLsFiltered(ThreadSync& sync, size_t max, std::vector<std::string>& out, Filter f, bool atLeastOne = false) {
+        if (max == 0) {
+            return;
+        }
+
+        core::LockGuard lock(urlQueueMu_, core::DeferLock);
+        if (atLeastOne) {
+            // The caller wants at least one URL, we need to wait until we have at
+            // least one.
+            lock.Lock();
+            urlQueueCv_.Wait(lock, [&]() { return !urlQueue_.Empty() || sync.ShouldSynchronize(); });
+        } else {
+            // The caller doesn't care if we can't get a URL. If we can't grab the
+            // lock right now, we won't wait around.
+            if (!lock.TryLock()) {
+                return;
+            }
+            if (urlQueue_.Empty()) {
+                return;
+            }
+        }
+
+        if (sync.ShouldSynchronize() || urlQueue_.Empty()) {
+            return;
+        }
+        urlQueue_.PopURLs(max, out, f);
+    }
 
     /**
      * @brief Pushes a url onto the frontier (if not already visited).

@@ -140,31 +140,7 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
 }
 
 void UrlFrontier::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne) {
-    if (max == 0) {
-        return;
-    }
-
-    core::LockGuard lock(urlQueueMu_, core::DeferLock);
-    if (atLeastOne) {
-        // The caller wants at least one URL, we need to wait until we have at
-        // least one.
-        lock.Lock();
-        urlQueueCv_.Wait(lock, [&]() { return !urlQueue_.Empty() || sync.ShouldSynchronize(); });
-    } else {
-        // The caller doesn't care if we can't get a URL. If we can't grab the
-        // lock right now, we won't wait around.
-        if (!lock.TryLock()) {
-            return;
-        }
-        if (urlQueue_.Empty()) {
-            return;
-        }
-    }
-
-    if (sync.ShouldSynchronize() || urlQueue_.Empty()) {
-        return;
-    }
-    urlQueue_.PopURLs(max, out);
+    GetURLsFiltered(sync, max, out, [](std::string_view) { return true; });
 }
 
 void UrlFrontier::PushURL(std::string u) {

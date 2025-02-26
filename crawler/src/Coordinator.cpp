@@ -103,10 +103,12 @@ void Coordinator::Run() {
     sigaddset(&signals, SIGTERM);
     pthread_sigmask(SIG_BLOCK, &signals, nullptr);
 
-    int sig;
-    sigwait(&signals, &sig);
+    int sig = 0;
+    while (sig != SIGINT && sig != SIGTERM) {
+        sigwait(&signals, &sig);
+    }
 
-    spdlog::info("received signal {}, shutting down", strsignal(sig));
+    spdlog::info("received signal {} {}, shutting down", sig, strsignal(sig));
 
     // Send shutdown to threads
     state_->threadSync.Shutdown();
@@ -135,9 +137,11 @@ void Coordinator::DumpState() {
     PersistentState state;
     state.nextDocumentID = state_->nextDocumentID.load();
     frontier_->DumpPendingURLs(state.pendingURLs);
+    requestManager_->ExtractQueuedURLs(state.activeCrawlURLs);
 
     spdlog::debug("saved state: next document id = {}", state.nextDocumentID);
     spdlog::debug("saved state: pending url count = {}", state.pendingURLs.size());
+    spdlog::debug("saved state: active crawl url count = {}", state.activeCrawlURLs.size());
 
     {
         // Write state to file
@@ -168,10 +172,11 @@ void Coordinator::RecoverState() {
 
     spdlog::debug("loaded state: next document id = {}", state.nextDocumentID);
     spdlog::debug("loaded state: pending url count = {}", state.pendingURLs.size());
+    spdlog::debug("loaded state: active crawl url count = {}", state.activeCrawlURLs.size());
 
     state_->nextDocumentID.store(state.nextDocumentID);
     frontier_->PushURLs(state.pendingURLs);
+    requestManager_->RestoreQueuedURLs(state.activeCrawlURLs);
 }
-
 
 }  // namespace mithril

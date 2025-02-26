@@ -21,7 +21,10 @@ struct LiveState {
 
 struct PersistentState {
     data::docid_t nextDocumentID;
+    // URLs that have been seen but not added to frontier
     std::vector<std::string> pendingURLs;
+    // URLs removed from frontier but yet to have been crawled
+    std::vector<std::string> activeCrawlURLs;
 };
 
 namespace data {
@@ -32,6 +35,7 @@ struct Serialize<PersistentState> {
     static void Write(const PersistentState& state, W& w) {
         SerializeValue(state.nextDocumentID, w);
         SerializeValue(state.pendingURLs, w);
+        SerializeValue(state.activeCrawlURLs, w);
     }
 };
 
@@ -41,7 +45,8 @@ struct Deserialize<PersistentState> {
     static bool Read(PersistentState& state, R& r) {
         // clang-format off
         return DeserializeValue(state.nextDocumentID, r)
-            && DeserializeValue(state.pendingURLs, r);
+            && DeserializeValue(state.pendingURLs, r)
+            && DeserializeValue(state.activeCrawlURLs, r);
         // clang-format on
     }
 };

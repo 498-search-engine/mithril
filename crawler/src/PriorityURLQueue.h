@@ -15,6 +15,7 @@
 #include <cstring>
 #include <functional>
 #include <random>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -319,7 +320,8 @@ public:
         queuedURLs_.PushBack(QueuedURL{*id, score});
     }
 
-    void PopURLs(size_t max, std::vector<std::string>& out) {
+    template<typename Filter>
+    void PopURLs(size_t max, std::vector<std::string>& out, Filter f) {
         struct Candidate {
             size_t queueIndex;
             QueuedURL url;
@@ -331,10 +333,45 @@ public:
         std::vector<Candidate> candidates;
         candidates.reserve(targetSize);
 
-        auto candidateIndicies = GenerateRandomIndicies(queuedURLs_.Size(), targetSize);
-        for (size_t index : candidateIndicies) {
-            candidates.push_back({index, queuedURLs_[index]});
+        if (queuedURLs_.Size() * 2 < targetSize) {
+            for (size_t i = 0; i < queuedURLs_.Size(); ++i) {
+                if (!f(store_.URL(queuedURLs_[i].id))) {
+                    continue;
+                }
+                candidates.push_back({i, queuedURLs_[i]});
+                if (candidates.size() >= targetSize) {
+                    break;
+                }
+            }
+        } else {
+            auto seen = std::set<size_t>{};
+            for (size_t i = 0; i < targetSize * 2; ++i) {
+                size_t index = rand() % queuedURLs_.Size();
+                if (seen.contains(index)) {
+                    continue;
+                }
+                seen.insert(index);
+                if (!f(store_.URL(queuedURLs_[index].id))) {
+                    continue;
+                }
+                candidates.push_back({index, queuedURLs_[index]});
+                if (candidates.size() >= targetSize) {
+                    break;
+                }
+            }
         }
+
+        // size_t tries = 0;
+        // while (candidates.empty() && tries < 5) {
+        //     auto candidateIndicies = GenerateRandomIndicies(queuedURLs_.Size(), targetSize);
+        //     for (size_t index : candidateIndicies) {
+        //         if (!f(store_.URL(queuedURLs_[index].id))) {
+        //             continue;
+        //         }
+        //         candidates.push_back({index, queuedURLs_[index]});
+        //     }
+        //     ++tries;
+        // }
 
         // Sort candidate URLs by their score
         std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {

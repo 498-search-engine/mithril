@@ -7,7 +7,6 @@
 #include "http/RequestExecutor.h"
 #include "http/URL.h"
 
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <string>
@@ -23,7 +22,7 @@ RequestManager::RequestManager(size_t targetConcurrentReqs,
                                DocumentQueue* docQueue)
     : targetConcurrentReqs_(targetConcurrentReqs),
       requestTimeout_(requestTimeout),
-      frontier_(frontier),
+      middleQueue_(frontier, 100),
       docQueue_(docQueue) {}
 
 void RequestManager::Run(ThreadSync& sync) {
@@ -40,7 +39,7 @@ void RequestManager::Run(ThreadSync& sync) {
 
             size_t toAdd = targetConcurrentReqs_ - requestExecutor_.InFlightRequests();
             urls.clear();
-            frontier_->GetURLs(sync, toAdd, urls, wantAtLeastOne);
+            middleQueue_.GetURLs(sync, toAdd, urls, wantAtLeastOne);
             if (sync.ShouldSynchronize()) {
                 continue;
             }
@@ -89,13 +88,18 @@ void RequestManager::Run(ThreadSync& sync) {
     spdlog::info("request manager terminating");
 }
 
-void RequestManager::Stop() {
-    stopped_.store(true, std::memory_order_release);
-}
-
 void RequestManager::DispatchFailedRequest(http::FailedRequest failed) {
     spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, http::StringOfRequestError(failed.error));
     // TODO: pass off to whatever
+}
+
+void RequestManager::RestoreQueuedURLs(std::vector<std::string>& urls) {
+    middleQueue_.RestoreFrom(urls);
+}
+
+void RequestManager::ExtractQueuedURLs(std::vector<std::string>& out) {
+    middleQueue_.ExtractQueuedURLs(out);
+    requestExecutor_.DumpUnprocessedRequests(out);
 }
 
 }  // namespace mithril

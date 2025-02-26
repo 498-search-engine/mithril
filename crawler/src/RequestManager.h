@@ -2,12 +2,15 @@
 #define CRAWLER_REQUESTMANAGER_H
 
 #include "DocumentQueue.h"
+#include "MiddleQueue.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "http/RequestExecutor.h"
 
 #include <atomic>
 #include <cstddef>
+#include <string>
+#include <vector>
 
 namespace mithril {
 
@@ -19,7 +22,9 @@ public:
                    DocumentQueue* docQueue);
 
     void Run(ThreadSync& sync);
-    void Stop();
+
+    void RestoreQueuedURLs(std::vector<std::string>& urls);
+    void ExtractQueuedURLs(std::vector<std::string>& out);
 
 private:
     void DispatchFailedRequest(http::FailedRequest failed);
@@ -27,12 +32,10 @@ private:
     size_t targetConcurrentReqs_;
     unsigned long requestTimeout_;
 
-    UrlFrontier* frontier_;
+    MiddleQueue middleQueue_;
     DocumentQueue* docQueue_;
 
     http::RequestExecutor requestExecutor_;
-
-    std::atomic<bool> stopped_;
 };
 
 }  // namespace mithril

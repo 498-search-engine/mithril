@@ -1,0 +1,221 @@
+#include "MiddleQueue.h"
+
+#include "Clock.h"
+#include "ThreadSync.h"
+#include "UrlFrontier.h"
+#include "core/memory.h"
+#include "core/optional.h"
+#include "http/URL.h"
+#include "spdlog/spdlog.h"
+
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace mithril {
+
+constexpr long DefaultCrawlDelayMs = 200;
+constexpr size_t URLBatchSize = 10;
+constexpr size_t HostURLLimit = 25;
+constexpr double QueueUtilizationTarget = 0.25;
+
+MiddleQueue::MiddleQueue(UrlFrontier* frontier, size_t numQueues) : frontier_(frontier), n_(numQueues) {
+    queues_.resize(numQueues, nullptr);
+    emptyQueues_.resize(numQueues, 0);
+    for (size_t i = 0; i < numQueues; ++i) {
+        emptyQueues_[i] = numQueues - i - 1;
+    }
+}
+
+void MiddleQueue::RestoreFrom(std::vector<std::string>& urls) {
+    long now = MonotonicTimeMs();
+    for (auto& url : urls) {
+        AcceptURL(now, std::move(url));
+    }
+}
+
+void MiddleQueue::ExtractQueuedURLs(std::vector<std::string>& out) {
+    for (const auto& entry : hosts_) {
+        while (!entry.second->queue.empty()) {
+            out.push_back(std::move(entry.second->queue.front()));
+            entry.second->queue.pop();
+        }
+    }
+}
+
+void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne) {
+    long now;
+
+    auto totalTargetQueuedURLs = n_ * URLBatchSize;
+    auto utilization = QueueUtilization();
+    if (totalQueuedURLs_ < totalTargetQueuedURLs || utilization < QueueUtilizationTarget) {
+        if (utilization < QueueUtilizationTarget) {
+            CleanEmptyHosts();
+        }
+
+        std::vector<std::string> r;
+        r.reserve(totalTargetQueuedURLs);
+
+        frontier_->GetURLsFiltered(
+            sync, totalTargetQueuedURLs, r, [this](std::string_view url) { return WantURL(url); }, atLeastOne);
+        if (sync.ShouldSynchronize()) {
+            return;
+        }
+
+        spdlog::debug(
+            "middle queue: got {} out of {} max atLeastOne = {}", r.size(), totalTargetQueuedURLs, atLeastOne);
+
+        now = MonotonicTimeMs();
+        for (auto url : r) {
+            AcceptURL(now, std::move(url));
+        }
+    } else {
+        now = MonotonicTimeMs();
+    }
+
+    size_t added = 0;
+    for (size_t i = 0; i < n_; ++i, k_ = (k_ + 1) % n_) {
+        auto* record = queues_[k_];
+        if (record == nullptr) {
+            continue;
+        }
+
+        if (record->queue.empty() || now < record->earliestNextCrawl) {
+            continue;
+        }
+
+        out.push_back(PopFromHost(now, *record));
+        ++added;
+        if (added >= max) {
+            k_ = (k_ + 1) % n_;
+            break;
+        }
+    }
+}
+
+
+size_t MiddleQueue::ActiveQueueCount() const {
+    return n_ - emptyQueues_.size();
+}
+
+double MiddleQueue::QueueUtilization() const {
+    return static_cast<double>(ActiveQueueCount()) / static_cast<double>(n_);
+}
+
+void MiddleQueue::AcceptURL(long now, std::string url) {
+    auto parsed = http::ParseURL(url);
+    if (!parsed) {
+        return;
+    }
+    auto host = http::CanonicalizeHost(*parsed).url;
+
+    auto recordIt = hosts_.find(host);
+    if (recordIt != hosts_.end()) {
+        PushURLForHost(std::move(url), recordIt->second.Get());
+    } else {
+        PushURLForNewHost(now, std::move(url), std::move(host));
+    }
+}
+
+void MiddleQueue::PushURLForHost(std::string url, HostRecord* record) {
+    record->queue.push(std::move(url));
+    ++totalQueuedURLs_;
+
+    if (!record->activeQueue.HasValue() && !emptyQueues_.empty()) {
+        // Have a empty queue, assign this host to the queue
+        AssignFreeQueue(record);
+    }
+}
+
+void MiddleQueue::PushURLForNewHost(long now, std::string url, std::string host) {
+    auto record = core::UniquePtr<HostRecord>{
+        new HostRecord{
+                       .host = host,
+                       .crawlDelayMs = DefaultCrawlDelayMs,
+                       .earliestNextCrawl = now,
+                       .queue = {},
+                       .activeQueue = {},
+                       }
+    };
+
+    auto it = hosts_.insert({
+        std::move(host),
+        std::move(record),
+    });
+    assert(it.second);
+
+    PushURLForHost(std::move(url), it.first->second.Get());
+}
+
+std::string MiddleQueue::PopFromHost(long now, HostRecord& record) {
+    assert(!record.queue.empty());
+    assert(record.earliestNextCrawl <= now);
+    assert(record.activeQueue.HasValue());
+
+    auto url = std::move(record.queue.front());
+    record.queue.pop();
+    --totalQueuedURLs_;
+
+    record.earliestNextCrawl = now + record.crawlDelayMs;
+    if (record.queue.empty()) {
+        queues_[*record.activeQueue] = nullptr;
+        emptyQueues_.push_back(*record.activeQueue);
+        record.activeQueue = core::nullopt;
+        PopulateActiveQueues();
+    }
+
+    return url;
+}
+
+void MiddleQueue::PopulateActiveQueues() {
+    size_t available = emptyQueues_.size();
+    auto it = hosts_.begin();
+    while (available > 0 && it != hosts_.end()) {
+        if (it->second->activeQueue.HasValue() || it->second->queue.empty()) {
+            ++it;
+            continue;
+        }
+        AssignFreeQueue(it->second.Get());
+        --available;
+        ++it;
+    }
+}
+
+void MiddleQueue::CleanEmptyHosts() {
+    for (auto it = hosts_.begin(); it != hosts_.end();) {
+        if (it->second->queue.empty()) {
+            assert(!it->second->activeQueue.HasValue());
+            it = hosts_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void MiddleQueue::AssignFreeQueue(HostRecord* record) {
+    assert(!emptyQueues_.empty());
+    auto emptyQueueNum = emptyQueues_.back();
+    emptyQueues_.pop_back();
+
+    queues_[emptyQueueNum] = record;
+    record->activeQueue = {emptyQueueNum};
+}
+
+bool MiddleQueue::WantURL(std::string_view url) const {
+    auto parsed = http::ParseURL(url);
+    if (!parsed) {
+        return true;
+    }
+    auto host = http::CanonicalizeHost(*parsed).url;
+    if (auto it = hosts_.find(host); it != hosts_.end()) {
+        return it->second->queue.size() < HostURLLimit;
+    }
+    return true;
+}
+
+}  // namespace mithril
