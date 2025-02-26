@@ -1,6 +1,7 @@
 #include "MiddleQueue.h"
 
 #include "Clock.h"
+#include "Config.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "core/memory.h"
@@ -19,12 +20,26 @@
 
 namespace mithril {
 
-constexpr long DefaultCrawlDelayMs = 200;
-constexpr size_t URLBatchSize = 10;
-constexpr size_t HostURLLimit = 25;
-constexpr double QueueUtilizationTarget = 0.25;
+MiddleQueue::MiddleQueue(UrlFrontier* frontier, const CrawlerConfig& config)
+    : MiddleQueue(frontier,
+                  config.middle_queue_queue_count,
+                  config.middle_queue_url_batch_size,
+                  config.middle_queue_host_url_limit,
+                  config.middle_queue_utilization_target,
+                  config.default_crawl_delay_ms) {}
 
-MiddleQueue::MiddleQueue(UrlFrontier* frontier, size_t numQueues) : frontier_(frontier), n_(numQueues) {
+MiddleQueue::MiddleQueue(UrlFrontier* frontier,
+                         size_t numQueues,
+                         size_t urlBatchSize,
+                         size_t hostUrlLimit,
+                         double queueUtilizationTarget,
+                         long defaultCrawlDelayMs)
+    : frontier_(frontier),
+      n_(numQueues),
+      urlBatchSize_(urlBatchSize),
+      hostUrlLimit_(hostUrlLimit),
+      queueUtilizationTarget_(queueUtilizationTarget),
+      defaultCrawlDelayMs_(defaultCrawlDelayMs) {
     queues_.resize(numQueues, nullptr);
     emptyQueues_.resize(numQueues, 0);
     for (size_t i = 0; i < numQueues; ++i) {
@@ -51,10 +66,10 @@ void MiddleQueue::ExtractQueuedURLs(std::vector<std::string>& out) {
 void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne) {
     long now;
 
-    auto totalTargetQueuedURLs = n_ * URLBatchSize;
+    auto totalTargetQueuedURLs = n_ * urlBatchSize_;
     auto utilization = QueueUtilization();
-    if (totalQueuedURLs_ < totalTargetQueuedURLs || utilization < QueueUtilizationTarget) {
-        if (utilization < QueueUtilizationTarget) {
+    if (totalQueuedURLs_ < totalTargetQueuedURLs || utilization < queueUtilizationTarget_) {
+        if (utilization < queueUtilizationTarget_) {
             // This doesn't happen that frequently. Take this opportunity to
             // clean up any empty hosts.
             CleanEmptyHosts();
@@ -143,7 +158,7 @@ void MiddleQueue::PushURLForNewHost(long now, std::string url, std::string host)
     auto record = core::UniquePtr<HostRecord>{
         new HostRecord{
                        .host = host,
-                       .crawlDelayMs = DefaultCrawlDelayMs,
+                       .crawlDelayMs = defaultCrawlDelayMs_,
                        .earliestNextCrawl = now,
                        .queue = {},
                        .activeQueue = {},
@@ -222,7 +237,7 @@ bool MiddleQueue::WantURL(std::string_view url) const {
     }
     auto host = http::CanonicalizeHost(*parsed).url;
     if (auto it = hosts_.find(host); it != hosts_.end()) {
-        return it->second->queue.size() < HostURLLimit;
+        return it->second->queue.size() < hostUrlLimit_;
     }
     return true;
 }

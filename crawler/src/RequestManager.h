@@ -1,13 +1,13 @@
 #ifndef CRAWLER_REQUESTMANAGER_H
 #define CRAWLER_REQUESTMANAGER_H
 
+#include "Config.h"
 #include "DocumentQueue.h"
 #include "MiddleQueue.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "http/RequestExecutor.h"
 
-#include <atomic>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -16,10 +16,7 @@ namespace mithril {
 
 class RequestManager {
 public:
-    RequestManager(size_t targetConcurrentReqs,
-                   unsigned long requestTimeout,
-                   UrlFrontier* frontier,
-                   DocumentQueue* docQueue);
+    RequestManager(UrlFrontier* frontier, DocumentQueue* docQueue, const CrawlerConfig& config);
 
     void Run(ThreadSync& sync);
 

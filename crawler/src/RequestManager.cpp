@@ -16,13 +16,10 @@
 
 namespace mithril {
 
-RequestManager::RequestManager(size_t targetConcurrentReqs,
-                               unsigned long requestTimeout,
-                               UrlFrontier* frontier,
-                               DocumentQueue* docQueue)
-    : targetConcurrentReqs_(targetConcurrentReqs),
-      requestTimeout_(requestTimeout),
-      middleQueue_(frontier, 100),
+RequestManager::RequestManager(UrlFrontier* frontier, DocumentQueue* docQueue, const CrawlerConfig& config)
+    : targetConcurrentReqs_(config.concurrent_requests),
+      requestTimeout_(config.request_timeout),
+      middleQueue_(frontier, config),
       docQueue_(docQueue) {}
 
 void RequestManager::Run(ThreadSync& sync) {

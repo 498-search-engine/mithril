@@ -2,6 +2,7 @@
 #define CRAWLER_MIDDLEQUEUE_H
 
 
+#include "Config.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "core/memory.h"
@@ -18,7 +19,14 @@ namespace mithril {
 
 class MiddleQueue {
 public:
-    MiddleQueue(UrlFrontier* frontier, size_t numQueues);
+    MiddleQueue(UrlFrontier* frontier, const CrawlerConfig& config);
+
+    MiddleQueue(UrlFrontier* frontier,
+                size_t numQueues,
+                size_t urlBatchSize,
+                size_t hostUrlLimit,
+                double queueUtilizationTarget,
+                long defaultCrawlDelayMs);
 
     /**
      * @brief Gets URLs from the middle queue, pulling from the frontier if
@@ -131,12 +139,17 @@ private:
 
     UrlFrontier* frontier_;
     size_t n_;
+    size_t urlBatchSize_;
+    size_t hostUrlLimit_;
+    double queueUtilizationTarget_;
+    long defaultCrawlDelayMs_;
+
     size_t k_{0};
+    size_t totalQueuedURLs_{0};
 
     std::unordered_map<std::string, core::UniquePtr<HostRecord>> hosts_;
     std::vector<HostRecord*> queues_;
     std::vector<size_t> emptyQueues_;
-    size_t totalQueuedURLs_{0};
 };
 
 }  // namespace mithril

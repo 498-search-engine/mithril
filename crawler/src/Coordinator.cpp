@@ -55,8 +55,7 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
 
     docQueue_ = core::UniquePtr<DocumentQueue>(new DocumentQueue{state_->threadSync});
     frontier_ = core::UniquePtr<UrlFrontier>(new UrlFrontier{frontierDirectory_});
-    requestManager_ = core::UniquePtr<RequestManager>(
-        new RequestManager{config_.concurrent_requests, config_.request_timeout, frontier_.Get(), docQueue_.Get()});
+    requestManager_ = core::UniquePtr<RequestManager>(new RequestManager{frontier_.Get(), docQueue_.Get(), config});
 
     RecoverState();
 }
