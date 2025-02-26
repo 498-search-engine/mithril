@@ -2,6 +2,7 @@
 #define COMMON_METRICS_METRICSSERVER_H
 
 #include "ThreadSync.h"
+#include "metrics/Metrics.h"
 
 #include <cstdint>
 #include <string>
@@ -9,12 +10,12 @@
 
 namespace mithril::metrics {
 
-
 class MetricsServer {
 public:
     MetricsServer(uint16_t port);
     ~MetricsServer();
 
+    void Register(const Metric* metric);
     void Run(ThreadSync& sync);
 
 private:
@@ -24,6 +25,8 @@ private:
 
     uint16_t port_;
     int sock_;
+
+    std::vector<const Metric*> metrics_;
 };
 
 }  // namespace mithril::metrics

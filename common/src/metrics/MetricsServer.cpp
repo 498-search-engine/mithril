@@ -1,6 +1,7 @@
 #include "metrics/MetricsServer.h"
 
 #include "ThreadSync.h"
+#include "metrics/Metrics.h"
 #include "spdlog/spdlog.h"
 
 #include <cassert>
@@ -43,6 +44,10 @@ MetricsServer::~MetricsServer() {
         close(sock_);
         sock_ = -1;
     }
+}
+
+void MetricsServer::Register(const Metric* metric) {
+    metrics_.push_back(metric);
 }
 
 void MetricsServer::Run(ThreadSync& sync) {
@@ -154,7 +159,9 @@ std::vector<char> MetricsServer::RenderResponse() {
 
 std::string MetricsServer::RenderMetrics() {
     std::string res;
-    res.append("Hello, world!");
+    for (const auto* metric : metrics_) {
+        metric->Render(res);
+    }
     return res;
 }
 
