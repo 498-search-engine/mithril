@@ -245,51 +245,6 @@ concept URLScorer = requires(std::string_view url) {
     { T::Score(url) } -> std::same_as<unsigned int>;
 };
 
-namespace {
-
-/**
- * @brief Generates K random, unique indicies in [0, N) using the Reservoir
- * Sampling Algorithm L.
- * https://en.wikipedia.org/wiki/Reservoir_sampling#Optimal:_Algorithm_L
- *
- * @param N Index range
- * @param K Number of indicies to generate
- * @return std::vector<size_t> Vector of generated indicies (unique)
- */
-std::vector<size_t> GenerateRandomIndicies(size_t N, size_t K) {
-    std::vector<size_t> result;
-    result.reserve(K);
-
-    // Fill first K indices
-    for (size_t i = 0; i < K; i++) {
-        result.push_back(i);
-    }
-
-    if (K == N) {
-        return result;
-    }
-
-    // Use a random number generator
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    // Algorithm L (Li's algorithm)
-    double W = std::exp(std::log(gen() / (double)std::mt19937::max()) / K);
-
-    size_t i = K;
-    while (i < N) {
-        i += std::floor(std::log(gen() / (double)std::mt19937::max()) / std::log(1 - W)) + 1;
-        if (i < N) {
-            result[gen() % K] = i;
-            W *= std::exp(std::log(gen() / (double)std::mt19937::max()) / K);
-        }
-    }
-
-    return result;
-}
-
-}  // namespace
-
 template<URLScorer Scorer>
 class PriorityURLQueue {
     using url_id_t = uint32_t;
@@ -334,6 +289,7 @@ public:
         candidates.reserve(targetSize);
 
         if (queuedURLs_.Size() * 2 < targetSize) {
+            // The queued urls list is small, don't bother with randomness
             for (size_t i = 0; i < queuedURLs_.Size(); ++i) {
                 if (!f(store_.URL(queuedURLs_[i].id))) {
                     continue;
@@ -344,6 +300,7 @@ public:
                 }
             }
         } else {
+            // Randomly select indicies into the queued urls list
             auto seen = std::set<size_t>{};
             for (size_t i = 0; i < targetSize * 2; ++i) {
                 size_t index = rand() % queuedURLs_.Size();
@@ -360,18 +317,6 @@ public:
                 }
             }
         }
-
-        // size_t tries = 0;
-        // while (candidates.empty() && tries < 5) {
-        //     auto candidateIndicies = GenerateRandomIndicies(queuedURLs_.Size(), targetSize);
-        //     for (size_t index : candidateIndicies) {
-        //         if (!f(store_.URL(queuedURLs_[index].id))) {
-        //             continue;
-        //         }
-        //         candidates.push_back({index, queuedURLs_[index]});
-        //     }
-        //     ++tries;
-        // }
 
         // Sort candidate URLs by their score
         std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
