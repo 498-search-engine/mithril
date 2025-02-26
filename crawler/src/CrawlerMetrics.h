@@ -25,6 +25,19 @@ inline auto RobotsResponseCodesMetric = Metric{
     "Number of robots.txt responses with a HTTP status code",
 };
 
+inline auto InFlightCrawlRequestsMetric = Metric{
+    "crawler_in_flight_crawl_requests",
+    "gauge",
+    "Number of actively-executing crawl requests",
+};
+
+inline auto InFlightRobotsRequestsMetric = Metric{
+    "crawler_in_flight_robots_requests",
+    "gauge",
+    "Number of actively-executing robots.txt requests",
+};
+
+
 }  // namespace mithril
 
 #endif

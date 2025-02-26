@@ -1,5 +1,6 @@
 #include "RequestManager.h"
 
+#include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
@@ -28,6 +29,7 @@ void RequestManager::Run(ThreadSync& sync) {
 
     while (!sync.ShouldShutdown()) {
         sync.MaybePause();
+        InFlightCrawlRequestsMetric.Get().store(requestExecutor_.InFlightRequests());
         // Get more URLs to execute, up to targetSize_ concurrently executing
         if (requestExecutor_.InFlightRequests() < targetConcurrentReqs_) {
             // If we have no in-flight requests to process, wait for at least

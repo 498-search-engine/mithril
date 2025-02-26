@@ -389,6 +389,8 @@ void RobotRulesCache::ProcessPendingRequests() {
         queuedFetches_.pop();
     }
 
+    InFlightRobotsRequestsMetric.Get().store(executor_.InFlightRequests());
+
     if (executor_.InFlightRequests() == 0) {
         return;
     }

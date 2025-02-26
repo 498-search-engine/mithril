@@ -63,6 +63,8 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     metricsServer_->Register(&DocumentsProcessedMetric);
     metricsServer_->Register(&CrawlResponseCodesMetric);
     metricsServer_->Register(&RobotsResponseCodesMetric);
+    metricsServer_->Register(&InFlightCrawlRequestsMetric);
+    metricsServer_->Register(&InFlightRobotsRequestsMetric);
 
     RecoverState();
 }
