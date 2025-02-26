@@ -111,7 +111,7 @@ void IndexBuilder::process_document(const Document& doc) {
         auto future = flush_block();
         future.wait();
     }
-    
+
     auto task = [this, doc]() {
         std::unordered_map<std::string, uint32_t> term_freqs;
 
@@ -283,6 +283,23 @@ std::future<void> IndexBuilder::flush_block() {
 
             uint32_t postings_size = postings.size();
             out.write(reinterpret_cast<const char*>(&postings_size), sizeof(postings_size));
+
+            // Calculate and write sync points
+            std::vector<SyncPoint> sync_points;
+            for (uint32_t i = 0; i < postings.size(); i += PostingList::SYNC_INTERVAL) {
+                if (i < postings.size()) {
+                    SyncPoint sp{postings[i].doc_id, i};
+                    sync_points.push_back(sp);
+                }
+            }
+
+            uint32_t sync_points_size = sync_points.size();
+            out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
+            if (sync_points_size > 0) {
+                out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(SyncPoint));
+            }
+
+            // Write the actual postings
             out.write(reinterpret_cast<const char*>(postings.data()), postings_size * sizeof(Posting));
         }
     });
@@ -349,6 +366,19 @@ void IndexBuilder::merge_blocks() {
         // Write compressed postings
         uint32_t postings_size = merged_postings.size();
         final_out.write(reinterpret_cast<const char*>(&postings_size), sizeof(postings_size));
+        // Write sync points
+        std::vector<SyncPoint> sync_points;
+        for (uint32_t i = 0; i < merged_postings.size(); i += PostingList::SYNC_INTERVAL) {
+            if (i < merged_postings.size()) {
+                SyncPoint sp{merged_postings[i].doc_id, i};
+                sync_points.push_back(sp);
+            }
+        }
+        uint32_t sync_points_size = sync_points.size();
+        final_out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
+        if (sync_points_size > 0) {
+            final_out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(SyncPoint));
+        }
 
         uint32_t last_doc_id = 0;
         for (const auto& posting : merged_postings) {

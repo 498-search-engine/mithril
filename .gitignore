@@ -4,3 +4,4 @@ build/*
 .cache/
 *.log
 bench/
+tags

@@ -11,15 +11,23 @@ struct Posting {
     uint32_t freq;
 };
 
+struct SyncPoint {
+    uint32_t doc_id;        // First document ID at this position
+    uint32_t plist_offset;  // Offset from start of postings list
+};
+
 class BlockReader {
 public:
     std::string current_term;
     std::vector<Posting> current_postings;
+    std::vector<SyncPoint> current_sync_points;
     bool has_next{true};
 
     explicit BlockReader(const std::string& path);
     ~BlockReader();
     void read_next();
+
+    Posting* find_posting(uint32_t target_doc_id);
 
     // Move support for priority queue
     BlockReader(BlockReader&& other) noexcept;

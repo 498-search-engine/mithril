@@ -26,9 +26,6 @@ bool PostingList::empty() const {
 
 Dictionary::Dictionary(size_t bucket_size_hint) : buckets_(bucket_size_hint, nullptr) {
     entries_.reserve(bucket_size_hint / 2);
-    for (auto& shard : shards_) {
-        shard.initialize(bucket_size_hint);
-    }
 }
 
 size_t Dictionary::hash(const std::string& term) const {
@@ -45,88 +42,85 @@ size_t Dictionary::hash(const std::string& term) const {
 }
 
 PostingList& Dictionary::get_or_create(const std::string& term) {
-    auto& shard = shards_[get_shard_index(term)];
-    const size_t bucket = get_bucket_index(term, shard.buckets.size());
-    
-    std::lock_guard<std::mutex> lock(shard.mutex_);
-    
+    const size_t bucket = hash(term);
+    std::lock_guard<std::mutex> lock(mutex_);
+
     // Search chain
-    Entry* curr = shard.buckets[bucket];
+    Entry* curr = buckets_[bucket];
     while (curr) {
         if (curr->term == term) {
             return curr->postings;
         }
         curr = curr->next;
     }
-    
+
     // Term not found - insert at back
     auto new_entry = std::make_unique<Entry>(term);
-    
-    if (!shard.buckets[bucket]) {
-        shard.buckets[bucket] = new_entry.get();
+
+    if (!buckets_[bucket]) {
+        // First entry in bucket
+        buckets_[bucket] = new_entry.get();
     } else {
-        curr = shard.buckets[bucket];
+        // Find end of chain and insert
+        curr = buckets_[bucket];
         while (curr->next) {
             curr = curr->next;
         }
         curr->next = new_entry.get();
     }
-    
+
     Entry* entry_ptr = new_entry.get();
-    shard.entries.push_back(std::move(new_entry));
-    shard.size++;
-    
+    entries_.push_back(std::move(new_entry));
+    size_++;
+
     return entry_ptr->postings;
 }
 
-size_t Dictionary::size() const {
-    size_t total = 0;
-    for (const auto& shard : shards_) {
-        total += shard.size.load(std::memory_order_relaxed);
-    }
-    return total;
-}
-
 bool Dictionary::contains(const std::string& term) const {
-    auto& shard = shards_[get_shard_index(term)];
-    const size_t bucket = get_bucket_index(term, shard.buckets.size());
-    
-    std::lock_guard<std::mutex> lock(shard.mutex_);
-    Entry* curr = shard.buckets[bucket];
+    const size_t bucket = hash(term);
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    Entry* curr = buckets_[bucket];
     while (curr) {
-        if (curr->term == term) return true;
+        if (curr->term == term) {
+            return true;
+        }
         curr = curr->next;
     }
     return false;
 }
 
+size_t Dictionary::size() const {
+    return size_;
+}
+
 void Dictionary::clear_postings() {
-    for (auto& shard : shards_) {
-        std::lock_guard<std::mutex> lock(shard.mutex_);
-        for (auto& entry : shard.entries) {
-            entry->postings.clear();
-        }
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& entry : entries_) {
+        entry->postings.clear();
     }
 }
 
 void Dictionary::iterate_terms(const std::function<void(const std::string&, const PostingList&)>& fn) const {
-    // Collect and sort terms from all shards
-    std::vector<std::pair<std::string, const PostingList*>> all_terms;
-    all_terms.reserve(size());
-    
-    for (const auto& shard : shards_) {
-        std::lock_guard<std::mutex> lock(shard.mutex_);
-        for (const auto& entry : shard.entries) {
-            if (!entry->postings.empty()) {
-                all_terms.emplace_back(entry->term, &entry->postings);
-            }
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Create sorted list of terms
+    std::vector<const Entry*> sorted_entries;
+    sorted_entries.reserve(entries_.size());
+
+    for (const auto& entry : entries_) {
+        if (!entry->postings.empty()) {
+            sorted_entries.push_back(entry.get());
         }
     }
-    
-    // Sort and process
-    std::sort(all_terms.begin(), all_terms.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-    for (const auto& [term, postings] : all_terms) {
-        fn(term, *postings);
+
+    // Sort by term
+    std::sort(
+        sorted_entries.begin(), sorted_entries.end(), [](const Entry* a, const Entry* b) { return a->term < b->term; });
+
+    // Call function for each term
+    for (const Entry* entry : sorted_entries) {
+        fn(entry->term, entry->postings);
     }
 }
 

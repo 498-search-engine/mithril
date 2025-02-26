@@ -17,9 +17,12 @@ public:
     size_t size_bytes() const;
     void clear();
     bool empty() const;
+    static constexpr uint32_t SYNC_INTERVAL = 1024;
+    const std::vector<SyncPoint>& sync_points() const { return sync_points_; }
 
 private:
     std::vector<Posting> postings_;
+    std::vector<SyncPoint> sync_points_;
     size_t size_bytes_{0};
 };
 
@@ -50,22 +53,21 @@ private:
 
     size_t hash(const std::string& term) const;
 
-    static constexpr size_t NUM_SHARDS = 8;
-    
-    struct Shard {
-        std::vector<Entry*> buckets;
-        std::vector<std::unique_ptr<Entry>> entries;
-        mutable std::mutex mutex_;
-        std::atomic<size_t> size{0};
-        Shard() = default;
-        void initialize(size_t bucket_size) {
-            buckets.resize(bucket_size/NUM_SHARDS);
-        }
-    };
-    
-    std::array<Shard, NUM_SHARDS> shards_;
-    size_t get_shard_index(const std::string& term) const { return (hash(term) >> 56) & (NUM_SHARDS - 1); }
-    size_t get_bucket_index(const std::string& term, size_t shard_size) const { return hash(term) % shard_size; }
+    // keeping in if needed later, currently cache locality curr version is better
+    // static constexpr size_t NUM_SHARDS = 8;
+    // struct Shard {
+    //     std::vector<Entry*> buckets;
+    //     std::vector<std::unique_ptr<Entry>> entries;
+    //     mutable std::mutex mutex_;
+    //     std::atomic<size_t> size{0};
+    //     Shard() = default;
+    //     void initialize(size_t bucket_size) {
+    //         buckets.resize(bucket_size/NUM_SHARDS);
+    //     }
+    // };
+    // std::array<Shard, NUM_SHARDS> shards_;
+    // size_t get_shard_index(const std::string& term) const { return (hash(term) >> 56) & (NUM_SHARDS - 1); }
+    // size_t get_bucket_index(const std::string& term, size_t shard_size) const { return hash(term) % shard_size; }
 
     std::vector<Entry*> buckets_;
     std::vector<std::unique_ptr<Entry>> entries_;

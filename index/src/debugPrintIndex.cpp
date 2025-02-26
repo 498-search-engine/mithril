@@ -56,6 +56,14 @@ void print_index(const std::string& path) {
         uint32_t postings_size;
         in.read(reinterpret_cast<char*>(&postings_size), sizeof(postings_size));
 
+        // Read and skip sync points
+        uint32_t sync_points_size;
+        in.read(reinterpret_cast<char*>(&sync_points_size), sizeof(sync_points_size));
+        if (sync_points_size > 0) {
+            // Skip over sync points data
+            in.seekg(sync_points_size * sizeof(SyncPoint), std::ios::cur);
+        }
+
         // Read compressed postings
         std::cout << term << " -> ";
         uint32_t last_doc_id = 0;
