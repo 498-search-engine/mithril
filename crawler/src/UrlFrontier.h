@@ -67,6 +67,15 @@ public:
      */
     void GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne = false);
 
+    /**
+     * @brief Gets at least one URL from the frontier, up to max, filtered.
+     *
+     * @param sync ThreadSync to cancel/pause waiting operations
+     * @param max Max URLs to get
+     * @param out Output vector to put URLs into
+     * @param f Filter predicate for URLs
+     * @param atLeastOne Wait for at least one URL
+     */
     template<typename Filter>
     void
     GetURLsFiltered(ThreadSync& sync, size_t max, std::vector<std::string>& out, Filter f, bool atLeastOne = false) {
