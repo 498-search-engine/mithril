@@ -1,6 +1,7 @@
 #include "RequestManager.h"
 
 #include "DocumentQueue.h"
+#include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
@@ -17,7 +18,7 @@
 namespace mithril {
 
 RequestManager::RequestManager(size_t targetConcurrentReqs,
-                               long requestTimeout,
+                               unsigned long requestTimeout,
                                UrlFrontier* frontier,
                                DocumentQueue* docQueue)
     : targetConcurrentReqs_(targetConcurrentReqs),
@@ -25,11 +26,12 @@ RequestManager::RequestManager(size_t targetConcurrentReqs,
       frontier_(frontier),
       docQueue_(docQueue) {}
 
-void RequestManager::Run() {
+void RequestManager::Run(ThreadSync& sync) {
     std::vector<std::string> urls;
     urls.reserve(targetConcurrentReqs_);
 
-    while (!stopped_.load(std::memory_order_acquire)) {
+    while (!sync.ShouldShutdown()) {
+        sync.MaybePause();
         // Get more URLs to execute, up to targetSize_ concurrently executing
         if (requestExecutor_.InFlightRequests() < targetConcurrentReqs_) {
             // If we have no in-flight requests to process, wait for at least
@@ -38,7 +40,14 @@ void RequestManager::Run() {
 
             size_t toAdd = targetConcurrentReqs_ - requestExecutor_.InFlightRequests();
             urls.clear();
-            frontier_->GetURLs(toAdd, urls, wantAtLeastOne);
+            frontier_->GetURLs(sync, toAdd, urls, wantAtLeastOne);
+            if (sync.ShouldSynchronize()) {
+                continue;
+            }
+
+            if (urls.empty() && requestExecutor_.InFlightRequests() == 0) {
+                continue;
+            }
 
             for (const auto& url : urls) {
                 if (auto parsed = http::ParseURL(url)) {

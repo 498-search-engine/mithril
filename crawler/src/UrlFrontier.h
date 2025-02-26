@@ -1,15 +1,17 @@
 #ifndef CRAWLER_URLFRONTIER_H
 #define CRAWLER_URLFRONTIER_H
 
+#include "PriorityURLQueue.h"
 #include "Robots.h"
-#include "UrlSet.h"
+#include "ThreadSync.h"
+#include "core/cv.h"
+#include "core/mutex.h"
 #include "http/URL.h"
+#include "ranking/CrawlerRanker.h"
 
-#include <condition_variable>
 #include <cstddef>
-#include <mutex>
-#include <queue>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -17,29 +19,52 @@ namespace mithril {
 
 class UrlFrontier {
 public:
-    UrlFrontier() = default;
+    UrlFrontier(const std::string& frontierDirectory);
 
     /**
-     * @brief Processes in-flight and pending robots.txt requests for URLs
-     * waiting to get into the frontier.
+     * @brief Initializes notifications on cv instances for ThreadSync.
+     *
+     * @param sync ThreadSync instance to be used for operations.
      */
-    void ProcessRobotsRequests();
+    void InitSync(ThreadSync& sync);
 
     /**
-     * @brief Processes freshly-added URLs from PushURL and PushURLs,
-     * determining whether each URL is valid, has been seen before, and is
-     * allowed by robots.txt before pushing the URL onto the frontier.
+     * @brief Returns the total size of the frontier, i.e. the number of
+     * previously visited documents plus the number of planned-to-visit
+     * documents.
      */
-    void ProcessFreshURLs();
+    size_t TotalSize() const;
+
+    /**
+     * @brief Returns whether the frontier is empty in terms of fresh documents
+     * to process.
+     */
+    bool Empty() const;
+
+    /**
+     * @brief Runs the robots requests processing thread until an indicated
+     * shutdown.
+     *
+     * @param sync ThreadSync to communicate shutdown.
+     */
+    void RobotsRequestsThread(ThreadSync& sync);
+
+    /**
+     * @brief Runs the fresh url processing thread until an indicated shutdown.
+     *
+     * @param sync ThreadSync to communicate shutdown.
+     */
+    void FreshURLsThread(ThreadSync& sync);
 
     /**
      * @brief Gets at least one URL from the frontier, up to max
      *
+     * @param sync ThreadSync to cancel/pause waiting operations
      * @param max Max URLs to get
      * @param out Output vector to put URLs into
      * @param atLeastOne Wait for at least one URL
      */
-    void GetURLs(size_t max, std::vector<std::string>& out, bool atLeastOne = false);
+    void GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne = false);
 
     /**
      * @brief Pushes a url onto the frontier (if not already visited).
@@ -55,31 +80,37 @@ public:
      */
     void PushURLs(std::vector<std::string>& urls);
 
+    void DumpPendingURLs(std::vector<std::string>& urls);
+
 private:
     /**
-     * @brief Pushes the URL, which has been approved to enter the frontier,
-     * onto the actual frontier structure. Requires any necessary locks to be
-     * held by the caller.
-     *
-     * @param url URL to push into the frontier.
+     * @brief Processes in-flight and pending robots.txt requests for URLs
+     * waiting to get into the frontier.
      */
-    void PushAcceptedURL(std::string url);
+    void ProcessRobotsRequests(ThreadSync& sync);
 
-    mutable std::mutex urlQueueMu_;     // Lock for urls_
-    mutable std::mutex seenMu_;         // Lock for seen_
-    mutable std::mutex robotsCacheMu_;  // Lock for robotRulesCache_
-    mutable std::mutex waitingUrlsMu_;  // Lock for urlsWaitingForRobots_
-    mutable std::mutex freshURLsMu_;    // Lock for freshURLs_
+    /**
+     * @brief Processes freshly-added URLs from PushURL and PushURLs,
+     * determining whether each URL is valid, has been seen before, and is
+     * allowed by robots.txt before pushing the URL onto the frontier.
+     */
+    void ProcessFreshURLs(ThreadSync& sync);
 
-    std::condition_variable urlQueueCv_;   // Notifies when URL is available in queue
-    std::condition_variable robotsCv_;     // Notifies when new request is available for processing
-    std::condition_variable freshURLsCv_;  // Notifies when a fresh URL is available for processing
+    struct Scorer {
+        // TODO: accept string_view instead?
+        static unsigned int Score(std::string_view url) { return ranking::GetUrlRank(std::string{url}); }
+    };
 
-    // Queue of validated and allowed URLs for us to crawl
-    std::queue<std::string> urls_;
-    // Set of visited/currently-processing URLs, including those we chose not to
-    // crawl
-    UrlSet seen_;
+    mutable core::Mutex urlQueueMu_;     // Lock for urls_
+    mutable core::Mutex robotsCacheMu_;  // Lock for robotRulesCache_
+    mutable core::Mutex waitingUrlsMu_;  // Lock for urlsWaitingForRobots_
+    mutable core::Mutex freshURLsMu_;    // Lock for freshURLs_
+
+    core::cv urlQueueCv_;   // Notifies when URL is available in queue
+    core::cv robotsCv_;     // Notifies when new request is available for processing
+    core::cv freshURLsCv_;  // Notifies when a fresh URL is available for processing
+
+    PriorityURLQueue<Scorer> urlQueue_;
 
     // Cache for robots.txt rulesets
     RobotRulesCache robotRulesCache_;

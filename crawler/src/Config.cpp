@@ -59,6 +59,8 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
             }
         } else if (key == "request_timeout") {
             config.request_timeout = std::stoul(std::string(value));
+        } else if (key == "data_directory") {
+            config.data_directory = value;
         }
     }
 

@@ -12,6 +12,8 @@ struct CrawlerConfig {
     size_t concurrent_requests = 10;
     unsigned long request_timeout = 10;  // seconds
     std::vector<std::string> seed_urls;
+
+    std::string data_directory = "data";
 };
 
 CrawlerConfig LoadConfigFromFile(const std::string& path);
