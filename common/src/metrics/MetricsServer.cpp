@@ -26,6 +26,13 @@ MetricsServer::MetricsServer(uint16_t port) : port_(port) {
         throw std::runtime_error("failed to create metrics socket");
     }
 
+    int reuse = 1;
+    if (setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1) {
+        close(sock_);
+        spdlog::error("failed to set SO_REUSEADDR on metrics socket: {}", strerror(errno));
+        throw std::runtime_error("failed to configure metrics socket");
+    }
+
     struct sockaddr_in bindAddr {};
     bindAddr.sin_family = AF_INET;
     bindAddr.sin_port = htons(port);
