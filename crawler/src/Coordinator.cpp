@@ -60,11 +60,7 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     requestManager_ = core::UniquePtr<RequestManager>(new RequestManager{frontier_.Get(), docQueue_.Get(), config});
 
     metricsServer_ = core::UniquePtr<metrics::MetricsServer>(new metrics::MetricsServer{config.metrics_port});
-    metricsServer_->Register(&DocumentsProcessedMetric);
-    metricsServer_->Register(&CrawlResponseCodesMetric);
-    metricsServer_->Register(&RobotsResponseCodesMetric);
-    metricsServer_->Register(&InFlightCrawlRequestsMetric);
-    metricsServer_->Register(&InFlightRobotsRequestsMetric);
+    RegisterCrawlerMetrics(*metricsServer_);
 
     RecoverState();
 }

@@ -2,6 +2,7 @@
 #define CRAWLER_CRAWLERMETRICS_H
 
 #include "metrics/Metrics.h"
+#include "metrics/MetricsServer.h"
 
 namespace mithril {
 
@@ -37,6 +38,20 @@ inline auto InFlightRobotsRequestsMetric = Metric{
     "Number of actively-executing robots.txt requests",
 };
 
+inline auto DocumentQueueSizeMetric = Metric{
+    "crawler_document_queue_size",
+    "gauge",
+    "Number of documents in document queue waiting to be processed by a worker",
+};
+
+inline auto RegisterCrawlerMetrics(MetricsServer& server) {
+    server.Register(&DocumentsProcessedMetric);
+    server.Register(&CrawlResponseCodesMetric);
+    server.Register(&RobotsResponseCodesMetric);
+    server.Register(&InFlightCrawlRequestsMetric);
+    server.Register(&InFlightRobotsRequestsMetric);
+    server.Register(&DocumentQueueSizeMetric);
+}
 
 }  // namespace mithril
 
