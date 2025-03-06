@@ -2,6 +2,7 @@
 
 #include "Clock.h"
 #include "Config.h"
+#include "CrawlerMetrics.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "core/memory.h"
@@ -119,6 +120,9 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
             break;
         }
     }
+
+    MiddleQueueActiveQueueCount.Get().store(ActiveQueueCount());
+    MiddleQueueTotalQueuedURLs.Get().store(totalQueuedURLs_);
 }
 
 size_t MiddleQueue::ActiveQueueCount() const {

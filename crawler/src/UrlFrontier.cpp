@@ -1,5 +1,6 @@
 #include "UrlFrontier.h"
 
+#include "CrawlerMetrics.h"
 #include "Robots.h"
 #include "ThreadSync.h"
 #include "core/locks.h"
@@ -72,6 +73,16 @@ void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
 }
 
 void UrlFrontier::FreshURLsThread(ThreadSync& sync) {
+    {
+        core::LockGuard lock(urlQueueMu_);
+        FrontierSize.Get().store(urlQueue_.TotalSize());
+        FrontierQueueSize.Get().store(urlQueue_.Size());
+    }
+    {
+        core::LockGuard lock(freshURLsMu_);
+        FrontierFreshURLs.Get().store(freshURLs_.size());
+    }
+
     while (true) {
         ProcessFreshURLs(sync);
         if (sync.ShouldShutdown()) {
@@ -123,8 +134,12 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
                 }
             }
         }
+        urlsWaitingForRobotsCount_ -= it->second.size();
         it = urlsWaitingForRobots_.erase(it);
     }
+
+    WaitingRobotsHosts.Get().store(urlsWaitingForRobots_.size());
+    WaitingRobotsURLs.Get().store(urlsWaitingForRobotsCount_);
 
     // Release the waitingUrlsMu_ mutex -- we have determined which URLs can go
     // onto the frontier immediately.
@@ -136,6 +151,8 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
             urlQueue_.PushURL(url);
         }
         urlQueueCv_.Broadcast();
+        FrontierSize.Get().store(urlQueue_.TotalSize());
+        FrontierQueueSize.Get().store(urlQueue_.Size());
     }
 }
 
@@ -146,6 +163,7 @@ void UrlFrontier::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 void UrlFrontier::PushURL(std::string u) {
     core::LockGuard lock(freshURLsMu_);
     freshURLs_.push_back(std::move(u));
+    FrontierFreshURLs.Get().store(freshURLs_.size());
     freshURLsCv_.Signal();
 }
 
@@ -154,6 +172,7 @@ void UrlFrontier::PushURLs(std::vector<std::string>& urls) {
     for (auto& url : urls) {
         freshURLs_.push_back(std::move(url));
     }
+    FrontierFreshURLs.Get().store(freshURLs_.size());
     freshURLsCv_.Broadcast();
 }
 
@@ -169,6 +188,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
 
         urls = std::move(freshURLs_);
         freshURLs_.clear();
+        FrontierFreshURLs.Get().store(0);
     }
 
     SPDLOG_TRACE("starting processing of {} fresh urls", urls.size());
@@ -259,6 +279,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
                         // Notify that a new request for a robots.txt page is available
                         robotsCv_.Signal();
                     }
+                    ++urlsWaitingForRobotsCount_;
                     break;
                 }
             case RobotsLookupResult::Allowed:
@@ -269,6 +290,8 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
                 break;
             }
         }
+        WaitingRobotsHosts.Get().store(urlsWaitingForRobots_.size());
+        WaitingRobotsURLs.Get().store(urlsWaitingForRobotsCount_);
     }
 
     if (pushURLs.empty()) {
@@ -282,6 +305,8 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
         for (auto* url : pushURLs) {
             urlQueue_.PushURL(url->url);
         }
+        FrontierSize.Get().store(urlQueue_.TotalSize());
+        FrontierQueueSize.Get().store(urlQueue_.Size());
     }
     urlQueueCv_.Broadcast();
 

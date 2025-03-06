@@ -180,6 +180,7 @@ private:
     std::unordered_map<std::string, RobotCacheEntry> cache_;
     std::queue<http::CanonicalHost> queuedFetches_;
     http::RequestExecutor executor_;
+    size_t waitingRobotsURLsCount_{0};
 };
 
 }  // namespace mithril
