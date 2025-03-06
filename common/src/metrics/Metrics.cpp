@@ -33,6 +33,36 @@ void RenderPrometheusString(const std::string& s, std::string& out) {
     out.push_back('"');
 }
 
+void RenderMetricValue(const std::string& name, const Labels& labels, double val, std::string& out) {
+    // metric_name [
+    //   "{" label_name "=" `"` label_value `"` { "," label_name "=" `"` label_value `"` } [ "," ] "}"
+    // ] value [ timestamp ]
+    // http_requests_total{method="post",code="200"} 1027
+    out.append(name);
+    if (!labels.empty()) {
+        out.push_back('{');
+        size_t i = 0;
+        for (const auto& label : labels) {
+            out.append(label.first);
+            out.push_back('=');
+            RenderPrometheusString(label.second, out);
+            if (i != labels.size() - 1) {
+                out.push_back(',');
+            }
+        }
+        out.push_back('}');
+    }
+    out.push_back(' ');
+
+    if (val - std::floor(val) <= 0.0001) {
+        out.append(std::to_string(static_cast<int>(val)));
+    } else {
+        out.append(std::to_string(val));
+    }
+
+    out.push_back('\n');
+}
+
 }  // namespace
 
 Metric::Metric(std::string name, std::string type, std::string help)
@@ -57,47 +87,27 @@ void Metric::Render(std::string& out) const {
         out.push_back('\n');
     }
 
-    if (rawMetrics_.empty()) {
+    if (rawMetrics_.empty() && emptyLabelMetric_.Get() == nullptr) {
         // Default of 0
         out.append(def_.name);
         out.push_back(' ');
         out.push_back('0');
         out.push_back('\n');
-    }
-
-    for (const auto& entry : rawMetrics_) {
-        auto v = entry.second->load();
-        // metric_name [
-        //   "{" label_name "=" `"` label_value `"` { "," label_name "=" `"` label_value `"` } [ "," ] "}"
-        // ] value [ timestamp ]
-        // http_requests_total{method="post",code="200"} 1027
-        out.append(def_.name);
-        if (!entry.first.empty()) {
-            out.push_back('{');
-            size_t i = 0;
-            for (const auto& label : entry.first) {
-                out.append(label.first);
-                out.push_back('=');
-                RenderPrometheusString(label.second, out);
-                if (i != entry.first.size() - 1) {
-                    out.push_back(',');
-                }
-            }
-            out.push_back('}');
+    } else {
+        if (emptyLabelMetric_.Get() != nullptr) {
+            RenderMetricValue(def_.name, {}, emptyLabelMetric_->load(), out);
         }
-        out.push_back(' ');
-
-        if (v - std::floor(v) <= 0.0001) {
-            out.append(std::to_string(static_cast<int>(v)));
-        } else {
-            out.append(std::to_string(v));
+        for (const auto& entry : rawMetrics_) {
+            RenderMetricValue(def_.name, entry.first, entry.second->load(), out);
         }
-
-        out.push_back('\n');
     }
 }
 
 MetricValue& Metric::WithLabels(const Labels& labels) {
+    if (labels.empty()) {
+        return Get();
+    }
+
     core::LockGuard lock(mu_);
     auto it = rawMetrics_.find(labels);
     if (it != rawMetrics_.end()) {
@@ -110,7 +120,11 @@ MetricValue& Metric::WithLabels(const Labels& labels) {
 }
 
 MetricValue& Metric::Get() {
-    return WithLabels({});
+    core::LockGuard lock(mu_);
+    if (emptyLabelMetric_.Get() == nullptr) [[unlikely]] {
+        emptyLabelMetric_ = core::UniquePtr<MetricValue>(new MetricValue{});
+    }
+    return *emptyLabelMetric_;
 }
 
 }  // namespace mithril::metrics

@@ -33,6 +33,9 @@ inline bool operator==(const std::map<std::string, std::string>& lhs, const std:
 
 namespace mithril::metrics {
 
+constexpr const char* MetricTypeCounter = "counter";
+constexpr const char* MetricTypeGauge = "gauge";
+
 using Labels = std::map<std::string, std::string>;
 using Label = Labels::value_type;
 
@@ -57,6 +60,7 @@ private:
     mutable core::Mutex mu_;
 
     MetricDefinition def_;
+    core::UniquePtr<MetricValue> emptyLabelMetric_;
     std::unordered_map<Labels, core::UniquePtr<MetricValue>> rawMetrics_;
 };
 

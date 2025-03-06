@@ -10,79 +10,79 @@ using namespace metrics;
 
 inline auto DocumentsProcessedMetric = Metric{
     "crawler_documents_processed",
-    "counter",
+    MetricTypeCounter,
     "Number of documents processed by the crawler",
 };
 
 inline auto CrawlResponseCodesMetric = Metric{
     "crawler_crawl_response_codes",
-    "counter",
+    MetricTypeCounter,
     "Number of crawl responses with a HTTP status code",
 };
 
 inline auto RobotsResponseCodesMetric = Metric{
     "crawler_robots_response_codes",
-    "counter",
+    MetricTypeCounter,
     "Number of robots.txt responses with a HTTP status code",
 };
 
 inline auto InFlightCrawlRequestsMetric = Metric{
     "crawler_in_flight_crawl_requests",
-    "gauge",
+    MetricTypeGauge,
     "Number of actively-executing crawl requests",
 };
 
 inline auto InFlightRobotsRequestsMetric = Metric{
     "crawler_in_flight_robots_requests",
-    "gauge",
+    MetricTypeGauge,
     "Number of actively-executing robots.txt requests",
 };
 
 inline auto WaitingRobotsHosts = Metric{
     "crawler_waiting_robots_hosts",
-    "gauge",
+    MetricTypeGauge,
     "Number of hosts waiting for robots.txt to be resolved",
 };
 
 inline auto WaitingRobotsURLs = Metric{
     "crawler_waiting_robots_urls",
-    "gauge",
+    MetricTypeGauge,
     "Number of URLs waiting for robots.txt to be resolved for their hosts",
 };
 
 inline auto DocumentQueueSizeMetric = Metric{
     "crawler_document_queue_size",
-    "gauge",
+    MetricTypeGauge,
     "Number of documents in document queue waiting to be processed by a worker",
 };
 
 inline auto MiddleQueueActiveQueueCount = Metric{
     "crawler_middle_queue_active_queue_count",
-    "gauge",
+    MetricTypeGauge,
     "Number of active, in-use queues within the middle queue",
 };
 
 inline auto MiddleQueueTotalQueuedURLs = Metric{
     "crawler_middle_queue_total_queued_urls",
-    "gauge",
+    MetricTypeGauge,
     "Number of queued URLs across all queues in the middle queue",
 };
 
 inline auto FrontierSize = Metric{
     "crawler_frontier_size",
-    "gauge",
+    MetricTypeGauge,
     "Number of URLs on the frontier, crawled or not yet crawled",
 };
 
 inline auto FrontierQueueSize = Metric{
     "crawler_frontier_queue_size",
-    "gauge",
+    MetricTypeGauge,
     "Number of URLs on the frontier yet to be crawled",
 };
 
 inline auto FrontierFreshURLs = Metric{
     "crawler_frontier_fresh_urls",
-    "gauge",
+    MetricTypeGauge,
     "Number of fresh URLs waiting to be pushed onto the frontier",
 };
 
