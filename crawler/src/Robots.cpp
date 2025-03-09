@@ -389,7 +389,7 @@ void RobotRulesCache::ProcessPendingRequests() {
         queuedFetches_.pop();
     }
 
-    InFlightRobotsRequestsMetric.Get().Set(executor_.InFlightRequests());
+    InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
 
     if (executor_.InFlightRequests() == 0) {
         return;

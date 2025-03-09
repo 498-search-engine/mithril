@@ -114,7 +114,7 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
 }
 
 void Worker::ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header) {
-    DocumentsProcessedMetric.Get().Inc();
+    DocumentsProcessedMetric.Inc();
     CrawlResponseCodesMetric
         .WithLabels({
             {"status", std::to_string(header.status)}

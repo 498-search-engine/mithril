@@ -75,12 +75,12 @@ void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
 void UrlFrontier::FreshURLsThread(ThreadSync& sync) {
     {
         core::LockGuard lock(urlQueueMu_);
-        FrontierSize.Get().store(urlQueue_.TotalSize());
-        FrontierQueueSize.Get().store(urlQueue_.Size());
+        FrontierSize.Set(urlQueue_.TotalSize());
+        FrontierQueueSize.Set(urlQueue_.Size());
     }
     {
         core::LockGuard lock(freshURLsMu_);
-        FrontierFreshURLs.Get().store(freshURLs_.size());
+        FrontierFreshURLs.Set(freshURLs_.size());
     }
 
     while (true) {
@@ -138,8 +138,8 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
         it = urlsWaitingForRobots_.erase(it);
     }
 
-    WaitingRobotsHosts.Get().store(urlsWaitingForRobots_.size());
-    WaitingRobotsURLs.Get().store(urlsWaitingForRobotsCount_);
+    WaitingRobotsHosts.Set(urlsWaitingForRobots_.size());
+    WaitingRobotsURLs.Set(urlsWaitingForRobotsCount_);
 
     // Release the waitingUrlsMu_ mutex -- we have determined which URLs can go
     // onto the frontier immediately.
@@ -151,8 +151,8 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
             urlQueue_.PushURL(url);
         }
         urlQueueCv_.Broadcast();
-        FrontierSize.Get().store(urlQueue_.TotalSize());
-        FrontierQueueSize.Get().store(urlQueue_.Size());
+        FrontierSize.Set(urlQueue_.TotalSize());
+        FrontierQueueSize.Set(urlQueue_.Size());
     }
 }
 
@@ -163,7 +163,7 @@ void UrlFrontier::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 void UrlFrontier::PushURL(std::string u) {
     core::LockGuard lock(freshURLsMu_);
     freshURLs_.push_back(std::move(u));
-    FrontierFreshURLs.Get().store(freshURLs_.size());
+    FrontierFreshURLs.Set(freshURLs_.size());
     freshURLsCv_.Signal();
 }
 
@@ -172,7 +172,7 @@ void UrlFrontier::PushURLs(std::vector<std::string>& urls) {
     for (auto& url : urls) {
         freshURLs_.push_back(std::move(url));
     }
-    FrontierFreshURLs.Get().store(freshURLs_.size());
+    FrontierFreshURLs.Set(freshURLs_.size());
     freshURLsCv_.Broadcast();
 }
 
@@ -188,7 +188,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
 
         urls = std::move(freshURLs_);
         freshURLs_.clear();
-        FrontierFreshURLs.Get().store(0);
+        FrontierFreshURLs.Zero();
     }
 
     SPDLOG_TRACE("starting processing of {} fresh urls", urls.size());
@@ -290,8 +290,8 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
                 break;
             }
         }
-        WaitingRobotsHosts.Get().store(urlsWaitingForRobots_.size());
-        WaitingRobotsURLs.Get().store(urlsWaitingForRobotsCount_);
+        WaitingRobotsHosts.Set(urlsWaitingForRobots_.size());
+        WaitingRobotsURLs.Set(urlsWaitingForRobotsCount_);
     }
 
     if (pushURLs.empty()) {
@@ -305,8 +305,8 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
         for (auto* url : pushURLs) {
             urlQueue_.PushURL(url->url);
         }
-        FrontierSize.Get().store(urlQueue_.TotalSize());
-        FrontierQueueSize.Get().store(urlQueue_.Size());
+        FrontierSize.Set(urlQueue_.TotalSize());
+        FrontierQueueSize.Set(urlQueue_.Size());
     }
     urlQueueCv_.Broadcast();
 

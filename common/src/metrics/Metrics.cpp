@@ -161,4 +161,32 @@ MetricValue& Metric::Get() {
     return *emptyLabelMetric_;
 }
 
+void Metric::Inc() {
+    Get().Inc();
+}
+
+void Metric::Dec() {
+    Get().Dec();
+}
+
+void Metric::Add(double delta) {
+    Get().Add(delta);
+}
+
+void Metric::Sub(double delta) {
+    Get().Sub(delta);
+}
+
+void Metric::Set(double val) {
+    Get().Set(val);
+}
+
+void Metric::Set(size_t val) {
+    Get().Set(val);
+}
+
+void Metric::Zero() {
+    Get().Zero();
+}
+
 }  // namespace mithril::metrics

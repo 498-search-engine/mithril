@@ -22,7 +22,7 @@ void DocumentQueue::Push(http::CompleteResponse res) {
     core::LockGuard lock(mu_);
     readyResponses_.push(std::move(res));
     cv_.Signal();
-    DocumentQueueSizeMetric.Get().Set(readyResponses_.size());
+    DocumentQueueSizeMetric.Set(readyResponses_.size());
 }
 
 void DocumentQueue::PushAll(std::vector<http::CompleteResponse>& res) {
@@ -31,7 +31,7 @@ void DocumentQueue::PushAll(std::vector<http::CompleteResponse>& res) {
         readyResponses_.push(std::move(r));
     }
     cv_.Broadcast();
-    DocumentQueueSizeMetric.Get().Set(readyResponses_.size());
+    DocumentQueueSizeMetric.Set(readyResponses_.size());
 }
 
 std::optional<http::CompleteResponse> DocumentQueue::Pop() {
@@ -43,7 +43,7 @@ std::optional<http::CompleteResponse> DocumentQueue::Pop() {
 
     auto res = std::move(readyResponses_.front());
     readyResponses_.pop();
-    DocumentQueueSizeMetric.Get().Set(readyResponses_.size());
+    DocumentQueueSizeMetric.Set(readyResponses_.size());
 
     return {std::move(res)};
 }

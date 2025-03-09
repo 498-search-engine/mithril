@@ -69,10 +69,19 @@ public:
 
     void Render(std::string& out) const;
 
+    void Inc();
+    void Dec();
+    void Add(double delta);
+    void Sub(double delta);
+    void Set(double val);
+    void Set(size_t val);
+    void Zero();
+
     MetricValue& WithLabels(const Labels& labels);
-    MetricValue& Get();
 
 private:
+    MetricValue& Get();
+
     mutable core::Mutex mu_;
 
     MetricDefinition def_;
