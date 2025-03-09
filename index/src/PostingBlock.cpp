@@ -11,37 +11,32 @@
 namespace mithril {
 
 BlockReader::BlockReader(const std::string& path) {
-    fd = open(path.c_str(), O_RDONLY);
+    const int fd = open(path.c_str(), O_RDONLY);
     if (fd == -1) {
-        throw std::runtime_error("Failed to open block file: " + std::string(strerror(errno)));
+        throw std::runtime_error("Open failed: " + std::string(strerror(errno)));
     }
 
-    struct stat sb;
-    if (fstat(fd, &sb) == -1) {
-        close(fd);
-        throw std::runtime_error("Failed to stat block file: " + std::string(strerror(errno)));
+    // Get file size using lseek
+    const off_t file_size = lseek(fd, 0, SEEK_END);
+    lseek(fd, 0, SEEK_SET);
+    
+    // Bulk read entire file into buffer
+    file_buffer_.resize(file_size);
+    const ssize_t bytes_read = read(fd, file_buffer_.data(), file_size);
+    close(fd);
+    
+    if (bytes_read != file_size) {
+        throw std::runtime_error("Read failed: " + std::string(strerror(errno)));
     }
 
-    size = sb.st_size;
-    if (size < sizeof(uint32_t)) {
-        close(fd);
-        throw std::runtime_error("Block file too small");
-    }
-
-    data = static_cast<const char*>(mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0));
-    if (data == MAP_FAILED) {
-        close(fd);
-        throw std::runtime_error("Failed to mmap block file: " + std::string(strerror(errno)));
-    }
-
+    // Use buffer directly
+    data = file_buffer_.data();
+    size = file_buffer_.size();
     current = data;
 
-    uint32_t num_terms;
-    std::memcpy(&num_terms, current, sizeof(num_terms));
-    current += sizeof(num_terms);
-
-    madvise(const_cast<char*>(data), size, MADV_SEQUENTIAL);
-
+    // Skip initial term count (not needed for sequential read)
+    current += sizeof(uint32_t);
+    
     read_next();
 }
 
@@ -54,39 +49,35 @@ BlockReader::~BlockReader() {
     }
 }
 
-BlockReader::BlockReader(BlockReader&& other) noexcept
-    : current_term(std::move(other.current_term)),
+BlockReader::BlockReader(BlockReader&& other) noexcept 
+    : file_buffer_(std::move(other.file_buffer_)),
+      current_term(std::move(other.current_term)),
       current_postings(std::move(other.current_postings)),
-      has_next(other.has_next),
-      data(other.data),
-      size(other.size),
-      fd(other.fd),
-      current(other.current) {
+      current_positions(std::move(other.current_positions)),
+      data(file_buffer_.data()),
+      size(file_buffer_.size()),
+      current(other.current),
+      has_next(other.has_next) {
     other.data = nullptr;
-    other.fd = -1;
+    other.size = 0;
+    other.current = nullptr;
 }
 
 BlockReader& BlockReader::operator=(BlockReader&& other) noexcept {
     if (this != &other) {
-        // Clean up existing resources
-        if (data != MAP_FAILED && data != nullptr) {
-            munmap(const_cast<char*>(data), size);
-        }
-        if (fd != -1) {
-            close(fd);
-        }
-
-        // Move data
+        file_buffer_ = std::move(other.file_buffer_);  // Move buffer first
+        data = file_buffer_.data();  // Update pointers after buffer is moved
+        size = file_buffer_.size();
+        
         current_term = std::move(other.current_term);
         current_postings = std::move(other.current_postings);
-        has_next = other.has_next;
-        data = other.data;
-        size = other.size;
-        fd = other.fd;
+        current_positions = std::move(other.current_positions);
         current = other.current;
+        has_next = other.has_next;
 
         other.data = nullptr;
-        other.fd = -1;
+        other.size = 0;
+        other.current = nullptr;
     }
     return *this;
 }
@@ -157,13 +148,13 @@ void BlockReader::read_next() {
         current += position_sync_points_size * sizeof(PositionSyncPoint);
     }
 
-    // Read VByte encoded positions
+    // (opt?) Read VByte encoded positions
     current_positions.all_positions.resize(positions_size);
-    if (positions_size > 0) {
-        for (size_t i = 0; i < positions_size; i++) {
-            current_positions.all_positions[i] = VByteCodec::decode_from_memory(current);
-        }
+    const char* pos_ptr = current;
+    for (size_t i = 0; i < positions_size; ++i) {
+        current_positions.all_positions[i] = VByteCodec::decode_from_memory(pos_ptr);
     }
+    current = pos_ptr;  // Bulk advance pointer after all decodes
 }
 
 Posting* BlockReader::find_posting(uint32_t target_doc_id) {

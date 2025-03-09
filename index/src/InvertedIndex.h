@@ -34,10 +34,17 @@ private:
     // Output config
     const std::string output_dir_;
     static constexpr size_t MAX_BLOCK_SIZE = 512 * 1024 * 1024;
+    static constexpr size_t MERGE_FACTOR = 16;
 
     // core methods
     std::future<void> flush_block();
     void merge_blocks();
+    std::string merge_block_subset(const std::vector<std::string>& block_paths,
+                                   size_t start_idx,
+                                   size_t end_idx,
+                                   bool is_final_output = false);
+    void merge_blocks_tiered();
+
     void save_document_map();
     std::string block_path(int block_num) const;
     void process_document(const Document& doc);

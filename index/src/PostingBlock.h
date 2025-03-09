@@ -51,6 +51,7 @@ public:
     BlockReader& operator=(const BlockReader&) = delete;
 
 private:
+    std::vector<char> file_buffer_;
     const char* data{nullptr};
     size_t size{0};
     int fd{-1};
