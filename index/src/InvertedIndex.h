@@ -95,37 +95,42 @@ public:
         uint32_t result = 0;
         uint32_t shift = 0;
         uint8_t byte;
-        
+
         do {
             byte = *reinterpret_cast<const uint8_t*>(buffer++);
             result |= (byte & 127) << shift;
             shift += 7;
         } while (byte & 128);
-        
+
         return result;
     }
-    
+
     static void encode_to_memory(uint32_t value, char*& buffer, size_t& remaining_space) {
         while (value >= 128) {
-            if (remaining_space < 1) throw std::runtime_error("Buffer overflow in VByte encoding");
+            if (remaining_space < 1)
+                throw std::runtime_error("Buffer overflow in VByte encoding");
             *buffer++ = (value & 127) | 128;
             remaining_space--;
             value >>= 7;
         }
-        
-        if (remaining_space < 1) throw std::runtime_error("Buffer overflow in VByte encoding");
+
+        if (remaining_space < 1)
+            throw std::runtime_error("Buffer overflow in VByte encoding");
         *buffer++ = value;
         remaining_space--;
     }
-    
+
     static size_t max_bytes_needed(uint32_t value) {
-        if (value < 128) return 1;
-        if (value < 16384) return 2;
-        if (value < 2097152) return 3;
-        if (value < 268435456) return 4;
+        if (value < 128)
+            return 1;
+        if (value < 16384)
+            return 2;
+        if (value < 2097152)
+            return 3;
+        if (value < 268435456)
+            return 4;
         return 5;
     }
-
 };
 
 }  // namespace mithril

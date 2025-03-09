@@ -115,26 +115,50 @@ void IndexBuilder::process_document(const Document& doc) {
     auto task = [this, doc]() {
         std::unordered_map<std::string, std::vector<uint32_t>> term_positions;
         uint32_t position = 0;
-        // Process title with position tracking
+
+        // Process URL with URL field type
+        std::string url_copy = doc.url;
+        // Replace common delimiters with spaces for tokenization
+        std::replace(url_copy.begin(), url_copy.end(), '/', ' ');
+        std::replace(url_copy.begin(), url_copy.end(), '.', ' ');
+        std::replace(url_copy.begin(), url_copy.end(), '-', ' ');
+        std::replace(url_copy.begin(), url_copy.end(), '_', ' ');
+        std::replace(url_copy.begin(), url_copy.end(), '?', ' ');
+        std::replace(url_copy.begin(), url_copy.end(), '&', ' ');
+        std::replace(url_copy.begin(), url_copy.end(), '=', ' ');
+
+        std::istringstream url_stream(url_copy);
+        std::string url_part;
+        while (url_stream >> url_part) {
+            std::string normalized = TokenNormalizer::normalize(url_part, FieldType::URL);
+            if (!normalized.empty()) {
+                term_positions[normalized].push_back(position++);
+            }
+        }
+
+        // Process title words with TITLE field type
         for (const auto& word : doc.title) {
-            std::string normalized = TokenNormalizer::normalize(word);
+            std::string normalized = TokenNormalizer::normalize(word, FieldType::TITLE);
             if (!normalized.empty()) {
                 term_positions[normalized].push_back(position++);
             }
         }
-        // Process body with continued position counting
+
+        // Process body words with default BODY field type
         for (const auto& word : doc.words) {
-            std::string normalized = TokenNormalizer::normalize(word);
+            std::string normalized = TokenNormalizer::normalize(word, FieldType::BODY);
             if (!normalized.empty()) {
                 term_positions[normalized].push_back(position++);
             }
         }
+
         // Assign into document map
         {
             std::unique_lock<std::mutex> lock(document_mutex_);
             url_to_id_[doc.url] = doc.id;
             documents_.push_back(doc);
         }
+
         // Add terms to the dictionary with positions
         {
             std::lock_guard<std::mutex> lock(block_mutex_);
@@ -146,6 +170,7 @@ void IndexBuilder::process_document(const Document& doc) {
         }
     };
 
+    // Queue the task
     {
         std::unique_lock<std::mutex> lock(queue_mutex_);
         tasks_.emplace(task);
@@ -285,10 +310,10 @@ std::future<void> IndexBuilder::flush_block() {
             uint32_t term_len = term.size();
             out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
             out.write(term.c_str(), term_len);
-            
+
             uint32_t postings_size = postings.size();
             out.write(reinterpret_cast<const char*>(&postings_size), sizeof(postings_size));
-            
+
             // Calculate and write sync points
             std::vector<SyncPoint> sync_points;
             for (uint32_t i = 0; i < postings.size(); i += PostingList::SYNC_INTERVAL) {
@@ -305,7 +330,7 @@ std::future<void> IndexBuilder::flush_block() {
             // Write the actual postings
             out.write(reinterpret_cast<const char*>(postings.data()), postings_size * sizeof(Posting));
 
-            // Write positions count and data 
+            // Write positions count and data
             uint32_t positions_size = positions.size();
             out.write(reinterpret_cast<const char*>(&positions_size), sizeof(positions_size));
             if (positions_size > 0) {
@@ -322,7 +347,7 @@ std::future<void> IndexBuilder::flush_block() {
                 uint32_t sync_points_size = sync_points.size();
                 out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
                 if (sync_points_size > 0) {
-                    out.write(reinterpret_cast<const char*>(sync_points.data()), 
+                    out.write(reinterpret_cast<const char*>(sync_points.data()),
                               sync_points_size * sizeof(PositionSyncPoint));
                 }
                 // Write VByte encoded positions
@@ -385,11 +410,9 @@ void IndexBuilder::merge_blocks() {
             }
 
             // Append positions from the current block
-            merged_positions.all_positions.insert(
-                merged_positions.all_positions.end(),
-                reader->current_positions.all_positions.begin(),
-                reader->current_positions.all_positions.end()
-            );
+            merged_positions.all_positions.insert(merged_positions.all_positions.end(),
+                                                  reader->current_positions.all_positions.begin(),
+                                                  reader->current_positions.all_positions.end());
 
             // Read the next term from the block reader.
             try {
@@ -410,7 +433,7 @@ void IndexBuilder::merge_blocks() {
         uint32_t term_len = current_term.size();
         final_out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
         final_out.write(current_term.c_str(), term_len);
-        
+
         // Write postings count and sync points
         uint32_t postings_size = merged_postings.size();
         final_out.write(reinterpret_cast<const char*>(&postings_size), sizeof(postings_size));
@@ -439,12 +462,12 @@ void IndexBuilder::merge_blocks() {
         // For positions, write count, sync points, and VByte encoded positions
         uint32_t positions_size = merged_positions.all_positions.size();
         final_out.write(reinterpret_cast<const char*>(&positions_size), sizeof(positions_size));
-        
+
         if (positions_size > 0) {
             // Calculate and write position sync points
             std::vector<PositionSyncPoint> sync_points;
             uint32_t absolute_pos = 0;
-            
+
             for (size_t i = 0; i < merged_positions.all_positions.size(); i++) {
                 // Update absolute position with each delta
                 absolute_pos += merged_positions.all_positions[i];
@@ -453,19 +476,20 @@ void IndexBuilder::merge_blocks() {
                     sync_points.push_back({static_cast<uint32_t>(i), absolute_pos});
                 }
             }
-            
+
             uint32_t sync_points_size = sync_points.size();
             final_out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
             if (sync_points_size > 0) {
-                final_out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(PositionSyncPoint));
+                final_out.write(reinterpret_cast<const char*>(sync_points.data()),
+                                sync_points_size * sizeof(PositionSyncPoint));
             }
-            
+
             // Write each delta-encoded position using VByte
             for (uint32_t delta : merged_positions.all_positions) {
                 VByteCodec::encode(delta, final_out);
             }
         }
-        
+
         total_terms++;
     }
 

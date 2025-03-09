@@ -27,6 +27,7 @@ public:
     const std::vector<SyncPoint>& sync_points() const { return sync_points_; }
 
     PositionsStore positions_store_;
+
 private:
     std::vector<Posting> postings_;
     size_t size_bytes_{0};

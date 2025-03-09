@@ -18,8 +18,8 @@ struct SyncPoint {
 };
 
 struct PositionSyncPoint {
-    uint32_t pos_offset;   // Offset in the postns array
-    uint32_t absolute_pos; // Reconstructed absolute position
+    uint32_t pos_offset;    // Offset in the postns array
+    uint32_t absolute_pos;  // Reconstructed absolute position
 };
 
 struct PositionsStore {
