@@ -302,14 +302,34 @@ std::future<void> IndexBuilder::flush_block() {
             if (sync_points_size > 0) {
                 out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(SyncPoint));
             }
-
             // Write the actual postings
             out.write(reinterpret_cast<const char*>(postings.data()), postings_size * sizeof(Posting));
+
             // Write positions count and data 
             uint32_t positions_size = positions.size();
             out.write(reinterpret_cast<const char*>(&positions_size), sizeof(positions_size));
-            if (positions_size > 0)
-                out.write(reinterpret_cast<const char*>(positions.data()), positions_size * sizeof(uint32_t));
+            if (positions_size > 0) {
+                // For sync points, we need to store both position offsets and absolute positions
+                std::vector<PositionSyncPoint> sync_points;
+                uint32_t prev_pos = 0;
+                // Compute and write sync points
+                for (size_t i = 0; i < positions.size(); i++) {
+                    if (i % PostingList::POSITION_SYNC_INTERVAL == 0) {
+                        sync_points.push_back({static_cast<uint32_t>(i), positions[i]});
+                    }
+                }
+                // Write sync points count and data
+                uint32_t sync_points_size = sync_points.size();
+                out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
+                if (sync_points_size > 0) {
+                    out.write(reinterpret_cast<const char*>(sync_points.data()), 
+                              sync_points_size * sizeof(PositionSyncPoint));
+                }
+                // Write VByte encoded positions
+                for (size_t i = 0; i < positions.size(); i++) {
+                    VByteCodec::encode(positions[i], out);
+                }
+            }
         }
     });
 }
@@ -416,12 +436,36 @@ void IndexBuilder::merge_blocks() {
             last_doc_id = posting.doc_id;
         }
 
-        // Write positions count, positions array
+        // For positions, write count, sync points, and VByte encoded positions
         uint32_t positions_size = merged_positions.all_positions.size();
         final_out.write(reinterpret_cast<const char*>(&positions_size), sizeof(positions_size));
-        if (positions_size > 0)
-            final_out.write(reinterpret_cast<const char*>(merged_positions.all_positions.data()), positions_size * sizeof(uint32_t));
-
+        
+        if (positions_size > 0) {
+            // Calculate and write position sync points
+            std::vector<PositionSyncPoint> sync_points;
+            uint32_t absolute_pos = 0;
+            
+            for (size_t i = 0; i < merged_positions.all_positions.size(); i++) {
+                // Update absolute position with each delta
+                absolute_pos += merged_positions.all_positions[i];
+                // Create sync point at regular intervals
+                if (i % PostingList::POSITION_SYNC_INTERVAL == 0) {
+                    sync_points.push_back({static_cast<uint32_t>(i), absolute_pos});
+                }
+            }
+            
+            uint32_t sync_points_size = sync_points.size();
+            final_out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
+            if (sync_points_size > 0) {
+                final_out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(PositionSyncPoint));
+            }
+            
+            // Write each delta-encoded position using VByte
+            for (uint32_t delta : merged_positions.all_positions) {
+                VByteCodec::encode(delta, final_out);
+            }
+        }
+        
         total_terms++;
     }
 

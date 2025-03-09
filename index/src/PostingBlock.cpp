@@ -6,6 +6,8 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+#include "InvertedIndex.h"
+
 namespace mithril {
 
 BlockReader::BlockReader(const std::string& path) {
@@ -143,10 +145,23 @@ void BlockReader::read_next() {
     std::memcpy(&positions_size, current, sizeof(positions_size));
     current += sizeof(positions_size);
     
+    // Read position sync points
+    uint32_t position_sync_points_size;
+    std::memcpy(&position_sync_points_size, current, sizeof(position_sync_points_size));
+    current += sizeof(position_sync_points_size);
+    
+    current_positions.sync_points.resize(position_sync_points_size);
+    if (position_sync_points_size > 0) {
+        std::memcpy(current_positions.sync_points.data(), current, position_sync_points_size * sizeof(PositionSyncPoint));
+        current += position_sync_points_size * sizeof(PositionSyncPoint);
+    }
+    
+    // Read VByte encoded positions
     current_positions.all_positions.resize(positions_size);
     if (positions_size > 0) {
-        std::memcpy(current_positions.all_positions.data(), current, positions_size * sizeof(uint32_t));
-        current += positions_size * sizeof(uint32_t);
+        for (size_t i = 0; i < positions_size; i++) {
+            current_positions.all_positions[i] = VByteCodec::decode_from_memory(current);
+        }
     }
 }
 
@@ -191,10 +206,7 @@ Posting* BlockReader::find_posting(uint32_t target_doc_id) {
 
 std::vector<uint32_t> BlockReader::get_positions(uint32_t doc_id) {
     Posting* posting = find_posting(doc_id);
-    if (!posting) return {};
-    
-    // If no positions stored
-    if (posting->positions_offset == UINT32_MAX) return {};
+    if (!posting || posting->positions_offset == UINT32_MAX) return {};
     
     // Calculate positions range
     size_t index = posting - current_postings.data();
@@ -203,7 +215,69 @@ std::vector<uint32_t> BlockReader::get_positions(uint32_t doc_id) {
                ? current_positions.all_positions.size() 
                : current_postings[index + 1].positions_offset;
     
-    return {current_positions.all_positions.begin() + start, current_positions.all_positions.begin() + end};
+    // Reconstruct absolute positions from deltas
+    std::vector<uint32_t> absolute_positions;
+    absolute_positions.reserve(end - start);
+    uint32_t current_pos = 0;
+    for (size_t i = start; i < end; i++) {
+        current_pos += current_positions.all_positions[i]; // Add delta
+        absolute_positions.push_back(current_pos);
+    }
+    
+    return absolute_positions;
+}
+
+std::vector<uint32_t> BlockReader::get_positions_near(uint32_t doc_id, uint32_t target_position, uint32_t window_size) {
+    Posting* posting = find_posting(doc_id);
+    if (!posting || posting->positions_offset == UINT32_MAX) return {};
+    
+    // Calculate positions range
+    size_t index = posting - current_postings.data();
+    size_t start = posting->positions_offset;
+    size_t end = (index == current_postings.size() - 1) ? current_positions.all_positions.size() : current_postings[index + 1].positions_offset;
+    
+    // Find closest sync point to target position
+    size_t sync_start = start;
+    uint32_t current_pos = 0;
+    bool found_sync_point = false;
+    
+    // Find the latest sync point that's before or at our target position
+    for (const auto& sync_point : current_positions.sync_points) {
+        if (sync_point.pos_offset >= start && sync_point.pos_offset < end && sync_point.absolute_pos <= target_position) {
+            sync_start = sync_point.pos_offset;
+            current_pos = sync_point.absolute_pos;
+            found_sync_point = true;
+        } else if (sync_point.pos_offset >= start && sync_point.pos_offset < end && sync_point.absolute_pos > target_position) {
+            // We've gone past the target, stop looking
+            break;
+        }
+    }
+    
+    // If no suitable sync point was found but we're not starting from the beginning,
+    // we need to calculate positions from the start
+    if (!found_sync_point && sync_start > start) {
+        for (size_t i = start; i < sync_start; i++) {
+            current_pos += current_positions.all_positions[i];
+        }
+    }
+    
+    // Scan forward to find positions within window
+    std::vector<uint32_t> positions_near;
+    for (size_t i = sync_start; i < end; i++) {
+        current_pos += current_positions.all_positions[i];
+        
+        // Check if position is within window
+        if (std::abs(static_cast<int64_t>(current_pos) - static_cast<int64_t>(target_position)) <= window_size) {
+            positions_near.push_back(current_pos);
+        }
+        
+        // Stop scanning if we're past the window
+        if (current_pos > target_position + window_size) {
+            break;
+        }
+    }
+    
+    return positions_near;
 }
 
 }  // namespace mithril

@@ -15,8 +15,58 @@ void PostingList::add(uint32_t doc_id, uint32_t freq) {
 void PostingList::add_with_positions(uint32_t doc_id, uint32_t freq, const std::vector<uint32_t>& positions) {
     uint32_t pos_offset = positions_store_.all_positions.size();
     postings_.push_back({doc_id, freq, pos_offset});
-    positions_store_.all_positions.insert(positions_store_.all_positions.end(), positions.begin(), positions.end());
+    // Delta encode positions
+    if (!positions.empty()) {
+        uint32_t prev_pos = 0;
+        uint32_t absolute_pos = 0;
+        
+        for (size_t i = 0; i < positions.size(); i++) {
+            uint32_t delta = positions[i] - prev_pos;
+            positions_store_.all_positions.push_back(delta);
+            prev_pos = positions[i];
+            
+            // Accumulate absolute position properly
+            if (i == 0) absolute_pos = positions[i];
+            else absolute_pos += delta;
+            
+            if (i % POSITION_SYNC_INTERVAL == 0) {
+                position_sync_points_.push_back({
+                    static_cast<uint32_t>(pos_offset + i),
+                    absolute_pos
+                });
+            }
+        }
+    }
+    
     size_bytes_ += sizeof(Posting) + positions.size() * sizeof(uint32_t);
+}
+
+size_t PostingList::find_nearest_position_sync_point(uint32_t target_position) const {
+    if (position_sync_points_.empty()) {
+        return 0; // No sync points, start from beginning
+    }
+
+    // binarySearch to find closest sync point less than or equal to target
+    size_t left = 0;
+    size_t right = position_sync_points_.size() - 1;
+
+    // If the vector is empty or target is before first sync point
+    if (position_sync_points_.empty() || position_sync_points_[0].absolute_pos > target_position)
+        return 0;
+    // If target is beyond last sync point
+    if (position_sync_points_[right].absolute_pos <= target_position)
+        return position_sync_points_[right].pos_offset;
+
+    while (left < right) {
+        size_t mid = left + (right - left + 1) / 2;
+        if (position_sync_points_[mid].absolute_pos <= target_position) {
+            left = mid;
+        } else {
+            right = mid - 1;
+        }
+    }
+
+    return position_sync_points_[left].pos_offset;
 }
 
 std::vector<uint32_t> PostingList::get_positions(size_t posting_index) const {
@@ -26,7 +76,17 @@ std::vector<uint32_t> PostingList::get_positions(size_t posting_index) const {
     
     size_t start = posting.positions_offset;
     size_t end = (posting_index == postings_.size() - 1) ? positions_store_.all_positions.size() : postings_[posting_index + 1].positions_offset;
-    return {positions_store_.all_positions.begin() + start, positions_store_.all_positions.begin() + end};
+    
+    // Reconstruct abs positions from deltas
+    std::vector<uint32_t> absolute_positions;
+    absolute_positions.reserve(end - start);
+    uint32_t current_pos = 0;
+    for (size_t i = start; i < end; i++) {
+        current_pos += positions_store_.all_positions[i]; // Add delta
+        absolute_positions.push_back(current_pos);
+    }
+    
+    return absolute_positions;
 }
 
 const std::vector<Posting>& PostingList::postings() const {
