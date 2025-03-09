@@ -65,6 +65,40 @@ void RenderMetricValue(const std::string& name, const Labels& labels, double val
 
 }  // namespace
 
+MetricValue::MetricValue() : v_(0.0) {}
+
+void MetricValue::Inc() {
+    Add(1.0);
+}
+
+void MetricValue::Dec() {
+    Sub(1.0);
+}
+
+void MetricValue::Add(double delta) {
+    v_.fetch_add(delta);
+}
+
+void MetricValue::Sub(double delta) {
+    v_.fetch_sub(delta);
+}
+
+void MetricValue::Set(double val) {
+    v_.store(val);
+}
+
+void MetricValue::Set(size_t val) {
+    v_.store(static_cast<double>(val));
+}
+
+void MetricValue::Zero() {
+    v_.store(0.0);
+}
+
+double MetricValue::Value() const {
+    return v_.load();
+}
+
 Metric::Metric(std::string name, std::string type, std::string help)
     : def_(MetricDefinition{.name = std::move(name), .type = std::move(type), .help = std::move(help)}) {}
 
@@ -95,10 +129,10 @@ void Metric::Render(std::string& out) const {
         out.push_back('\n');
     } else {
         if (emptyLabelMetric_.Get() != nullptr) {
-            RenderMetricValue(def_.name, {}, emptyLabelMetric_->load(), out);
+            RenderMetricValue(def_.name, {}, emptyLabelMetric_->Value(), out);
         }
         for (const auto& entry : rawMetrics_) {
-            RenderMetricValue(def_.name, entry.first, entry.second->load(), out);
+            RenderMetricValue(def_.name, entry.first, entry.second->Value(), out);
         }
     }
 }

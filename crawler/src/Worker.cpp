@@ -114,12 +114,12 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
 }
 
 void Worker::ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header) {
-    DocumentsProcessedMetric.Get().fetch_add(1);
+    DocumentsProcessedMetric.Get().Inc();
     CrawlResponseCodesMetric
         .WithLabels({
             {"status", std::to_string(header.status)}
     })
-        .fetch_add(1);
+        .Inc();
 
     switch (header.status) {
     case http::StatusCode::OK:

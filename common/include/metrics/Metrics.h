@@ -39,7 +39,23 @@ constexpr const char* MetricTypeGauge = "gauge";
 using Labels = std::map<std::string, std::string>;
 using Label = Labels::value_type;
 
-using MetricValue = std::atomic<double>;
+class MetricValue {
+public:
+    MetricValue();
+
+    void Inc();
+    void Dec();
+    void Add(double delta);
+    void Sub(double delta);
+    void Set(double val);
+    void Set(size_t val);
+    void Zero();
+
+    double Value() const;
+
+private:
+    std::atomic<double> v_;
+};
 
 struct MetricDefinition {
     std::string name;

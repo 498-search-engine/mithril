@@ -389,7 +389,7 @@ void RobotRulesCache::ProcessPendingRequests() {
         queuedFetches_.pop();
     }
 
-    InFlightRobotsRequestsMetric.Get().store(executor_.InFlightRequests());
+    InFlightRobotsRequestsMetric.Get().Set(executor_.InFlightRequests());
 
     if (executor_.InFlightRequests() == 0) {
         return;
@@ -421,7 +421,7 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
         .WithLabels({
             {"status", std::to_string(r.header.status)}
     })
-        .fetch_add(1);
+        .Inc();
 
     auto canonicalHost = CanonicalizeHost(r.req.Url());
     SPDLOG_TRACE("successful robots.txt request: {}", canonicalHost.host);
