@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
 
@@ -24,7 +25,6 @@ namespace mithril {
 using namespace std::string_view_literals;
 
 constexpr size_t MaxRobotsTxtSize = 500L * 1024L;  // 500 KB
-constexpr auto MaxInFlightRobotsTxtRequests = 100;
 constexpr int MaxRobotsTxtRedirects = 5;
 constexpr long RobotsTxtRequestTimeoutSeconds = 10;
 
@@ -330,6 +330,8 @@ bool RobotRules::Allowed(std::string_view path) const {
     return trie_->IsAllowed(path);
 }
 
+RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests) : maxInFlightRequests_(maxInFlightRequests) {}
+
 const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
     auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
@@ -383,7 +385,7 @@ size_t RobotRulesCache::PendingRequests() const {
 }
 
 void RobotRulesCache::ProcessPendingRequests() {
-    while (!queuedFetches_.empty() && executor_.InFlightRequests() < MaxInFlightRobotsTxtRequests) {
+    while (!queuedFetches_.empty() && executor_.InFlightRequests() < maxInFlightRequests_) {
         Fetch(queuedFetches_.front());
         queuedFetches_.pop();
     }
@@ -445,6 +447,8 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
 
         // TODO: cut-outs for 429, 5xx, etc.
     }
+
+    completedFetches_.push_back(std::move(canonicalHost));
 }
 
 void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& failed) {
@@ -459,6 +463,8 @@ void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& fail
     it->second.rules = RobotRules{};
     it->second.valid = false;
     it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+
+    completedFetches_.push_back(std::move(canonicalHost));
 }
 
 void RobotRulesCache::HandleRobotsOK(const http::ResponseHeader& header,
@@ -483,6 +489,10 @@ void RobotRulesCache::HandleRobotsNotFound(RobotCacheEntry& entry) {
     entry.rules = RobotRules{false};
     entry.valid = true;
     entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+}
+
+std::vector<http::CanonicalHost>& RobotRulesCache::CompletedFetchs() {
+    return completedFetches_;
 }
 
 }  // namespace mithril

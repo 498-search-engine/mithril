@@ -31,7 +31,7 @@ bool IsValidUrl(std::string_view url) {
 
 }  //  namespace
 
-UrlFrontier::UrlFrontier(const std::string& frontierDirectory) : urlQueue_(frontierDirectory) {}
+UrlFrontier::UrlFrontier(const std::string& frontierDirectory) : urlQueue_(frontierDirectory), robotRulesCache_(100) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);
@@ -100,18 +100,24 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
         }
     }
 
-    // Process waiting URLs
+    // Process completed robots.txt fetches
     std::set<std::string> allowedURLs;
-    core::LockGuard waitingLock(waitingUrlsMu_);
+    {
+        core::LockGuard waitingLock(waitingUrlsMu_);
+        core::LockGuard robotsLock(robotsCacheMu_);
 
-    auto it = urlsWaitingForRobots_.begin();
-    while (it != urlsWaitingForRobots_.end()) {
-        {
-            core::LockGuard robotsLock(robotsCacheMu_);
+        auto& completed = robotRulesCache_.CompletedFetchs();
+        while (!completed.empty()) {
+            auto it = urlsWaitingForRobots_.find(completed.back());
+            completed.pop_back();
+            if (it == urlsWaitingForRobots_.end()) {
+                continue;
+            }
+
             const auto* robots = robotRulesCache_.GetOrFetch(it->first);
             if (robots == nullptr) {
-                // Still fetching...
-                ++it;
+                // Shouldn't really happen unless some LRU cache funny business
+                // happens
                 continue;
             }
 
@@ -122,13 +128,9 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
                     allowedURLs.insert(url.url);
                 }
             }
+            urlsWaitingForRobots_.erase(it);
         }
-        it = urlsWaitingForRobots_.erase(it);
     }
-
-    // Release the waitingUrlsMu_ mutex -- we have determined which URLs can go
-    // onto the frontier immediately.
-    waitingLock.Unlock();
 
     if (!allowedURLs.empty()) {
         core::LockGuard queueLock(urlQueueMu_);

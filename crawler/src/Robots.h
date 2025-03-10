@@ -128,7 +128,7 @@ private:
 
 class RobotRulesCache {
 public:
-    RobotRulesCache() = default;
+    RobotRulesCache(size_t maxInFlightRequests);
 
     /**
      * @brief Gets the ruleset associated with the canonical host, or queues up
@@ -148,6 +148,8 @@ public:
      * @brief Processes pending robots.txt requests.
      */
     void ProcessPendingRequests();
+
+    std::vector<http::CanonicalHost>& CompletedFetchs();
 
 private:
     struct RobotCacheEntry {
@@ -176,10 +178,14 @@ private:
     static void HandleRobotsOK(const http::ResponseHeader& header, const http::Response& res, RobotCacheEntry& entry);
     static void HandleRobotsNotFound(RobotCacheEntry& entry);
 
+    size_t maxInFlightRequests_;
+
     // TODO: Use an LRU cache
     std::unordered_map<std::string, RobotCacheEntry> cache_;
     std::queue<http::CanonicalHost> queuedFetches_;
     http::RequestExecutor executor_;
+
+    std::vector<http::CanonicalHost> completedFetches_;
 };
 
 }  // namespace mithril
