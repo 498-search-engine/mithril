@@ -20,7 +20,7 @@ namespace mithril {
 
 class UrlFrontier {
 public:
-    UrlFrontier(const std::string& frontierDirectory);
+    UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests);
 
     /**
      * @brief Initializes notifications on cv instances for ThreadSync.

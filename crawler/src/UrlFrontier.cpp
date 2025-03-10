@@ -31,7 +31,8 @@ bool IsValidUrl(std::string_view url) {
 
 }  //  namespace
 
-UrlFrontier::UrlFrontier(const std::string& frontierDirectory) : urlQueue_(frontierDirectory), robotRulesCache_(100) {}
+UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests)
+    : urlQueue_(frontierDirectory), robotRulesCache_(concurrentRobotsRequests) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);

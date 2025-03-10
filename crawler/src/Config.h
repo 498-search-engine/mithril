@@ -20,6 +20,8 @@ struct CrawlerConfig {
     size_t middle_queue_url_batch_size = 10;
     size_t middle_queue_host_url_limit = 25;
     double middle_queue_utilization_target = 0.25;
+
+    size_t concurrent_robots_requests = 100;
 };
 
 CrawlerConfig LoadConfigFromFile(const std::string& path);
