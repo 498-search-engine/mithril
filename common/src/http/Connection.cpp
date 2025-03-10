@@ -17,6 +17,7 @@
 #include <netdb.h>
 #include <optional>
 #include <stdexcept>
+#include <string_view>
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -35,6 +36,7 @@ namespace {
 constexpr size_t MaxHeaderSize = 8192;
 constexpr size_t BufferSize = 8192;
 constexpr const char* ContentLengthHeader = "Content-Length: ";
+constexpr const char* ContentLanguageHeader = "Content-Language: ";
 constexpr const char* TransferEncodingChunkedHeader = "Transfer-Encoding: chunked";
 constexpr const char* HeaderDelimiter = "\r\n\r\n";
 constexpr const char* CRLF = "\r\n";
@@ -71,6 +73,15 @@ void PrintSSLConnectError(SSL* ssl, int status) {
         OPENSSL_free(issuer);
         X509_free(cert);
     }
+}
+
+bool ContentLanguageMatches(std::string_view header, std::string_view lang) {
+    // TODO: verify this is how this header works
+    auto semiPos = header.find(';');
+    if (semiPos != std::string_view::npos) {
+        header = header.substr(0, semiPos);
+    }
+    return InsensitiveStrEquals(header, lang);
 }
 
 }  // namespace
@@ -503,13 +514,15 @@ bool Connection::IsActive() const {
 
 bool Connection::IsError() const {
     return state_ == State::ConnectError || state_ == State::SocketError || state_ == State::UnexpectedEOFError ||
-           state_ == State::ResponseTooBigError;
+           state_ == State::ResponseTooBigError || state_ == State::ResponseWrongLanguage;
 }
 
 RequestError Connection::GetError() const {
     switch (state_) {
     case State::ResponseTooBigError:
         return RequestError::ResponseTooBig;
+    case State::ResponseWrongLanguage:
+        return RequestError::ResponseWrongLanguage;
     case State::ConnectError:
     case State::SocketError:
     case State::UnexpectedEOFError:
@@ -568,6 +581,21 @@ void Connection::ProcessHeaders() {
             spdlog::debug("content-length {} for response {} exceeds max response size", contentLength_, url_.url);
             state_ = State::ResponseTooBigError;
             return;
+        }
+    }
+
+    if (!reqOptions_.allowedContentLanguage.empty()) {
+        // Look for Content-Language header
+        auto contentLanguagePos = FindCaseInsensitive(headers, ContentLanguageHeader);
+        if (contentLanguagePos != std::string::npos) {
+            contentLanguagePos += strlen(ContentLanguageHeader);
+            auto langEnd = headers.find(CRLF, contentLanguagePos);
+            auto contentLanguage = headers.substr(contentLanguagePos, langEnd - contentLanguagePos);
+            if (!ContentLanguageMatches(contentLanguage, reqOptions_.allowedContentLanguage)) {
+                spdlog::debug("content-language {} for response {} is not acceptable", contentLanguage, url_.url);
+                state_ = State::ResponseWrongLanguage;
+                return;
+            }
         }
     }
 

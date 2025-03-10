@@ -28,6 +28,12 @@ struct RequestOptions {
      * enforced.
      */
     int maxResponseSize{0};
+
+    /**
+     * @brief Allowed Content-Language language header. If empty,
+     * Content-Language header is not inspected.
+     */
+    std::string allowedContentLanguage;
 };
 
 class Request {
