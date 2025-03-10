@@ -76,12 +76,21 @@ void PrintSSLConnectError(SSL* ssl, int status) {
 }
 
 bool ContentLanguageMatches(std::string_view header, std::string_view lang) {
-    // TODO: verify this is how this header works
+    if (lang.empty()) {
+        return true;
+    }
+
     auto semiPos = header.find(';');
     if (semiPos != std::string_view::npos) {
         header = header.substr(0, semiPos);
     }
-    return InsensitiveStrEquals(header, lang);
+
+    if (lang.back() == '*') {
+        lang.remove_suffix(1);
+        return InsensitiveStartsWith(header, lang);
+    } else {
+        return InsensitiveStrEquals(header, lang);
+    }
 }
 
 }  // namespace
@@ -591,7 +600,11 @@ void Connection::ProcessHeaders() {
             contentLanguagePos += strlen(ContentLanguageHeader);
             auto langEnd = headers.find(CRLF, contentLanguagePos);
             auto contentLanguage = headers.substr(contentLanguagePos, langEnd - contentLanguagePos);
-            if (!ContentLanguageMatches(contentLanguage, reqOptions_.allowedContentLanguage)) {
+            auto anyMatch = std::any_of(
+                reqOptions_.allowedContentLanguage.begin(),
+                reqOptions_.allowedContentLanguage.end(),
+                [contentLanguage](std::string_view lang) { return ContentLanguageMatches(contentLanguage, lang); });
+            if (!anyMatch) {
                 spdlog::debug("content-language {} for response {} is not acceptable", contentLanguage, url_.url);
                 state_ = State::ResponseWrongLanguage;
                 return;

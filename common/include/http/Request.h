@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace mithril::http {
 
@@ -30,10 +31,10 @@ struct RequestOptions {
     int maxResponseSize{0};
 
     /**
-     * @brief Allowed Content-Language language header. If empty,
+     * @brief Allowed Content-Language language headers. If empty,
      * Content-Language header is not inspected.
      */
-    std::string allowedContentLanguage;
+    std::vector<std::string> allowedContentLanguage;
 };
 
 class Request {
