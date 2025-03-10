@@ -48,6 +48,7 @@ enum class RequestError : uint8_t {
     TooManyRedirects,
     TimedOut,
     ResponseTooBig,
+    ResponseWrongLanguage,
 };
 
 struct FailedRequest {
@@ -72,6 +73,8 @@ constexpr std::string_view StringOfRequestError(RequestError e) {
         return "TimedOut"sv;
     case RequestError::ResponseTooBig:
         return "ResponseTooBig"sv;
+    case RequestError::ResponseWrongLanguage:
+        return "ResponseWrongLanguage"sv;
     default:
         return "Unkown"sv;
     }

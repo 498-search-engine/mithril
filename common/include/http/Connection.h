@@ -87,10 +87,11 @@ private:
         Complete,        // HTTP response complete
         Closed,          // Socket closed
 
-        ConnectError,         // Error while establishing connection
-        SocketError,          // Error while reading/writing from socket
-        UnexpectedEOFError,   // Got unexpected EOF while reading response
-        ResponseTooBigError,  // Response body or header was too big
+        ConnectError,           // Error while establishing connection
+        SocketError,            // Error while reading/writing from socket
+        UnexpectedEOFError,     // Got unexpected EOF while reading response
+        ResponseTooBigError,    // Response body or header was too big
+        ResponseWrongLanguage,  // Response Content-Language header was unacceptable
     };
 
     /**
