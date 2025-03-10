@@ -59,6 +59,18 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
             }
         } else if (key == "request_timeout") {
             config.request_timeout = std::stoul(std::string(value));
+        } else if (key == "data_directory") {
+            config.data_directory = value;
+        } else if (key == "default_crawl_delay_ms") {
+            config.default_crawl_delay_ms = std::stol(std::string(value));
+        } else if (key == "middle_queue.queue_count") {
+            config.middle_queue_queue_count = std::stoul(std::string(value));
+        } else if (key == "middle_queue.url_batch_size") {
+            config.middle_queue_url_batch_size = std::stoul(std::string(value));
+        } else if (key == "middle_queue.host_url_limit") {
+            config.middle_queue_host_url_limit = std::stoul(std::string(value));
+        } else if (key == "middle_queue.utilization_target") {
+            config.middle_queue_utilization_target = std::stod(std::string(value));
         }
     }
 

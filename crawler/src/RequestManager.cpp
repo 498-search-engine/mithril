@@ -1,12 +1,12 @@
 #include "RequestManager.h"
 
 #include "DocumentQueue.h"
+#include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/URL.h"
 
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <string>
@@ -16,20 +16,18 @@
 
 namespace mithril {
 
-RequestManager::RequestManager(size_t targetConcurrentReqs,
-                               long requestTimeout,
-                               UrlFrontier* frontier,
-                               DocumentQueue* docQueue)
-    : targetConcurrentReqs_(targetConcurrentReqs),
-      requestTimeout_(requestTimeout),
-      frontier_(frontier),
+RequestManager::RequestManager(UrlFrontier* frontier, DocumentQueue* docQueue, const CrawlerConfig& config)
+    : targetConcurrentReqs_(config.concurrent_requests),
+      requestTimeout_(config.request_timeout),
+      middleQueue_(frontier, config),
       docQueue_(docQueue) {}
 
-void RequestManager::Run() {
+void RequestManager::Run(ThreadSync& sync) {
     std::vector<std::string> urls;
     urls.reserve(targetConcurrentReqs_);
 
-    while (!stopped_.load(std::memory_order_acquire)) {
+    while (!sync.ShouldShutdown()) {
+        sync.MaybePause();
         // Get more URLs to execute, up to targetSize_ concurrently executing
         if (requestExecutor_.InFlightRequests() < targetConcurrentReqs_) {
             // If we have no in-flight requests to process, wait for at least
@@ -38,7 +36,14 @@ void RequestManager::Run() {
 
             size_t toAdd = targetConcurrentReqs_ - requestExecutor_.InFlightRequests();
             urls.clear();
-            frontier_->GetURLs(toAdd, urls, wantAtLeastOne);
+            middleQueue_.GetURLs(sync, toAdd, urls, wantAtLeastOne);
+            if (sync.ShouldSynchronize()) {
+                continue;
+            }
+
+            if (urls.empty() && requestExecutor_.InFlightRequests() == 0) {
+                continue;
+            }
 
             for (const auto& url : urls) {
                 if (auto parsed = http::ParseURL(url)) {
@@ -80,13 +85,18 @@ void RequestManager::Run() {
     spdlog::info("request manager terminating");
 }
 
-void RequestManager::Stop() {
-    stopped_.store(true, std::memory_order_release);
-}
-
 void RequestManager::DispatchFailedRequest(http::FailedRequest failed) {
     spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, http::StringOfRequestError(failed.error));
     // TODO: pass off to whatever
+}
+
+void RequestManager::RestoreQueuedURLs(std::vector<std::string>& urls) {
+    middleQueue_.RestoreFrom(urls);
+}
+
+void RequestManager::ExtractQueuedURLs(std::vector<std::string>& out) {
+    middleQueue_.ExtractQueuedURLs(out);
+    requestExecutor_.DumpUnprocessedRequests(out);
 }
 
 }  // namespace mithril
