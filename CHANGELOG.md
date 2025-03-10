@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - static ranking for crawler (#41)
 - persistent, interruptible crawling (#45)
 - middle queue for rate limiting (#49)
+- reject page based on `Content-Language` header (#52)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
