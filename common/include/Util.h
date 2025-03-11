@@ -9,6 +9,8 @@ bool InsensitiveCharEquals(char a, char b);
 
 bool InsensitiveStrEquals(std::string_view a, std::string_view b);
 
+bool InsensitiveStartsWith(std::string_view s, std::string_view prefix);
+
 size_t FindCaseInsensitive(const std::string& s, const char* q);
 
 std::string ToLowerCase(std::string_view s);

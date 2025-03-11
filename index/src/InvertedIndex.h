@@ -16,7 +16,7 @@ public:
     explicit IndexBuilder(const std::string& output_dir, size_t num_threads = std::thread::hardware_concurrency());
     ~IndexBuilder();
 
-    void add_document(const std::string& words_path, const std::string& links_path); // remnant
+    void add_document(const std::string& words_path, const std::string& links_path);  // remnant
     void add_document(const std::string& doc_path);
     // void add_document(const Document& doc);
     void finalize();
@@ -33,11 +33,18 @@ private:
 
     // Output config
     const std::string output_dir_;
-    static constexpr size_t MAX_BLOCK_SIZE = 128 * 1024 * 1024;  // 64 MB
+    static constexpr size_t MAX_BLOCK_SIZE = 512 * 1024 * 1024;
+    static constexpr size_t MERGE_FACTOR = 16;
 
     // core methods
     std::future<void> flush_block();
     void merge_blocks();
+    std::string merge_block_subset(const std::vector<std::string>& block_paths,
+                                   size_t start_idx,
+                                   size_t end_idx,
+                                   bool is_final_output = false);
+    void merge_blocks_tiered();
+
     void save_document_map();
     std::string block_path(int block_num) const;
     void process_document(const Document& doc);
@@ -89,6 +96,47 @@ public:
             shift += 7;
         } while (byte & 128);
         return result;
+    }
+
+    static uint32_t decode_from_memory(const char*& buffer) {
+        uint32_t result = 0;
+        uint32_t shift = 0;
+        uint8_t byte;
+
+        do {
+            byte = *reinterpret_cast<const uint8_t*>(buffer++);
+            result |= (byte & 127) << shift;
+            shift += 7;
+        } while (byte & 128);
+
+        return result;
+    }
+
+    static void encode_to_memory(uint32_t value, char*& buffer, size_t& remaining_space) {
+        while (value >= 128) {
+            if (remaining_space < 1)
+                throw std::runtime_error("Buffer overflow in VByte encoding");
+            *buffer++ = (value & 127) | 128;
+            remaining_space--;
+            value >>= 7;
+        }
+
+        if (remaining_space < 1)
+            throw std::runtime_error("Buffer overflow in VByte encoding");
+        *buffer++ = value;
+        remaining_space--;
+    }
+
+    static size_t max_bytes_needed(uint32_t value) {
+        if (value < 128)
+            return 1;
+        if (value < 16384)
+            return 2;
+        if (value < 2097152)
+            return 3;
+        if (value < 268435456)
+            return 4;
+        return 5;
     }
 };
 

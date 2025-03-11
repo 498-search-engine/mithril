@@ -29,10 +29,14 @@ bool IsValidUrl(std::string_view url) {
     return url.length() >= http::MinUrlLength && url.length() <= http::MaxUrlLength && !HasInvalidChars(url);
 }
 
+constexpr unsigned int URLHighScoreCutoff = 80;
+constexpr unsigned int URLHighScoreQueuePercent = 75;
+
 }  //  namespace
 
 UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests)
-    : urlQueue_(frontierDirectory), robotRulesCache_(concurrentRobotsRequests) {}
+    : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
+      robotRulesCache_(concurrentRobotsRequests) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);
