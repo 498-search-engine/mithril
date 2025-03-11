@@ -255,13 +255,19 @@ class PriorityURLQueue {
         unsigned int score;
     };
 
+    using queue_t = core::VectorFile<QueuedURL>;
+
 public:
-    PriorityURLQueue(const std::string& directory)
-        : store_(directory), queuedURLs_((directory + "/url_queue.dat").c_str()) {}
+    PriorityURLQueue(const std::string& directory, unsigned int highScoreCutoff, unsigned int highScoreQueuePercent)
+        : highScoreCutoff_(highScoreCutoff),
+          highScoreQueuePercent_(highScoreQueuePercent),
+          store_(directory),
+          highScoreQueuedURLs_((directory + "/url_queue.dat").c_str()),
+          lowScoreQueuedURLs_((directory + "/url_queue_low_score.dat").c_str()) {}
 
     bool Seen(std::string_view url) { return store_.Contains(url); }
 
-    size_t Size() const { return queuedURLs_.Size(); }
+    size_t Size() const { return highScoreQueuedURLs_.Size() + lowScoreQueuedURLs_.Size(); }
     bool Empty() const { return Size() == 0; }
 
     size_t TotalSize() const { return store_.Size(); }
@@ -271,30 +277,50 @@ public:
         if (!id) {
             return;
         }
+
         auto score = Scorer::Score(url);
-        queuedURLs_.PushBack(QueuedURL{*id, score});
+        auto queued = QueuedURL{*id, score};
+
+        if (score >= highScoreCutoff_) {
+            highScoreQueuedURLs_.PushBack(queued);
+        } else {
+            lowScoreQueuedURLs_.PushBack(queued);
+        }
     }
 
     template<typename Filter>
     void PopURLs(size_t max, std::vector<std::string>& out, Filter f) {
+        // Randomly choose either the low score or high score queue based on the
+        // percentage configured
+        auto choice = static_cast<unsigned int>(rand() % 100);
+        if (choice < highScoreQueuePercent_) {
+            PopURLsFromQueue(store_, highScoreQueuedURLs_, max, out, f);
+        } else {
+            PopURLsFromQueue(store_, lowScoreQueuedURLs_, max, out, f);
+        }
+    }
+
+private:
+    template<typename Filter>
+    static void PopURLsFromQueue(URLStore& store, queue_t& queue, size_t max, std::vector<std::string>& out, Filter f) {
         struct Candidate {
             size_t queueIndex;
             QueuedURL url;
         };
 
         auto sampleSize = static_cast<size_t>(static_cast<double>(max) * SampleOverheadFactor);
-        size_t targetSize = std::min(sampleSize, queuedURLs_.Size());
+        size_t targetSize = std::min(sampleSize, queue.Size());
 
         std::vector<Candidate> candidates;
         candidates.reserve(targetSize);
 
-        if (queuedURLs_.Size() * 2 < targetSize) {
+        if (queue.Size() * 2 < targetSize) {
             // The queued urls list is small, don't bother with randomness
-            for (size_t i = 0; i < queuedURLs_.Size(); ++i) {
-                if (!f(store_.URL(queuedURLs_[i].id))) {
+            for (size_t i = 0; i < queue.Size(); ++i) {
+                if (!f(store.URL(queue[i].id))) {
                     continue;
                 }
-                candidates.push_back({i, queuedURLs_[i]});
+                candidates.push_back({i, queue[i]});
                 if (candidates.size() >= targetSize) {
                     break;
                 }
@@ -303,15 +329,15 @@ public:
             // Randomly select indicies into the queued urls list
             auto seen = std::set<size_t>{};
             for (size_t i = 0; i < targetSize * 2; ++i) {
-                size_t index = rand() % queuedURLs_.Size();
+                size_t index = rand() % queue.Size();
                 if (seen.contains(index)) {
                     continue;
                 }
                 seen.insert(index);
-                if (!f(store_.URL(queuedURLs_[index].id))) {
+                if (!f(store.URL(queue[index].id))) {
                     continue;
                 }
-                candidates.push_back({index, queuedURLs_[index]});
+                candidates.push_back({index, queue[index]});
                 if (candidates.size() >= targetSize) {
                     break;
                 }
@@ -330,27 +356,30 @@ public:
 
         // Push retrieved URLs
         for (size_t i = 0; i < targetReturn; ++i) {
-            out.emplace_back(store_.URL(candidates[i].url.id));
+            out.emplace_back(store.URL(candidates[i].url.id));
             indiciesToRemove.push_back(candidates[i].queueIndex);
         }
 
         // Remove retrieved URLs from queue in reverse-index order
         std::sort(indiciesToRemove.begin(), indiciesToRemove.end(), std::greater<>{});
         for (size_t index : indiciesToRemove) {
-            RemoveQueuedAtIndex(index);
+            RemoveQueuedAtIndex(queue, index);
         }
     }
 
-private:
-    void RemoveQueuedAtIndex(size_t index) {
-        if (index != queuedURLs_.Size() - 1) {
-            std::swap(queuedURLs_[index], queuedURLs_.Back());
+    static void RemoveQueuedAtIndex(queue_t& queue, size_t index) {
+        if (index != queue.Size() - 1) {
+            std::swap(queue[index], queue.Back());
         }
-        queuedURLs_.PopBack();
+        queue.PopBack();
     }
+
+    unsigned int highScoreCutoff_;
+    unsigned int highScoreQueuePercent_;
 
     URLStore store_;
-    core::VectorFile<QueuedURL> queuedURLs_;
+    queue_t highScoreQueuedURLs_;
+    queue_t lowScoreQueuedURLs_;
 };
 
 }  // namespace mithril
