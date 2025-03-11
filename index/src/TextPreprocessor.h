@@ -1,85 +1,158 @@
 #ifndef INDEX_TEXTPREPROCESSOR_H
 #define INDEX_TEXTPREPROCESSOR_H
 
+#include <algorithm>
 #include <cctype>
 #include <string>
 #include <string_view>
 
 namespace mithril {
 
+enum class FieldType {
+    BODY = 0,
+    TITLE = 1,
+    URL = 2,
+    ANCHOR = 3
+    // Can be extended with HEADING, BOLD, etc.
+};
+
 class TokenNormalizer {
 public:
-    static std::string normalize(std::string_view token) {
-        // early reject obvious cases
-        if (token.empty() || isAllPunctuation(token) || isAllDigits(token) || containsCJK(token)) {
+    static std::string normalize(std::string_view token, FieldType field = FieldType::BODY) {
+        if (token.empty())
             return "";
-        }
 
-        // Normalize the token
-        std::string normalized = trim(token);
+        std::string processed(token);
 
-        // Must contain at least one English letter
-        if (!containsEnglishLetter(normalized)) {
+        // Phase 1: Content Cleaning
+        stripHtmlTags(processed);
+        removeHtmlEntities(processed);
+        smartTrim(processed);
+
+        // Phase 2: Aggressive Filtering
+        if (shouldReject(processed))
             return "";
+
+        // Phase 3: Normalization
+        smartCaseFold(processed);
+        normalizePunctuation(processed);
+
+        // Final validation and field decoration
+        if (isValidToken(processed)) {
+            return decorateToken(processed, field);
         }
-
-        // Remove HTML entities
-        if (normalized.find('&') != std::string::npos) {
-            removeHtmlEntities(normalized);
-        }
-
-        // Normalize internal punctuation (e.g., multiple spaces/dots)
-        normalizeInternalPunctuation(normalized);
-
-        return normalized;
+        return "";
     }
 
 private:
-    static bool isAllPunctuation(std::string_view token) {
-        return std::all_of(token.begin(), token.end(), [](char c) { return std::ispunct(c); });
+    static std::string decorateToken(const std::string& token, FieldType field) {
+        switch (field) {
+        case FieldType::TITLE:
+            return "#" + token;
+        case FieldType::URL:
+            return "@" + token;
+        case FieldType::ANCHOR:
+            return "$" + token;
+        case FieldType::BODY:
+        default:
+            return token;
+        }
     }
 
-    static bool isAllDigits(std::string_view token) {
-        return std::all_of(token.begin(), token.end(), [](char c) { return std::isdigit(c); });
+    static bool isValidToken(const std::string& str) {
+        // Must contain at least one letter and no non-ASCII chars
+        return std::any_of(str.begin(), str.end(), ::isalpha) && str.find_first_of("\x80\xFF") == std::string::npos;
     }
 
-    static bool containsCJK(std::string_view token) {
-        return std::any_of(token.begin(), token.end(), [](char c) { return static_cast<unsigned char>(c) > 127; });
+    static void smartCaseFold(std::string& str) {
+        if (str.length() > 1 && std::all_of(str.begin(), str.end(), ::isupper)) {
+            return;  // Preserve valid acronyms
+        }
+        std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) { return std::tolower(c); });
     }
 
-    static bool containsEnglishLetter(std::string_view token) {
-        return std::any_of(token.begin(), token.end(), [](char c) { return std::isalpha(c); });
+    static void stripHtmlTags(std::string& str) {
+        bool in_tag = false;
+        std::string clean;
+        clean.reserve(str.size());
+
+        for (char c : str) {
+            if (c == '<' || c == '{')
+                in_tag = true;
+            else if (c == '>' || c == '}')
+                in_tag = false;
+            else if (!in_tag)
+                clean += c;
+        }
+        str.swap(clean);
     }
 
-    static void removeHtmlEntities(std::string& token) {
-        size_t pos;
-        while ((pos = token.find('&')) != std::string::npos) {
-            size_t end = token.find(';', pos);
+    static void removeHtmlEntities(std::string& str) {
+        size_t pos = 0;
+        while ((pos = str.find('&', pos)) != std::string::npos) {
+            size_t end = str.find(';', pos);
             if (end != std::string::npos) {
-                token.erase(pos, end - pos + 1);
+                str.erase(pos, end - pos + 1);
             } else
                 break;
         }
     }
 
-    static void normalizeInternalPunctuation(std::string& token) {
-        // Replace multiple spaces with single space
-        auto new_end =
-            std::unique(token.begin(), token.end(), [](char a, char b) { return a == b && std::isspace(a); });
-        token.erase(new_end, token.end());
+    static void smartTrim(std::string& str) {
+        constexpr std::string_view TRIM_CHARS = " \t\n\r\f\v!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
-        // Replace multiple dots/punctuation with single
-        new_end = std::unique(token.begin(), token.end(), [](char a, char b) { return a == b && std::ispunct(a); });
-        token.erase(new_end, token.end());
+        size_t first = str.find_first_not_of(TRIM_CHARS);
+        if (first == std::string::npos)
+            str.clear();
+        else
+            str = str.substr(first, str.find_last_not_of(TRIM_CHARS) - first + 1);
     }
 
-    static std::string trim(std::string_view token) {
-        auto start = token.find_first_not_of(" \t\n\r\f\v.,!?;:\"'");
-        if (start == std::string::npos)
-            return "";
+    static void normalizePunctuation(std::string& str) {
+        std::string clean;
+        bool prev_punct = false;
 
-        auto end = token.find_last_not_of(" \t\n\r\f\v.,!?;:\"'");
-        return std::string(token.substr(start, end - start + 1));
+        for (char c : str) {
+            if (std::ispunct(c)) {
+                if (!prev_punct && !clean.empty()) {
+                    clean += ' ';
+                    prev_punct = true;
+                }
+            } else {
+                clean += c;
+                prev_punct = false;
+            }
+        }
+        str.swap(clean);
+    }
+
+    static bool shouldReject(const std::string& str) {
+        if (str.empty())
+            return true;
+
+        // Reject pure numbers but allow alphanumeric
+        bool has_letter = false;
+        bool all_digits = true;
+
+        for (char c : str) {
+            if (std::isalpha(c)) {
+                has_letter = true;
+                all_digits = false;
+            } else if (!std::isdigit(c)) {
+                all_digits = false;
+            }
+        }
+
+        // Reject pure numbers, keep alphanumeric
+        if (all_digits)
+            return true;
+
+        // Still reject URLs and other patterns
+        const bool has_bad_pattern = str.find("//") != std::string::npos || str.find('|') != std::string::npos ||
+                                     str.find('=') != std::string::npos || str.find("www.") != std::string::npos ||
+                                     str.find(".com") != std::string::npos;
+
+        return has_bad_pattern || str.length() > 64;
     }
 };
 
