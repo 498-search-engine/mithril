@@ -72,6 +72,8 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
             config.middle_queue_host_url_limit = std::stoul(std::string(value));
         } else if (key == "middle_queue.utilization_target") {
             config.middle_queue_utilization_target = std::stod(std::string(value));
+        } else if (key == "concurrent_robots_requests") {
+            config.concurrent_robots_requests = std::stoul(std::string(value));
         } else if (key == "metrics_port") {
             config.metrics_port = static_cast<uint16_t>(std::stoul(std::string(value)));
         }

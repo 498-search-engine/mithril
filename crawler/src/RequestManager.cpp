@@ -50,11 +50,13 @@ void RequestManager::Run(ThreadSync& sync) {
             for (const auto& url : urls) {
                 if (auto parsed = http::ParseURL(url)) {
                     SPDLOG_DEBUG("starting crawl request: {}", url);
-                    requestExecutor_.Add(http::Request::GET(std::move(*parsed),
-                                                            http::RequestOptions{
-                                                                .timeout = 30,                       // seconds
-                                                                .maxResponseSize = 2 * 1024 * 1024,  // 2 MB
-                                                            }));
+                    requestExecutor_.Add(
+                        http::Request::GET(std::move(*parsed),
+                                           http::RequestOptions{
+                                               .timeout = 30, // seconds
+                                               .maxResponseSize = 2 * 1024 * 1024, // 2 MB
+                                               .allowedContentLanguage = {"en", "en-*", "en_*"}, // English
+                    }));
                 } else {
                     spdlog::info("frontier failed to parse url {}", url);
                 }

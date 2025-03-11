@@ -56,7 +56,7 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     state_ = core::UniquePtr<LiveState>(new LiveState{});
 
     docQueue_ = core::UniquePtr<DocumentQueue>(new DocumentQueue{state_->threadSync});
-    frontier_ = core::UniquePtr<UrlFrontier>(new UrlFrontier{frontierDirectory_});
+    frontier_ = core::UniquePtr<UrlFrontier>(new UrlFrontier{frontierDirectory_, config.concurrent_robots_requests});
     requestManager_ = core::UniquePtr<RequestManager>(new RequestManager{frontier_.Get(), docQueue_.Get(), config});
 
     metricsServer_ = core::UniquePtr<metrics::MetricsServer>(new metrics::MetricsServer{config.metrics_port});

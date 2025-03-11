@@ -30,9 +30,14 @@ bool IsValidUrl(std::string_view url) {
     return url.length() >= http::MinUrlLength && url.length() <= http::MaxUrlLength && !HasInvalidChars(url);
 }
 
+constexpr unsigned int URLHighScoreCutoff = 80;
+constexpr unsigned int URLHighScoreQueuePercent = 75;
+
 }  //  namespace
 
-UrlFrontier::UrlFrontier(const std::string& frontierDirectory) : urlQueue_(frontierDirectory) {}
+UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests)
+    : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
+      robotRulesCache_(concurrentRobotsRequests) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);
@@ -111,18 +116,24 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
         }
     }
 
-    // Process waiting URLs
+    // Process completed robots.txt fetches
     std::set<std::string> allowedURLs;
-    core::LockGuard waitingLock(waitingUrlsMu_);
+    {
+        core::LockGuard waitingLock(waitingUrlsMu_);
+        core::LockGuard robotsLock(robotsCacheMu_);
 
-    auto it = urlsWaitingForRobots_.begin();
-    while (it != urlsWaitingForRobots_.end()) {
-        {
-            core::LockGuard robotsLock(robotsCacheMu_);
+        auto& completed = robotRulesCache_.CompletedFetchs();
+        while (!completed.empty()) {
+            auto it = urlsWaitingForRobots_.find(completed.back());
+            completed.pop_back();
+            if (it == urlsWaitingForRobots_.end()) {
+                continue;
+            }
+
             const auto* robots = robotRulesCache_.GetOrFetch(it->first);
             if (robots == nullptr) {
-                // Still fetching...
-                ++it;
+                // Shouldn't really happen unless some LRU cache funny business
+                // happens
                 continue;
             }
 
@@ -133,17 +144,13 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
                     allowedURLs.insert(url.url);
                 }
             }
+            urlsWaitingForRobotsCount_ -= it->second.size();
+            urlsWaitingForRobots_.erase(it);
         }
-        urlsWaitingForRobotsCount_ -= it->second.size();
-        it = urlsWaitingForRobots_.erase(it);
+
+        WaitingRobotsHosts.Set(urlsWaitingForRobots_.size());
+        WaitingRobotsURLs.Set(urlsWaitingForRobotsCount_);
     }
-
-    WaitingRobotsHosts.Set(urlsWaitingForRobots_.size());
-    WaitingRobotsURLs.Set(urlsWaitingForRobotsCount_);
-
-    // Release the waitingUrlsMu_ mutex -- we have determined which URLs can go
-    // onto the frontier immediately.
-    waitingLock.Unlock();
 
     if (!allowedURLs.empty()) {
         core::LockGuard queueLock(urlQueueMu_);

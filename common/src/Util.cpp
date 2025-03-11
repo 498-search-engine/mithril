@@ -14,6 +14,10 @@ bool InsensitiveStrEquals(std::string_view a, std::string_view b) {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), InsensitiveCharEquals);
 }
 
+bool InsensitiveStartsWith(std::string_view s, std::string_view prefix) {
+    return s.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), s.begin(), InsensitiveCharEquals);
+}
+
 size_t FindCaseInsensitive(const std::string& s, const char* q) {
     auto len = std::strlen(q);
     auto it = std::search(s.begin(), s.end(), q, q + len, [](unsigned char a, unsigned char b) -> bool {
