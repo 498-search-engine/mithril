@@ -5,9 +5,11 @@
 #include "http/Response.h"
 #include "http/URL.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <netdb.h>
 #include <optional>
+#include <string>
 #include <vector>
 #include <openssl/ssl.h>
 
@@ -120,6 +122,8 @@ private:
     void ProcessHeaders();
     void ProcessBody();
     void ProcessChunks();
+
+    bool ValidateHeaders(const std::string& headers);
 
     int SocketDescriptor() const;
     bool IsSecure() const;

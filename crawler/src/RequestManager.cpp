@@ -63,8 +63,9 @@ void RequestManager::Run(ThreadSync& sync) {
             }
         }
 
-        // We should have at least one request to execute
-        assert(requestExecutor_.InFlightRequests() > 0);
+        if (requestExecutor_.InFlightRequests() == 0) {
+            continue;
+        }
 
         // Process send/recv for connections
         requestExecutor_.ProcessConnections();

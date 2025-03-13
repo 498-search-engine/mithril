@@ -14,6 +14,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
@@ -115,6 +116,8 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
             return;
         }
     }
+
+    usleep(1);
 
     // Process completed robots.txt fetches
     std::set<std::string> allowedURLs;

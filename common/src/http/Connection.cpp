@@ -17,6 +17,7 @@
 #include <netdb.h>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <unistd.h>
 #include <utility>
@@ -570,6 +571,11 @@ void Connection::ProcessHeaders() {
     headersLength_ = headerEnd - buffer_.begin() + 4;  // Include delimiter
     auto headers = std::string{buffer_.begin(), headerEnd};
 
+    if (!ValidateHeaders(headers)) {
+        // Headers are not valid for request options
+        return;
+    }
+
     // Check for chunked encoding
     if (FindCaseInsensitive(headers, TransferEncodingChunkedHeader) != std::string::npos) {
         state_ = State::ReadingChunks;
@@ -593,6 +599,11 @@ void Connection::ProcessHeaders() {
         }
     }
 
+    state_ = State::ReadingBody;
+    ProcessBody();  // Process any body data we already have
+}
+
+bool Connection::ValidateHeaders(const std::string& headers) {
     if (!reqOptions_.allowedContentLanguage.empty()) {
         // Look for Content-Language header
         auto contentLanguagePos = FindCaseInsensitive(headers, ContentLanguageHeader);
@@ -607,13 +618,12 @@ void Connection::ProcessHeaders() {
             if (!anyMatch) {
                 spdlog::debug("content-language {} for response {} is not acceptable", contentLanguage, url_.url);
                 state_ = State::ResponseWrongLanguage;
-                return;
+                return false;
             }
         }
     }
 
-    state_ = State::ReadingBody;
-    ProcessBody();  // Process any body data we already have
+    return true;
 }
 
 void Connection::ProcessBody() {
