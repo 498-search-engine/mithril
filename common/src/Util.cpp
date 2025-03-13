@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <iterator>
 #include <string>
 #include <string_view>

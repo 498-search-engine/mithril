@@ -11,6 +11,18 @@
 #include <vector>
 #include <arpa/inet.h>
 
+#ifdef __APPLE__
+// On macOS, ntohll might be available or we define it
+#    ifndef ntohll
+#        define ntohll(x) (((uint64_t)ntohl((uint32_t)((x) >> 32))) | (((uint64_t)ntohl((uint32_t)(x))) << 32))
+#    endif
+#else
+// Linux and other platforms
+#    include <endian.h>
+// Use be64toh as equivalent to ntohll
+#    define ntohll(x) be64toh(x)
+#endif
+
 namespace mithril::data {
 
 namespace {
