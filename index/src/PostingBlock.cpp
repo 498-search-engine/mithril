@@ -19,12 +19,12 @@ BlockReader::BlockReader(const std::string& path) {
     // Get file size using lseek
     const off_t file_size = lseek(fd, 0, SEEK_END);
     lseek(fd, 0, SEEK_SET);
-    
+
     // Bulk read entire file into buffer
     file_buffer_.resize(file_size);
     const ssize_t bytes_read = read(fd, file_buffer_.data(), file_size);
     close(fd);
-    
+
     if (bytes_read != file_size) {
         throw std::runtime_error("Read failed: " + std::string(strerror(errno)));
     }
@@ -36,7 +36,7 @@ BlockReader::BlockReader(const std::string& path) {
 
     // Skip initial term count (not needed for sequential read)
     current += sizeof(uint32_t);
-    
+
     read_next();
 }
 
@@ -49,7 +49,7 @@ BlockReader::~BlockReader() {
     }
 }
 
-BlockReader::BlockReader(BlockReader&& other) noexcept 
+BlockReader::BlockReader(BlockReader&& other) noexcept
     : file_buffer_(std::move(other.file_buffer_)),
       current_term(std::move(other.current_term)),
       current_postings(std::move(other.current_postings)),
@@ -66,9 +66,9 @@ BlockReader::BlockReader(BlockReader&& other) noexcept
 BlockReader& BlockReader::operator=(BlockReader&& other) noexcept {
     if (this != &other) {
         file_buffer_ = std::move(other.file_buffer_);  // Move buffer first
-        data = file_buffer_.data();  // Update pointers after buffer is moved
+        data = file_buffer_.data();                    // Update pointers after buffer is moved
         size = file_buffer_.size();
-        
+
         current_term = std::move(other.current_term);
         current_postings = std::move(other.current_postings);
         current_positions = std::move(other.current_positions);
