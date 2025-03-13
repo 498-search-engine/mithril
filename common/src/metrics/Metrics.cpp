@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -36,6 +37,14 @@ void RenderPrometheusString(const std::string& s, std::string& out) {
     out.push_back('"');
 }
 
+std::string StringOfDouble(double val) {
+    if (val - std::floor(val) <= 0.0001 && val < static_cast<double>(std::numeric_limits<long>::max())) {
+        return std::to_string(static_cast<long>(val));
+    } else {
+        return std::to_string(val);
+    }
+}
+
 void RenderMetricValue(const std::string& name, const Labels& labels, double val, std::string& out) {
     // metric_name [
     //   "{" label_name "=" `"` label_value `"` { "," label_name "=" `"` label_value `"` } [ "," ] "}"
@@ -56,13 +65,7 @@ void RenderMetricValue(const std::string& name, const Labels& labels, double val
         out.push_back('}');
     }
     out.push_back(' ');
-
-    if (val - std::floor(val) <= 0.0001) {
-        out.append(std::to_string(static_cast<int>(val)));
-    } else {
-        out.append(std::to_string(val));
-    }
-
+    out.append(StringOfDouble(val));
     out.push_back('\n');
 }
 
@@ -208,7 +211,7 @@ HistogramMetric::HistogramMetric(std::string name, std::string help, std::vector
     bucketLabels_.reserve(buckets_.size() + 1);
     for (double bound : buckets_) {
         bucketLabels_.push_back({
-            {"le", std::to_string(bound)}
+            {"le", StringOfDouble(bound)}
         });
     }
     bucketLabels_.push_back({
@@ -230,6 +233,10 @@ void HistogramMetric::Observe(double value) {
 
     sum_ += value;
     count_ += 1.0;
+}
+
+void HistogramMetric::Observe(size_t value) {
+    Observe(static_cast<double>(value));
 }
 
 void HistogramMetric::Render(std::string& out) const {

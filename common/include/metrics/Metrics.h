@@ -101,6 +101,7 @@ public:
     HistogramMetric(std::string name, std::string help, std::vector<double> buckets);
 
     void Observe(double value);
+    void Observe(size_t value);
 
     void Render(std::string& out) const override;
 

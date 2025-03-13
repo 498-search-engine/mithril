@@ -112,6 +112,8 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
         frontier_->PushURLs(absoluteURLs);
         absoluteURLs.clear();
     }
+
+    DocumentSizeBytesMetric.Observe(res.body.size());
 }
 
 void Worker::ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header) {

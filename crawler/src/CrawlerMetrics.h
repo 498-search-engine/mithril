@@ -20,6 +20,12 @@ inline auto DocumentProcessDurationMetric = HistogramMetric{
     ExponentialBuckets(0.001, 2, 11),
 };
 
+inline auto DocumentSizeBytesMetric = HistogramMetric{
+    "crawler_document_size_bytes",
+    "Processed document size in bytes",
+    {1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 17, 1 << 18, 1 << 19, 1 << 20},
+};
+
 inline auto CrawlResponseCodesMetric = Metric{
     "crawler_crawl_response_codes",
     MetricTypeCounter,
@@ -95,6 +101,7 @@ inline auto FrontierFreshURLs = Metric{
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&DocumentsProcessedMetric);
     server.Register(&DocumentProcessDurationMetric);
+    server.Register(&DocumentSizeBytesMetric);
     server.Register(&CrawlResponseCodesMetric);
     server.Register(&RobotsResponseCodesMetric);
     server.Register(&InFlightCrawlRequestsMetric);
