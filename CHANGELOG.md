@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fix copying body data from buffer (#24)
 - Improve performance by splitting one lock into many (#34)
 - improve robots.txt throughput (probably) (#54)
+- fix getaddrinfo failure handling (#58)
 
 ## [0.1.0] - 2025-02-07
 
