@@ -15,7 +15,7 @@ public:
     MetricsServer(uint16_t port);
     ~MetricsServer();
 
-    void Register(const Metric* metric);
+    void Register(const RenderableMetric* metric);
     void Run(ThreadSync& sync);
 
 private:
@@ -26,7 +26,7 @@ private:
     uint16_t port_;
     int sock_;
 
-    std::vector<const Metric*> metrics_;
+    std::vector<const RenderableMetric*> metrics_;
 };
 
 }  // namespace mithril::metrics

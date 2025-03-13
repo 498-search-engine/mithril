@@ -53,7 +53,7 @@ MetricsServer::~MetricsServer() {
     }
 }
 
-void MetricsServer::Register(const Metric* metric) {
+void MetricsServer::Register(const RenderableMetric* metric) {
     metrics_.push_back(metric);
 }
 

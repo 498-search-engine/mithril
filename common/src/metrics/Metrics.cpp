@@ -3,11 +3,14 @@
 #include "core/locks.h"
 #include "core/memory.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 
 namespace mithril::metrics {
@@ -187,6 +190,98 @@ void Metric::Set(size_t val) {
 
 void Metric::Zero() {
     Get().Zero();
+}
+
+HistogramMetric::HistogramMetric(std::string name, std::string help, std::vector<double> buckets)
+    : name_(std::move(name)),
+      help_(std::move(help)),
+      bucketStr_(name_ + "_bucket"),
+      buckets_(std::move(buckets)),
+      sum_(0.0),
+      count_(0.0) {
+    if (buckets_.empty()) {
+        throw std::runtime_error("histogram must have at least one bucket");
+    }
+
+    std::sort(buckets_.begin(), buckets_.end());
+    bucketValues_.resize(buckets_.size() + 1, 0.0);
+    bucketLabels_.reserve(buckets_.size() + 1);
+    for (double bound : buckets_) {
+        bucketLabels_.push_back({
+            {"le", std::to_string(bound)}
+        });
+    }
+    bucketLabels_.push_back({
+        {"le", "+Inf"}
+    });
+}
+
+void HistogramMetric::Observe(double value) {
+    core::LockGuard lock(mu_);
+
+    for (size_t i = 0; i < buckets_.size(); ++i) {
+        if (value <= buckets_[i]) {
+            bucketValues_[i] += 1.0;
+        }
+    }
+
+    // Count in the +Inf bucket too
+    bucketValues_.back() += 1.0;
+
+    sum_ += value;
+    count_ += 1.0;
+}
+
+void HistogramMetric::Render(std::string& out) const {
+    core::LockGuard lock(mu_);
+    // # HELP http_request_duration_seconds HTTP request duration in seconds.
+    if (!help_.empty()) {
+        out.append("# HELP ");
+        out.append(name_);
+        out.push_back(' ');
+        out.append(help_);
+        out.push_back('\n');
+    }
+
+    // # TYPE http_request_duration_seconds histogram
+    out.append("# TYPE ");
+    out.append(name_);
+    out.push_back(' ');
+    out.append(MetricTypeHistogram);
+    out.push_back('\n');
+
+    for (size_t i = 0; i < bucketValues_.size(); ++i) {
+        RenderMetricValue(bucketStr_, bucketLabels_[i], bucketValues_[i], out);
+    }
+
+    RenderMetricValue(name_ + "_sum", {}, sum_, out);
+    RenderMetricValue(name_ + "_count", {}, count_, out);
+}
+
+std::vector<double> ExponentialBuckets(double start, double multiple, size_t count) {
+    std::vector<double> res;
+    res.reserve(count);
+
+    double v = start;
+    for (size_t i = 0; i < count; ++i) {
+        res.push_back(v);
+        v *= multiple;
+    }
+
+    return res;
+}
+
+std::vector<double> LinearBuckets(double start, double amount, size_t count) {
+    std::vector<double> res;
+    res.reserve(count);
+
+    double v = start;
+    for (size_t i = 0; i < count; ++i) {
+        res.push_back(v);
+        v += amount;
+    }
+
+    return res;
 }
 
 }  // namespace mithril::metrics

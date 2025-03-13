@@ -11,6 +11,7 @@
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace std {
 template<>
@@ -35,6 +36,7 @@ namespace mithril::metrics {
 
 constexpr const char* MetricTypeCounter = "counter";
 constexpr const char* MetricTypeGauge = "gauge";
+constexpr const char* MetricTypeHistogram = "histogram";
 
 using Labels = std::map<std::string, std::string>;
 using Label = Labels::value_type;
@@ -63,11 +65,16 @@ struct MetricDefinition {
     std::string help;
 };
 
-class Metric {
+class RenderableMetric {
+public:
+    virtual void Render(std::string& out) const = 0;
+};
+
+class Metric : public RenderableMetric {
 public:
     Metric(std::string name, std::string type, std::string help);
 
-    void Render(std::string& out) const;
+    void Render(std::string& out) const override;
 
     void Inc();
     void Dec();
@@ -88,6 +95,31 @@ private:
     core::UniquePtr<MetricValue> emptyLabelMetric_;
     std::unordered_map<Labels, core::UniquePtr<MetricValue>> rawMetrics_;
 };
+
+class HistogramMetric : public RenderableMetric {
+public:
+    HistogramMetric(std::string name, std::string help, std::vector<double> buckets);
+
+    void Observe(double value);
+
+    void Render(std::string& out) const override;
+
+private:
+    mutable core::Mutex mu_;
+
+    std::string name_;
+    std::string help_;
+    std::string bucketStr_;
+
+    std::vector<double> buckets_;
+    std::vector<double> bucketValues_;
+    std::vector<Labels> bucketLabels_;
+
+    double sum_;
+    double count_;
+};
+
+std::vector<double> ExponentialBuckets(double start, double multiple, size_t count);
 
 }  // namespace mithril::metrics
 
