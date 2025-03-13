@@ -1,5 +1,6 @@
 #include "DocumentQueue.h"
 
+#include "CrawlerMetrics.h"
 #include "ThreadSync.h"
 #include "core/locks.h"
 #include "http/RequestExecutor.h"
@@ -20,18 +21,17 @@ DocumentQueue::DocumentQueue(ThreadSync& sync) : sync_(sync) {
 void DocumentQueue::Push(http::CompleteResponse res) {
     core::LockGuard lock(mu_);
     readyResponses_.push(std::move(res));
-    SPDLOG_TRACE("document queue size increased = {}", readyResponses_.size());
     cv_.Signal();
+    DocumentQueueSizeMetric.Set(readyResponses_.size());
 }
 
 void DocumentQueue::PushAll(std::vector<http::CompleteResponse>& res) {
     core::LockGuard lock(mu_);
     for (auto& r : res) {
-        SPDLOG_DEBUG("ready document added to queue: {}", r.req.Url().url);
         readyResponses_.push(std::move(r));
     }
-    SPDLOG_TRACE("document queue size increased = {}", readyResponses_.size());
     cv_.Broadcast();
+    DocumentQueueSizeMetric.Set(readyResponses_.size());
 }
 
 std::optional<http::CompleteResponse> DocumentQueue::Pop() {
@@ -43,7 +43,7 @@ std::optional<http::CompleteResponse> DocumentQueue::Pop() {
 
     auto res = std::move(readyResponses_.front());
     readyResponses_.pop();
-    SPDLOG_TRACE("document queue size decreased = {}", readyResponses_.size());
+    DocumentQueueSizeMetric.Set(readyResponses_.size());
 
     return {std::move(res)};
 }

@@ -2,6 +2,7 @@
 #define CRAWLER_CONFIG_H
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,8 @@ struct CrawlerConfig {
     double middle_queue_utilization_target = 0.25;
 
     size_t concurrent_robots_requests = 100;
+
+    uint16_t metrics_port = 9000;
 };
 
 CrawlerConfig LoadConfigFromFile(const std::string& path);

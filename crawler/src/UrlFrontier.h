@@ -156,6 +156,7 @@ private:
     RobotRulesCache robotRulesCache_;
     // URLs waiting for a robots.txt request to complete
     std::unordered_map<http::CanonicalHost, std::vector<http::URL>> urlsWaitingForRobots_;
+    size_t urlsWaitingForRobotsCount_{0};
 
     // List of fresh URLs to consider for placement into the frontier, pushed by
     // workers

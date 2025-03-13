@@ -1,6 +1,7 @@
 #include "Worker.h"
 
 #include "Clock.h"
+#include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "State.h"
 #include "ThreadSync.h"
@@ -49,10 +50,11 @@ void Worker::Run() {
         auto start = MonotonicTimeMs();
         ProcessDocument(doc->req, doc->res, doc->header);
         auto end = MonotonicTimeMs();
-        spdlog::debug("worker took {} ms to process document {} ({} bytes)",
-                      end - start,
-                      doc->req.Url().url,
-                      doc->res.body.size());
+        auto elapsedMs = end - start;
+
+        SPDLOG_DEBUG(
+            "worker took {} ms to process document {} ({} bytes)", elapsedMs, doc->req.Url().url, doc->res.body.size());
+        DocumentProcessDurationMetric.Observe(static_cast<double>(elapsedMs) / 1000.0);
     }
     spdlog::info("worker terminating");
 }
@@ -110,9 +112,18 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
         frontier_->PushURLs(absoluteURLs);
         absoluteURLs.clear();
     }
+
+    DocumentSizeBytesMetric.Observe(res.body.size());
 }
 
 void Worker::ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header) {
+    DocumentsProcessedMetric.Inc();
+    CrawlResponseCodesMetric
+        .WithLabels({
+            {"status", std::to_string(header.status)}
+    })
+        .Inc();
+
     switch (header.status) {
     case http::StatusCode::OK:
         if (!header.ContentType) {

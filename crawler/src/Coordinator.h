@@ -7,6 +7,7 @@
 #include "State.h"
 #include "UrlFrontier.h"
 #include "core/memory.h"
+#include "metrics/MetricsServer.h"
 
 #include <string>
 
@@ -33,6 +34,7 @@ private:
     core::UniquePtr<DocumentQueue> docQueue_;
     core::UniquePtr<UrlFrontier> frontier_;
     core::UniquePtr<RequestManager> requestManager_;
+    core::UniquePtr<metrics::MetricsServer> metricsServer_;
 };
 
 }  // namespace mithril

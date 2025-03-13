@@ -185,6 +185,7 @@ private:
     std::queue<http::CanonicalHost> queuedFetches_;
     http::RequestExecutor executor_;
 
+    size_t waitingRobotsURLsCount_{0};
     std::vector<http::CanonicalHost> completedFetches_;
 };
 

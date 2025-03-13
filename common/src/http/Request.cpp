@@ -2,6 +2,8 @@
 
 #include "http/URL.h"
 
+#include <utility>
+
 namespace mithril::http {
 
 namespace {
@@ -15,11 +17,11 @@ constexpr const char* ConnectionCloseHeader = "Connection: close\r\n";
 }  // namespace
 
 Request Request::GET(URL url, RequestOptions options) {
-    return Request{Method::GET, std::move(url), options};
+    return Request{Method::GET, std::move(url), std::move(options)};
 }
 
 Request::Request(enum Method method, URL url, RequestOptions options)
-    : method_(method), url_(std::move(url)), options_(options) {}
+    : method_(method), url_(std::move(url)), options_(std::move(options)) {}
 
 Method Request::GetMethod() const {
     return method_;

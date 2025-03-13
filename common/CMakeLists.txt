@@ -16,6 +16,9 @@ add_library(common STATIC
     src/http/SSL.cpp
     src/http/URL.cpp
 
+    src/metrics/Metrics.cpp
+    src/metrics/MetricsServer.cpp
+
     src/ranking/CrawlerRanker.cpp
 
     src/Clock.cpp

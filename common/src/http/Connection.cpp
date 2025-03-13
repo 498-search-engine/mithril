@@ -99,7 +99,7 @@ std::optional<Connection> Connection::NewFromRequest(const Request& req) {
     return Connection::NewFromURL(req.GetMethod(), req.Url(), req.Options());
 }
 
-std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, const RequestOptions& options) {
+std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, RequestOptions options) {
     struct addrinfo* address;
     struct addrinfo hints {};
     memset(&hints, 0, sizeof(hints));
@@ -128,15 +128,15 @@ std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, 
         // continue anyway
     }
 
-    return Connection{fd, address, method, url, options};
+    return Connection{fd, address, method, url, std::move(options)};
 }
 
-Connection::Connection(int fd, struct addrinfo* address, Method method, const URL& url, const RequestOptions& options)
+Connection::Connection(int fd, struct addrinfo* address, Method method, const URL& url, RequestOptions options)
     : fd_(fd),
       address_(address),
       state_(State::TCPConnecting),
       url_(url),
-      reqOptions_(options),
+      reqOptions_(std::move(options)),
       rawRequest_(BuildRawRequestString(method, url)),
       requestBytesSent_(0),
       contentLength_(0),
@@ -160,7 +160,7 @@ Connection::Connection(Connection&& other) noexcept
       address_(other.address_),
       state_(other.state_),
       url_(std::move(other.url_)),
-      reqOptions_(other.reqOptions_),
+      reqOptions_(std::move(other.reqOptions_)),
       rawRequest_(std::move(other.rawRequest_)),
       requestBytesSent_(other.requestBytesSent_),
       contentLength_(other.contentLength_),
@@ -185,7 +185,7 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     address_ = other.address_;
     state_ = other.state_;
     url_ = std::move(other.url_);
-    reqOptions_ = other.reqOptions_;
+    reqOptions_ = std::move(other.reqOptions_);
     rawRequest_ = std::move(other.rawRequest_);
     requestBytesSent_ = other.requestBytesSent_;
     contentLength_ = other.contentLength_;

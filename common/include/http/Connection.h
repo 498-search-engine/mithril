@@ -19,7 +19,7 @@ enum class RequestError : uint8_t;
 class Connection {
 public:
     static std::optional<Connection> NewFromRequest(const Request& req);
-    static std::optional<Connection> NewFromURL(Method method, const URL& url, const RequestOptions& options = {});
+    static std::optional<Connection> NewFromURL(Method method, const URL& url, RequestOptions options = {});
 
     ~Connection();
 
@@ -102,7 +102,7 @@ private:
      * addrinfo and will call freeaddrinfo when appropriate.
      * @param req Request to be executed on the connection
      */
-    Connection(int fd, struct addrinfo* address, Method method, const URL& url, const RequestOptions& options);
+    Connection(int fd, struct addrinfo* address, Method method, const URL& url, RequestOptions options);
 
     void InitializeSSL();
 

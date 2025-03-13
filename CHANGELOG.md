@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - index v2 (positional indexing, perf improvs, field tagging, v1 isr) (#48)
 - reject page based on `Content-Language` header (#52)
 - split url queue into high and low scoring queue (#53)
+- metrics for crawler (#50)
 
 ### Fixed
 - Fix copying body data from buffer (#24)

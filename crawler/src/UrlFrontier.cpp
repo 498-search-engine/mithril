@@ -1,5 +1,6 @@
 #include "UrlFrontier.h"
 
+#include "CrawlerMetrics.h"
 #include "Robots.h"
 #include "ThreadSync.h"
 #include "core/locks.h"
@@ -77,6 +78,16 @@ void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
 }
 
 void UrlFrontier::FreshURLsThread(ThreadSync& sync) {
+    {
+        core::LockGuard lock(urlQueueMu_);
+        FrontierSize.Set(urlQueue_.TotalSize());
+        FrontierQueueSize.Set(urlQueue_.Size());
+    }
+    {
+        core::LockGuard lock(freshURLsMu_);
+        FrontierFreshURLs.Set(freshURLs_.size());
+    }
+
     while (true) {
         ProcessFreshURLs(sync);
         if (sync.ShouldShutdown()) {
@@ -133,8 +144,12 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
                     allowedURLs.insert(url.url);
                 }
             }
+            urlsWaitingForRobotsCount_ -= it->second.size();
             urlsWaitingForRobots_.erase(it);
         }
+
+        WaitingRobotsHosts.Set(urlsWaitingForRobots_.size());
+        WaitingRobotsURLs.Set(urlsWaitingForRobotsCount_);
     }
 
     if (!allowedURLs.empty()) {
@@ -143,6 +158,8 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
             urlQueue_.PushURL(url);
         }
         urlQueueCv_.Broadcast();
+        FrontierSize.Set(urlQueue_.TotalSize());
+        FrontierQueueSize.Set(urlQueue_.Size());
     }
 }
 
@@ -153,6 +170,7 @@ void UrlFrontier::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 void UrlFrontier::PushURL(std::string u) {
     core::LockGuard lock(freshURLsMu_);
     freshURLs_.push_back(std::move(u));
+    FrontierFreshURLs.Set(freshURLs_.size());
     freshURLsCv_.Signal();
 }
 
@@ -161,6 +179,7 @@ void UrlFrontier::PushURLs(std::vector<std::string>& urls) {
     for (auto& url : urls) {
         freshURLs_.push_back(std::move(url));
     }
+    FrontierFreshURLs.Set(freshURLs_.size());
     freshURLsCv_.Broadcast();
 }
 
@@ -176,6 +195,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
 
         urls = std::move(freshURLs_);
         freshURLs_.clear();
+        FrontierFreshURLs.Zero();
     }
 
     SPDLOG_TRACE("starting processing of {} fresh urls", urls.size());
@@ -266,6 +286,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
                         // Notify that a new request for a robots.txt page is available
                         robotsCv_.Signal();
                     }
+                    ++urlsWaitingForRobotsCount_;
                     break;
                 }
             case RobotsLookupResult::Allowed:
@@ -276,6 +297,8 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
                 break;
             }
         }
+        WaitingRobotsHosts.Set(urlsWaitingForRobots_.size());
+        WaitingRobotsURLs.Set(urlsWaitingForRobotsCount_);
     }
 
     if (pushURLs.empty()) {
@@ -289,6 +312,8 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
         for (auto* url : pushURLs) {
             urlQueue_.PushURL(url->url);
         }
+        FrontierSize.Set(urlQueue_.TotalSize());
+        FrontierQueueSize.Set(urlQueue_.Size());
     }
     urlQueueCv_.Broadcast();
 
