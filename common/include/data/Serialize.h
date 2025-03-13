@@ -11,6 +11,18 @@
 #include <vector>
 #include <arpa/inet.h>
 
+#ifdef __APPLE__
+// On macOS, htonll might be available or we define it
+#    ifndef htonll
+#        define htonll(x) (((uint64_t)htonl((uint32_t)((x) >> 32))) | (((uint64_t)htonl((uint32_t)(x))) << 32))
+#    endif
+#else
+// Linux and other platforms
+#    include <endian.h>
+// Use htobe64 as equivalent to htonll
+#    define htonll(x) htobe64(x)
+#endif
+
 namespace mithril::data {
 
 namespace {
