@@ -86,8 +86,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
             return;
         }
 
-        spdlog::debug(
-            "middle queue: got {} out of {} max atLeastOne = {}", r.size(), totalTargetQueuedURLs, atLeastOne);
+        SPDLOG_TRACE("middle queue: got {} out of {} max atLeastOne = {}", r.size(), totalTargetQueuedURLs, atLeastOne);
 
         // Push all obtained URLs into the middle queue
         now = MonotonicTimeMs();
