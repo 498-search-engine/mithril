@@ -50,10 +50,11 @@ void Worker::Run() {
         auto start = MonotonicTimeMs();
         ProcessDocument(doc->req, doc->res, doc->header);
         auto end = MonotonicTimeMs();
-        spdlog::debug("worker took {} ms to process document {} ({} bytes)",
-                      end - start,
-                      doc->req.Url().url,
-                      doc->res.body.size());
+        auto elapsedMs = end - start;
+
+        SPDLOG_DEBUG(
+            "worker took {} ms to process document {} ({} bytes)", elapsedMs, doc->req.Url().url, doc->res.body.size());
+        DocumentProcessDurationMetric.Observe(static_cast<double>(elapsedMs) / 1000.0);
     }
     spdlog::info("worker terminating");
 }

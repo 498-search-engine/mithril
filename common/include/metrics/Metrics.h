@@ -120,6 +120,7 @@ private:
 };
 
 std::vector<double> ExponentialBuckets(double start, double multiple, size_t count);
+std::vector<double> LinearBuckets(double start, double amount, size_t count);
 
 }  // namespace mithril::metrics
 

@@ -14,6 +14,12 @@ inline auto DocumentsProcessedMetric = Metric{
     "Number of documents processed by the crawler",
 };
 
+inline auto DocumentProcessDurationMetric = HistogramMetric{
+    "crawler_document_process_duration",
+    "Document process duration in seconds",
+    ExponentialBuckets(0.001, 2, 11),
+};
+
 inline auto CrawlResponseCodesMetric = Metric{
     "crawler_crawl_response_codes",
     MetricTypeCounter,
@@ -88,6 +94,7 @@ inline auto FrontierFreshURLs = Metric{
 
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&DocumentsProcessedMetric);
+    server.Register(&DocumentProcessDurationMetric);
     server.Register(&CrawlResponseCodesMetric);
     server.Register(&RobotsResponseCodesMetric);
     server.Register(&InFlightCrawlRequestsMetric);
