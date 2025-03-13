@@ -101,7 +101,7 @@ std::optional<Connection> Connection::NewFromRequest(const Request& req) {
 }
 
 std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, RequestOptions options) {
-    struct addrinfo* address;
+    struct addrinfo* address = nullptr;
     struct addrinfo hints {};
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -112,8 +112,11 @@ std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, 
     const char* port = url.port.empty() ? (isSecure ? "443" : "80") : url.port.c_str();
 
     int status = getaddrinfo(url.host.c_str(), port, &hints, &address);
-    if (status == -1 || address == nullptr) {
-        spdlog::warn("failed to get addr for {}:{}", url.host, port);
+    if (status != 0) {
+        spdlog::warn("failed to get addr for {}:{}: {}", url.host, port, gai_strerror(status));
+        return std::nullopt;
+    } else if (address == nullptr) {
+        spdlog::warn("failed to get addr for {}:{}: address is null", url.host, port);
         return std::nullopt;
     }
 
