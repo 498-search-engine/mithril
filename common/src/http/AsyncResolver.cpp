@@ -1,17 +1,47 @@
 #include "http/AsyncResolver.h"
 
 #include "core/locks.h"
+#include "http/Resolver.h"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <netdb.h>
-#include <sys/sysinfo.h>
+#include <optional>
+#include <string>
+#include <utility>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
+#    include <sys/sysctl.h>
+#    include <sys/types.h>
+#else
+#    include <sys/sysinfo.h>
+#endif
+
+namespace {
+
+int GetNProcs() {
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
+    int ncpu;
+    size_t sz = sizeof(ncpu);
+    int status = sysctlbyname("hw.ncpu", &ncpu, &sz, nullptr, 0);
+    if (status != 0) {
+        return 1;
+    }
+    return ncpu;
+#else
+    return get_nprocs();
+#endif
+}
+
+}  // namespace
 
 namespace mithril::http {
 
-AsyncResolver::AsyncResolver() : AsyncResolver(std::clamp(get_nprocs() * 2, 4, 16)) {}
+AsyncResolver::AsyncResolver() : AsyncResolver(std::clamp(GetNProcs() * 2, 4, 16)) {}
 
 AsyncResolver::AsyncResolver(size_t workers) {
     spdlog::info("pooled async resolver starting with {} workers", workers);
@@ -85,7 +115,7 @@ void AsyncResolver::ResolveSync(const ResolveRequest& req) {
     ResolutionResult result;
 
     struct addrinfo* address = nullptr;
-    struct addrinfo hints{};
+    struct addrinfo hints {};
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
