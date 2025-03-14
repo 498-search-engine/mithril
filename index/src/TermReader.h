@@ -26,6 +26,7 @@ public:
     uint32_t currentFrequency() const;
     std::vector<uint32_t> currentPositions() const;
     std::string getTerm() const { return term_; }
+    uint32_t getDocumentCount() const { return postings_.size(); }
 
 private:
     std::string term_;

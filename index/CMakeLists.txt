@@ -6,6 +6,8 @@ add_library(index STATIC
     src/TermReader.cpp
     src/TermDictionary.cpp
     src/IndexStreamReader.cpp
+    src/TermOR.cpp
+    src/TermAND.cpp
 )
 target_include_directories(index PUBLIC src)
 target_link_libraries(index PUBLIC
@@ -42,3 +44,9 @@ add_executable(test_termReader
 target_link_libraries(test_termReader PRIVATE
     index
 )
+
+add_executable(test_termOR src/test_termOR.cpp)
+target_link_libraries(test_termOR PRIVATE index)
+
+add_executable(test_termAND src/test_termAND.cpp)
+target_link_libraries(test_termAND PRIVATE index)
