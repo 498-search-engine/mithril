@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstddef>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <spdlog/spdlog.h>
@@ -138,8 +139,15 @@ std::optional<URL> ParseURL(std::string_view s) {
             return std::nullopt;
         }
 
-        const int portNum = std::stoi(u.port);
-        if (portNum < 1 || portNum > 65535) {
+        try {
+            const int portNum = std::stoi(u.port);
+            if (portNum < 1 || portNum > 65535) {
+                SPDLOG_DEBUG("parse url: port {} out of range in {}", u.port, uv);
+                return std::nullopt;
+            }
+        } catch (const std::invalid_argument&) {
+            return std::nullopt;
+        } catch (const std::out_of_range&) {
             SPDLOG_DEBUG("parse url: port {} out of range in {}", u.port, uv);
             return std::nullopt;
         }
