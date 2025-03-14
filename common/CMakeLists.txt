@@ -16,6 +16,7 @@ add_library(common STATIC
     src/http/Resolver.cpp
     src/http/Response.cpp
     src/http/SSL.cpp
+    src/http/SyncResolver.cpp
     src/http/URL.cpp
 
     src/metrics/Metrics.cpp

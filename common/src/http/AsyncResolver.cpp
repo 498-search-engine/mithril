@@ -112,13 +112,17 @@ void AsyncResolver::ProcessCompletedRequests(core::LockGuard lock) {
 
     for (auto& [status, req] : completed) {
         ResolutionResult result;
-        result.status = status;
 
-        if (status == 0 && req->request.ar_result != nullptr) {
+        if (status != 0) {
+            result.status = status;
+            result.addr = std::nullopt;
+        } else if (req->request.ar_result == nullptr) {
+            result.status = EAI_SYSTEM;
+            result.addr = std::nullopt;
+        } else {
+            result.status = status;
             result.addr = ResolvedAddr(req->request.ar_result);
             freeaddrinfo(req->request.ar_result);
-        } else {
-            result.addr = std::nullopt;
         }
 
         lock.Lock();
