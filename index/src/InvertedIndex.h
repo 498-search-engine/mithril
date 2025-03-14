@@ -33,7 +33,7 @@ private:
 
     // Output config
     const std::string output_dir_;
-    static constexpr size_t MAX_BLOCK_SIZE = 1024 * 1024 * 1024;
+    static constexpr size_t MAX_BLOCK_SIZE = 512 * 1024 * 1024;
     static constexpr size_t MERGE_FACTOR = 32;
 
     // core methods

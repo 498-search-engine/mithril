@@ -5,6 +5,7 @@
 #include <cctype>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 
 namespace mithril {
 
@@ -16,6 +17,76 @@ enum class FieldType {
     // Can be extended with HEADING, BOLD, etc.
 };
 
+class StopwordFilter {
+private:
+    static std::unordered_set<std::string> stopwords_;
+    static bool initialized_;
+    static bool enabled_;
+
+public:
+    static void initialize() {
+        if (initialized_)
+            return;
+
+        stopwords_ = {
+            // Basic stopwords
+            "a",       "an",      "the",       "and",     "or",      "but",        "is",       "are",        "was",
+            "were",    "be",      "been",      "being",   "in",      "on",         "at",       "to",         "for",
+            "with",    "by",      "about",     "against", "between", "into",       "through",  "during",     "before",
+            "after",   "above",   "below",     "from",    "up",      "down",       "of",       "off",        "over",
+            "under",   "again",   "further",   "then",    "once",    "here",       "there",    "when",       "where",
+            "why",     "how",     "all",       "any",     "both",    "each",       "few",      "more",       "most",
+            "other",   "some",    "such",      "no",      "nor",     "not",        "only",     "own",        "same",
+            "so",      "than",    "too",       "very",    "can",     "will",       "just",     "should",     "now",
+            "this",    "that",    "these",     "those",   "i",       "me",         "my",       "myself",     "we",
+            "our",     "ours",    "ourselves", "you",     "your",    "yours",      "yourself", "yourselves", "he",
+            "him",     "his",     "himself",   "she",     "her",     "hers",       "herself",  "it",         "its",
+            "itself",  "they",    "them",      "their",   "theirs",  "themselves", "what",     "which",      "who",
+            "whom",    "whose",   "as",        "until",   "while",   "because",    "if",       "though",     "unless",
+            "whereas", "whether", "although",  "until"};
+
+        initialized_ = true;
+        enabled_ = true;
+    }
+
+    static bool isStopword(const std::string& term, FieldType field = FieldType::BODY) {
+        if (!initialized_)
+            initialize();
+        if (!enabled_)
+            return false;
+
+        bool is_stopword = stopwords_.find(term) != stopwords_.end();
+        if (is_stopword && field == FieldType::BODY) {
+            return true;
+        }
+
+        return false;
+    }
+
+    static void setEnabled(bool enabled) {
+        if (!initialized_)
+            initialize();
+        enabled_ = enabled;
+    }
+
+    static void addStopword(const std::string& word) {
+        if (!initialized_)
+            initialize();
+        stopwords_.insert(word);
+    }
+
+    static void removeStopword(const std::string& word) {
+        if (!initialized_)
+            initialize();
+        stopwords_.erase(word);
+    }
+};
+
+// init static members
+std::unordered_set<std::string> StopwordFilter::stopwords_;
+bool StopwordFilter::initialized_ = false;
+bool StopwordFilter::enabled_ = true;
+
 class TokenNormalizer {
 public:
     static std::string normalize(std::string_view token, FieldType field = FieldType::BODY) {
@@ -24,12 +95,10 @@ public:
 
         std::string processed(token);
 
-        // Phase 1: Content Cleaning
+        // Phase 1 & 2: Content Cleaning & Filtering
         stripHtmlTags(processed);
         removeHtmlEntities(processed);
         smartTrim(processed);
-
-        // Phase 2: Aggressive Filtering
         if (shouldReject(processed))
             return "";
 
@@ -37,8 +106,16 @@ public:
         smartCaseFold(processed);
         normalizePunctuation(processed);
 
-        // Final validation and field decoration
         if (isValidToken(processed)) {
+            if (field == FieldType::BODY && StopwordFilter::isStopword(processed)) {
+                return "";  // Filter out stopwords in body text
+            }
+
+            if ((field == FieldType::TITLE || field == FieldType::ANCHOR) && StopwordFilter::isStopword(processed) &&
+                processed.length() <= 3) {
+                return "";  // Only filter very short stopwords in titles
+            }
+
             return decorateToken(processed, field);
         }
         return "";
