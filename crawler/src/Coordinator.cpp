@@ -119,6 +119,16 @@ void Coordinator::Run() {
     // Send shutdown to threads
     state_->threadSync.Shutdown();
 
+    // std::atomic<bool> keepStopping{true};
+
+    // core::Thread shutdownThread([&] {
+    //     while (keepStopping.load()) {
+    //         spdlog::info("sending shutdown");
+    //         state_->threadSync.Shutdown();
+    //         usleep(10 * 1000);
+    //     }
+    // });
+
     // Wait for threads to finish
     requestThread.Join();
     robotsThread.Join();
@@ -127,6 +137,9 @@ void Coordinator::Run() {
         t.Join();
     }
     metricsThread.Join();
+
+    // keepStopping.store(false);
+    // shutdownThread.Join();
 
     spdlog::info("all threads stopped, saving crawler state");
     DumpState();

@@ -9,9 +9,11 @@ add_library(common STATIC
     src/html/Parser.cpp
     src/html/Tags.cpp
 
+    src/http/AsyncResolver.cpp
     src/http/Connection.cpp
     src/http/Request.cpp
     src/http/RequestExecutor.cpp
+    src/http/Resolver.cpp
     src/http/Response.cpp
     src/http/SSL.cpp
     src/http/URL.cpp
