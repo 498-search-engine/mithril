@@ -79,6 +79,13 @@ void RequestExecutor::Add(Request req) {
     });
 }
 
+void RequestExecutor::TouchRequestTimeouts() {
+    auto now = MonotonicTimeMs();
+    for (auto& conn : activeConnections_) {
+        conn.second.state.startTime = now;
+    }
+}
+
 void RequestExecutor::SetupActiveConnection(ReqConn reqConn) {
     int fd = reqConn.conn.SocketDescriptor();
     activeConnections_.emplace(fd, std::move(reqConn));

@@ -66,6 +66,11 @@ public:
     void FreshURLsThread(ThreadSync& sync);
 
     /**
+     * @brief Resets the timeout progress for all active robots requests.
+     */
+    void TouchRobotRequestTimeouts();
+
+    /**
      * @brief Gets at least one URL from the frontier, up to max
      *
      * @param sync ThreadSync to cancel/pause waiting operations

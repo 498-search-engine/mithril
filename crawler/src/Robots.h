@@ -149,6 +149,11 @@ public:
      */
     void ProcessPendingRequests();
 
+    /**
+     * @brief Resets the timeout progress for all active robots requests.
+     */
+    void TouchRobotRequestTimeouts();
+
     std::vector<http::CanonicalHost>& CompletedFetchs();
 
 private:

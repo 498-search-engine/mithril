@@ -347,4 +347,9 @@ void UrlFrontier::DumpPendingURLs(std::vector<std::string>& urls) {
     }
 }
 
+void UrlFrontier::TouchRobotRequestTimeouts() {
+    core::LockGuard robotsLock(robotsCacheMu_);
+    robotRulesCache_.TouchRobotRequestTimeouts();
+}
+
 }  // namespace mithril

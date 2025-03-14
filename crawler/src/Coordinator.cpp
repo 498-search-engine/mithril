@@ -276,6 +276,12 @@ void Coordinator::DoSnapshot(size_t n) {
         RmRf(snapshotOldDir.c_str());
     }
 
+    // Reset progress on request timeouts -- snapshot may have taken a sizeable
+    // amount of time and we don't want to count the duration elapsed against
+    // the request timeout.
+    requestManager_->TouchRequestTimeouts();
+    frontier_->TouchRobotRequestTimeouts();
+
     spdlog::info("resuming crawler");
     state_->threadSync.EndPause();
 }

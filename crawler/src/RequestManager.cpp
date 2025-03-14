@@ -90,6 +90,10 @@ void RequestManager::Run(ThreadSync& sync) {
     spdlog::info("request manager terminating");
 }
 
+void RequestManager::TouchRequestTimeouts() {
+    requestExecutor_.TouchRequestTimeouts();
+}
+
 void RequestManager::DispatchFailedRequest(http::FailedRequest failed) {
     spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, http::StringOfRequestError(failed.error));
     // TODO: pass off to whatever
