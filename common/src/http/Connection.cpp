@@ -3,6 +3,7 @@
 #include "Util.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
+#include "http/Resolver.h"
 #include "http/Response.h"
 #include "http/SSL.h"
 #include "http/URL.h"
@@ -101,28 +102,8 @@ std::optional<Connection> Connection::NewFromRequest(const Request& req) {
 }
 
 std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, RequestOptions options) {
-    struct addrinfo* address = nullptr;
-    struct addrinfo hints {};
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    bool isSecure = url.scheme == "https";
-    const char* port = url.port.empty() ? (isSecure ? "443" : "80") : url.port.c_str();
-
-    int status = getaddrinfo(url.host.c_str(), port, &hints, &address);
-    if (status != 0) {
-        spdlog::warn("failed to get addr for {}:{}: {}", url.host, port, gai_strerror(status));
-        return std::nullopt;
-    } else if (address == nullptr) {
-        spdlog::warn("failed to get addr for {}:{}: address is null", url.host, port);
-        return std::nullopt;
-    }
-
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (fd == -1) {
-        freeaddrinfo(address);
         spdlog::error("failed to create socket: {}", strerror(errno));
         return std::nullopt;
     }
@@ -132,14 +113,14 @@ std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, 
         // continue anyway
     }
 
-    return Connection{fd, address, method, url, std::move(options)};
+    return Connection{fd, method, url, std::move(options)};
 }
 
-Connection::Connection(int fd, struct addrinfo* address, Method method, const URL& url, RequestOptions options)
+Connection::Connection(int fd, Method method, const URL& url, RequestOptions options)
     : fd_(fd),
-      address_(address),
-      state_(State::TCPConnecting),
+      state_(State::Resolving),
       url_(url),
+      port_(url.port.empty() ? (url.scheme == "https" ? "443" : "80") : url.port),
       reqOptions_(std::move(options)),
       rawRequest_(BuildRawRequestString(method, url)),
       requestBytesSent_(0),
@@ -161,9 +142,10 @@ Connection::~Connection() {
 
 Connection::Connection(Connection&& other) noexcept
     : fd_(other.fd_),
-      address_(other.address_),
+      address_(std::move(other.address_)),
       state_(other.state_),
       url_(std::move(other.url_)),
+      port_(std::move(other.port_)),
       reqOptions_(std::move(other.reqOptions_)),
       rawRequest_(std::move(other.rawRequest_)),
       requestBytesSent_(other.requestBytesSent_),
@@ -177,7 +159,6 @@ Connection::Connection(Connection&& other) noexcept
       ssl_(other.ssl_),
       isSecure_(other.isSecure_) {
     other.fd_ = -1;
-    other.address_ = nullptr;
     other.state_ = State::Closed;
     other.ssl_ = nullptr;
 }
@@ -186,9 +167,10 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     Close();
 
     fd_ = other.fd_;
-    address_ = other.address_;
+    address_ = std::move(other.address_);
     state_ = other.state_;
     url_ = std::move(other.url_);
+    port_ = std::move(other.port_);
     reqOptions_ = std::move(other.reqOptions_);
     rawRequest_ = std::move(other.rawRequest_);
     requestBytesSent_ = other.requestBytesSent_;
@@ -203,7 +185,6 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     isSecure_ = other.isSecure_;
 
     other.fd_ = -1;
-    other.address_ = nullptr;
     other.state_ = State::Closed;
     other.ssl_ = nullptr;
 
@@ -263,11 +244,6 @@ void Connection::Close() {
         SSL_shutdown(ssl_);
         SSL_free(ssl_);
         ssl_ = nullptr;
-    }
-    if (address_ != nullptr) {
-        // TODO(dsage): only do this if we manage the lifetime of address_
-        freeaddrinfo(address_);
-        address_ = nullptr;
     }
     if (fd_ != -1) {
         close(fd_);
@@ -409,8 +385,28 @@ bool Connection::ReadFromSocketSSL() {
 }
 
 void Connection::Connect() {
+    if (state_ == State::Resolving) {
+        Resolver::ResolutionResult result{};
+        bool resolved = ApplicationResolver->Resolve(url_.host, port_, result);
+        if (!resolved) {
+            // Address resolution in progress
+            return;
+        }
+
+        if (result.status != 0) {
+            spdlog::warn("failed to get addr for {}:{}", url_.host, port_);
+            state_ = State::ConnectError;
+            Close();
+            return;
+        }
+
+        assert(result.addr.has_value());
+        address_ = std::move(*result.addr);
+        state_ = State::TCPConnecting;
+    }
+
     if (state_ == State::TCPConnecting) {
-        int status = connect(fd_, address_->ai_addr, address_->ai_addrlen);
+        int status = connect(fd_, address_.AddrInfo()->ai_addr, address_.AddrInfo()->ai_addrlen);
         if (status == 0) {
             state_ = isSecure_ ? State::SSLConnecting : State::Sending;
         } else if (status < 0) {
@@ -518,7 +514,7 @@ bool Connection::ProcessReceive() {
 }
 
 bool Connection::IsConnecting() const {
-    return state_ == State::TCPConnecting || state_ == State::SSLConnecting;
+    return state_ == State::Resolving || state_ == State::TCPConnecting || state_ == State::SSLConnecting;
 }
 
 bool Connection::IsActive() const {
