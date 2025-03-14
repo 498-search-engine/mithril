@@ -1,7 +1,8 @@
-#include "TermReader.h"
 #include "DocumentMapReader.h"
-#include <iostream>
+#include "TermReader.h"
+
 #include <iomanip>
+#include <iostream>
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
@@ -11,36 +12,36 @@ int main(int argc, char* argv[]) {
 
     std::string index_dir = argv[1];
     std::string term = argv[2];
-    
+
     try {
         std::cout << "Starting program" << std::endl;
-        
+
         std::cout << "Loading document map from " << index_dir << std::endl;
         mithril::DocumentMapReader doc_reader(index_dir);
         std::cout << "Loaded document map with " << doc_reader.documentCount() << " documents." << std::endl;
-        
+
         std::cout << "Creating TermReader for term '" << term << "'" << std::endl;
         mithril::TermReader term_reader(index_dir, term);
-        
+
         std::cout << "Searching for term: \"" << term << "\"" << std::endl;
-        
+
         if (!term_reader.hasNext()) {
             std::cout << "Term not found in the index." << std::endl;
             return 0;
         }
-        
+
         std::cout << "Documents containing the term:" << std::endl;
         std::cout << "-------------------------------" << std::endl;
-        
+
         int count = 0;
         const int MAX_DOCS = 5;
-        
+
         while (term_reader.hasNext() && count < MAX_DOCS) {
             mithril::data::docid_t doc_id = term_reader.currentDocID();
             uint32_t frequency = term_reader.currentFrequency();
-            
+
             std::cout << "Document ID: " << doc_id << " (appears " << frequency << " times)" << std::endl;
-            
+
             auto doc_opt = doc_reader.getDocument(doc_id);
             if (doc_opt) {
                 std::cout << "  URL: " << doc_opt->url << std::endl;
@@ -50,7 +51,7 @@ int main(int argc, char* argv[]) {
                 }
                 std::cout << std::endl;
             }
-            
+
             try {
                 auto positions = term_reader.currentPositions();
                 std::cout << "  Positions:";
@@ -64,19 +65,19 @@ int main(int argc, char* argv[]) {
             } catch (const std::exception& e) {
                 std::cout << "  Error getting positions: " << e.what() << std::endl << std::endl;
             }
-            
+
             term_reader.moveNext();
             count++;
         }
-        
+
         if (term_reader.hasNext()) {
             std::cout << "... and more documents with this term." << std::endl;
         }
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-    
+
     return 0;
 }

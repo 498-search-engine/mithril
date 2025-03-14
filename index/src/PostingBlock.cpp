@@ -4,10 +4,10 @@
 
 #include <cerrno>
 #include <fcntl.h>
+#include <iostream>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <iostream>
 
 namespace mithril {
 
@@ -34,7 +34,7 @@ BlockReader::BlockReader(const std::string& path) : file_path_(path) {
     data = static_cast<const char*>(mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0));
     if (data == MAP_FAILED) {
         close(fd);
-        data = nullptr; // Ensure data is null if mapping failed
+        data = nullptr;  // Ensure data is null if mapping failed
         std::cerr << "ERROR: Memory mapping failed: " << strerror(errno) << std::endl;
         throw std::runtime_error("Memory mapping failed: " + std::string(strerror(errno)));
     }
@@ -57,7 +57,7 @@ BlockReader::~BlockReader() {
     }
 }
 
-BlockReader::BlockReader(BlockReader&& other) noexcept 
+BlockReader::BlockReader(BlockReader&& other) noexcept
     : current_term(std::move(other.current_term)),
       current_postings(std::move(other.current_postings)),
       current_positions(std::move(other.current_positions)),
@@ -84,7 +84,7 @@ BlockReader& BlockReader::operator=(BlockReader&& other) noexcept {
         if (fd != -1) {
             close(fd);
         }
-        
+
         // Move from other
         current_term = std::move(other.current_term);
         current_postings = std::move(other.current_postings);
@@ -247,16 +247,15 @@ std::vector<uint32_t> BlockReader::get_positions(uint32_t doc_id) const {
 std::vector<uint32_t> BlockReader::get_positions_by_index(size_t posting_index) const {
     if (posting_index >= current_postings.size())
         return {};
-        
+
     const Posting& posting = current_postings[posting_index];
     if (posting.positions_offset == UINT32_MAX)
         return {};
 
     // Calculate positions range
     size_t start = posting.positions_offset;
-    size_t end = (posting_index == current_postings.size() - 1) 
-                ? current_positions.all_positions.size()
-                : current_postings[posting_index + 1].positions_offset;
+    size_t end = (posting_index == current_postings.size() - 1) ? current_positions.all_positions.size()
+                                                                : current_postings[posting_index + 1].positions_offset;
 
     // Reconstruct absolute positions from deltas
     std::vector<uint32_t> absolute_positions;
@@ -270,7 +269,8 @@ std::vector<uint32_t> BlockReader::get_positions_by_index(size_t posting_index) 
     return absolute_positions;
 }
 
-std::vector<uint32_t> BlockReader::get_positions_near(uint32_t doc_id, uint32_t target_position, uint32_t window_size) const {
+std::vector<uint32_t>
+BlockReader::get_positions_near(uint32_t doc_id, uint32_t target_position, uint32_t window_size) const {
     Posting* posting = find_posting(doc_id);
     if (!posting || posting->positions_offset == UINT32_MAX)
         return {};

@@ -723,6 +723,103 @@ void IndexBuilder::save_document_map() {
     }
 }
 
+
+void IndexBuilder::create_term_dictionary() {
+    std::string index_path = output_dir_ + "/final_index.bin";
+    std::string dict_path = output_dir_ + "/term_dictionary.bin";
+
+    std::ifstream index_file(index_path, std::ios::binary);
+    if (!index_file) {
+        std::cerr << "Failed to open index file for dictionary creation" << std::endl;
+        return;
+    }
+
+    std::ofstream dict_file(dict_path, std::ios::binary);
+    if (!dict_file) {
+        std::cerr << "Failed to create dictionary file" << std::endl;
+        return;
+    }
+
+    // Read term count from index
+    uint32_t term_count;
+    index_file.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
+
+    // Write dict header
+    uint32_t magic = 0x4D495448;  // "MITH" as magic number
+    uint32_t version = 1;
+    dict_file.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+    dict_file.write(reinterpret_cast<const char*>(&version), sizeof(version));
+    dict_file.write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
+
+    // Collect term entries with their offsets
+    std::vector<std::pair<std::string, std::pair<uint64_t, uint32_t>>> term_entries;
+    term_entries.reserve(term_count);
+
+    std::streampos term_start_pos = index_file.tellg();
+
+    for (uint32_t i = 0; i < term_count; i++) {
+        // Remember offset of this term
+        uint64_t term_offset = index_file.tellg() - term_start_pos;
+
+        // Read term
+        uint32_t term_len;
+        index_file.read(reinterpret_cast<char*>(&term_len), sizeof(term_len));
+        std::string term(term_len, '\0');
+        index_file.read(&term[0], term_len);
+
+        // Read postings size for additional info
+        uint32_t postings_size;
+        index_file.read(reinterpret_cast<char*>(&postings_size), sizeof(postings_size));
+
+        // Store term entry
+        term_entries.emplace_back(term, std::make_pair(term_offset, postings_size));
+
+        // Skip the rest of this term's data
+        // Read sync points size
+        uint32_t sync_points_size;
+        index_file.read(reinterpret_cast<char*>(&sync_points_size), sizeof(sync_points_size));
+        index_file.seekg(sync_points_size * sizeof(SyncPoint), std::ios::cur);
+
+        // Skip postings (VByte encoded)
+        for (uint32_t j = 0; j < postings_size; j++) {
+            VByteCodec::decode(index_file);  // Skip doc_id delta
+            VByteCodec::decode(index_file);  // Skip freq
+        }
+
+        // Skip positions
+        uint32_t positions_size;
+        index_file.read(reinterpret_cast<char*>(&positions_size), sizeof(positions_size));
+
+        uint32_t position_sync_points_size;
+        index_file.read(reinterpret_cast<char*>(&position_sync_points_size), sizeof(position_sync_points_size));
+        index_file.seekg(position_sync_points_size * sizeof(PositionSyncPoint), std::ios::cur);
+
+        for (uint32_t j = 0; j < positions_size; j++) {
+            VByteCodec::decode(index_file);  // Skip position delta
+        }
+
+        // Show progress
+        if (i % 10000 == 0) {
+            std::cout << "\rCreating term dictionary: " << i << "/" << term_count << " (" << (i * 100 / term_count)
+                      << "%)" << std::flush;
+        }
+    }
+
+    std::sort(term_entries.begin(), term_entries.end());
+    for (const auto& [term, offset_info] : term_entries) {
+        uint32_t term_len = term.length();
+        uint64_t offset = offset_info.first;
+        uint32_t postings_count = offset_info.second;
+
+        dict_file.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
+        dict_file.write(term.c_str(), term_len);
+        dict_file.write(reinterpret_cast<const char*>(&offset), sizeof(offset));
+        dict_file.write(reinterpret_cast<const char*>(&postings_count), sizeof(postings_count));
+    }
+
+    std::cout << "\rCreating term dictionary: " << term_count << "/" << term_count << " (100%)" << std::endl;
+}
+
 std::string IndexBuilder::block_path(int block_num) const {
     return output_dir_ + "/blocks/block_" + std::to_string(block_num) + ".bin";
 }
@@ -742,6 +839,7 @@ void IndexBuilder::finalize() {
     // merge_blocks();
     merge_blocks_tiered();
     save_document_map();
+    create_term_dictionary();
     std::filesystem::remove_all(output_dir_ + "/blocks");
 }
 }  // namespace mithril

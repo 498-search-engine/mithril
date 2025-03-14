@@ -50,7 +50,7 @@ public:
 
     BlockReader(const BlockReader&) = delete;
     BlockReader& operator=(const BlockReader&) = delete;
-    
+
     std::string getFilePath() const { return file_path_; }
 
 private:

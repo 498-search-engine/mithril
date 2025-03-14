@@ -4,6 +4,7 @@ add_library(index STATIC
     src/PostingBlock.cpp
     src/DocumentMapReader.cpp
     src/TermReader.cpp
+    src/TermDictionary.cpp
     src/IndexStreamReader.cpp
 )
 target_include_directories(index PUBLIC src)

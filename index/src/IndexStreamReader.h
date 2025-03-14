@@ -2,6 +2,7 @@
 #define INDEX_INDEXSTREAMREADER_H
 
 #include "data/Document.h"
+
 #include <optional>
 
 namespace mithril {
@@ -9,14 +10,14 @@ namespace mithril {
 class IndexStreamReader {
 public:
     virtual ~IndexStreamReader() = default;
-    
+
     virtual bool hasNext() const = 0;
     virtual void moveNext() = 0;
-    
+
     virtual data::docid_t currentDocID() const = 0;
     virtual void seekToDocID(data::docid_t target_doc_id) = 0;
 };
 
-} // namespace mithril
+}  // namespace mithril
 
-#endif // INDEX_INDEXSTREAMREADER_H
+#endif  // INDEX_INDEXSTREAMREADER_H

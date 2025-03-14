@@ -48,6 +48,7 @@ private:
     void save_document_map();
     std::string block_path(int block_num) const;
     void process_document(const Document& doc);
+    void create_term_dictionary();
 
     // helpers
     void add_terms(data::docid_t doc_id, const std::unordered_map<std::string, uint32_t>& term_freqs);
