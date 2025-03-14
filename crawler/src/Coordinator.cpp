@@ -42,6 +42,19 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
         exit(1);
     }
 
+    auto lockFilePath = LockPath();
+    if (FileExists(lockFilePath.c_str())) {
+        spdlog::error("lock file {} present!", lockFilePath);
+        spdlog::error("crawler may already be running, or a un-graceful shutdown occurred");
+        exit(1);
+    }
+
+    {
+        // Create lock file
+        auto lockFile = data::FileWriter{lockFilePath.c_str()};
+        data::SerializeValue(true, lockFile);
+    }
+
     frontierDirectory_ = config.data_directory + "/frontier";
     if (!DirectoryExists(frontierDirectory_.c_str())) {
         // Create frontier directory
@@ -136,7 +149,15 @@ void Coordinator::Run() {
 
     spdlog::info("all threads stopped, saving crawler state");
     DumpState(StatePath());
+
+    spdlog::info("crawler state saved, cleaning up");
+    unlink(LockPath().c_str());
+
     spdlog::info("shutdown complete, goodbye!");
+}
+
+std::string Coordinator::LockPath() const {
+    return config_.data_directory + "/crawler_lock";
 }
 
 std::string Coordinator::StatePath() const {

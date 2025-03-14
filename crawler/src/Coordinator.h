@@ -22,6 +22,7 @@ private:
     void SnapshotThreadEntry(size_t n);
     void DoSnapshot(size_t n);
 
+    std::string LockPath() const;
     std::string StatePath() const;
     std::string StateSnapshotPath() const;
 
