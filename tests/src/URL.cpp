@@ -76,6 +76,7 @@ TEST(URL, ParseInvalid) {
 
     // Invalid port (out of range)
     EXPECT_FALSE(ParseURL("http://example.com:65536"sv).has_value());
+    EXPECT_FALSE(ParseURL("http://tel:8883719655"sv).has_value());
 
     // Invalid characters in host
     EXPECT_FALSE(ParseURL("http://exam<>ple.com"sv).has_value());
