@@ -90,6 +90,10 @@ void RequestManager::Run(ThreadSync& sync) {
     spdlog::info("request manager terminating");
 }
 
+void RequestManager::TouchRequestTimeouts() {
+    requestExecutor_.TouchRequestTimeouts();
+}
+
 void RequestManager::DispatchFailedRequest(http::FailedRequest failed) {
     spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, http::StringOfRequestError(failed.error));
     // TODO: pass off to whatever
@@ -99,8 +103,8 @@ void RequestManager::RestoreQueuedURLs(std::vector<std::string>& urls) {
     middleQueue_.RestoreFrom(urls);
 }
 
-void RequestManager::ExtractQueuedURLs(std::vector<std::string>& out) {
-    middleQueue_.ExtractQueuedURLs(out);
+void RequestManager::DumpQueuedURLs(std::vector<std::string>& out) {
+    middleQueue_.DumpQueuedURLs(out);
     requestExecutor_.DumpUnprocessedRequests(out);
 }
 

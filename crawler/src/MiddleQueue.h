@@ -51,7 +51,7 @@ public:
      *
      * @param out Vector to put URLs into.
      */
-    void ExtractQueuedURLs(std::vector<std::string>& out);
+    void DumpQueuedURLs(std::vector<std::string>& out);
 
 private:
     struct HostRecord {

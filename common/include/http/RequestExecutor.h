@@ -97,6 +97,11 @@ public:
     void Add(Request req);
 
     /**
+     * @brief Resets the timeout progress for all active requests.
+     */
+    void TouchRequestTimeouts();
+
+    /**
      * @brief Processes events from all managed connections.
      */
     void ProcessConnections();

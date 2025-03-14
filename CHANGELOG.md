@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - split url queue into high and low scoring queue (#53)
 - metrics for crawler (#50)
 - async name resolution (#62)
+- periodic crawler state snapshots (#63)
 
 ### Fixed
 - Fix copying body data from buffer (#24)

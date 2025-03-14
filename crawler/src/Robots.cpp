@@ -500,6 +500,10 @@ void RobotRulesCache::HandleRobotsNotFound(RobotCacheEntry& entry) {
     entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
 }
 
+void RobotRulesCache::TouchRobotRequestTimeouts() {
+    executor_.TouchRequestTimeouts();
+}
+
 std::vector<http::CanonicalHost>& RobotRulesCache::CompletedFetchs() {
     return completedFetches_;
 }

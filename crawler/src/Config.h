@@ -25,6 +25,7 @@ struct CrawlerConfig {
     size_t concurrent_robots_requests = 100;
 
     uint16_t metrics_port = 9000;
+    unsigned long snapshot_period_seconds = 30L * 60L;
 };
 
 CrawlerConfig LoadConfigFromFile(const std::string& path);
