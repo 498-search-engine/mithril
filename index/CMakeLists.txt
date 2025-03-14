@@ -3,6 +3,8 @@ add_library(index STATIC
     src/InvertedIndex.cpp
     src/PostingBlock.cpp
     src/DocumentMapReader.cpp
+    src/TermReader.cpp
+    src/IndexStreamReader.cpp
 )
 target_include_directories(index PUBLIC src)
 target_link_libraries(index PUBLIC
@@ -30,5 +32,12 @@ add_executable(test_docReader
     src/test_docReader.cpp
 )
 target_link_libraries(test_docReader PRIVATE
+    index
+)
+
+add_executable(test_termReader
+    src/test_termReader.cpp
+)
+target_link_libraries(test_termReader PRIVATE
     index
 )

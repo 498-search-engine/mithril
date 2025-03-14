@@ -38,10 +38,11 @@ public:
     ~BlockReader();
     void read_next();
 
-    Posting* find_posting(uint32_t target_doc_id);
+    Posting* find_posting(uint32_t target_doc_id) const;
     PositionsStore current_positions;
-    std::vector<uint32_t> get_positions(uint32_t doc_id);
-    std::vector<uint32_t> get_positions_near(uint32_t doc_id, uint32_t target_position, uint32_t window_size);
+    std::vector<uint32_t> get_positions(uint32_t doc_id) const;
+    std::vector<uint32_t> get_positions_by_index(size_t posting_index) const;
+    std::vector<uint32_t> get_positions_near(uint32_t doc_id, uint32_t target_position, uint32_t window_size) const;
 
     // Move support for priority queue
     BlockReader(BlockReader&& other) noexcept;
@@ -49,13 +50,16 @@ public:
 
     BlockReader(const BlockReader&) = delete;
     BlockReader& operator=(const BlockReader&) = delete;
+    
+    std::string getFilePath() const { return file_path_; }
 
 private:
-    std::vector<char> file_buffer_;
     const char* data{nullptr};
     size_t size{0};
     int fd{-1};
     const char* current{nullptr};
+    std::string file_path_;
+    // std::vector<char> file_buffer_;
 
     size_t find_nearest_position_sync_point(uint32_t target_position) const;
     bool validate_remaining(size_t needed) const { return (current + needed <= data + size); }

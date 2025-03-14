@@ -7,34 +7,42 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <iostream>
 
 namespace mithril {
 
-BlockReader::BlockReader(const std::string& path) {
-    const int fd = open(path.c_str(), O_RDONLY);
+BlockReader::BlockReader(const std::string& path) : file_path_(path) {
+    std::cout << "DEBUG: BlockReader opening file: " << path << std::endl;
+    fd = open(path.c_str(), O_RDONLY);
     if (fd == -1) {
+        std::cerr << "ERROR: Open failed: " << strerror(errno) << std::endl;
         throw std::runtime_error("Open failed: " + std::string(strerror(errno)));
     }
+    std::cout << "DEBUG: File opened successfully" << std::endl;
 
-    // Get file size using lseek
-    const off_t file_size = lseek(fd, 0, SEEK_END);
-    lseek(fd, 0, SEEK_SET);
-
-    // Bulk read entire file into buffer
-    file_buffer_.resize(file_size);
-    const ssize_t bytes_read = read(fd, file_buffer_.data(), file_size);
-    close(fd);
-
-    if (bytes_read != file_size) {
-        throw std::runtime_error("Read failed: " + std::string(strerror(errno)));
+    // Get file size using stat instead of lseek
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) {
+        close(fd);
+        std::cerr << "ERROR: Failed to get file size: " << strerror(errno) << std::endl;
+        throw std::runtime_error("Failed to get file size: " + std::string(strerror(errno)));
     }
+    size = sb.st_size;
+    std::cout << "DEBUG: File size: " << size << " bytes" << std::endl;
 
-    // Use buffer directly
-    data = file_buffer_.data();
-    size = file_buffer_.size();
+    // Map file into memory (more efficient than reading)
+    data = static_cast<const char*>(mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0));
+    if (data == MAP_FAILED) {
+        close(fd);
+        data = nullptr; // Ensure data is null if mapping failed
+        std::cerr << "ERROR: Memory mapping failed: " << strerror(errno) << std::endl;
+        throw std::runtime_error("Memory mapping failed: " + std::string(strerror(errno)));
+    }
+    std::cout << "DEBUG: Memory mapped successfully" << std::endl;
+
     current = data;
 
-    // Skip initial term count (not needed for sequential read)
+    // Skip initial term count
     current += sizeof(uint32_t);
 
     read_next();
@@ -49,35 +57,52 @@ BlockReader::~BlockReader() {
     }
 }
 
-BlockReader::BlockReader(BlockReader&& other) noexcept
-    : file_buffer_(std::move(other.file_buffer_)),
-      current_term(std::move(other.current_term)),
+BlockReader::BlockReader(BlockReader&& other) noexcept 
+    : current_term(std::move(other.current_term)),
       current_postings(std::move(other.current_postings)),
       current_positions(std::move(other.current_positions)),
-      data(file_buffer_.data()),
-      size(file_buffer_.size()),
+      current_sync_points(std::move(other.current_sync_points)),
+      data(other.data),
+      size(other.size),
+      fd(other.fd),
       current(other.current),
-      has_next(other.has_next) {
+      has_next(other.has_next),
+      file_path_(std::move(other.file_path_)) {
     other.data = nullptr;
     other.size = 0;
+    other.fd = -1;
     other.current = nullptr;
+    other.has_next = false;
 }
 
 BlockReader& BlockReader::operator=(BlockReader&& other) noexcept {
     if (this != &other) {
-        file_buffer_ = std::move(other.file_buffer_);  // Move buffer first
-        data = file_buffer_.data();                    // Update pointers after buffer is moved
-        size = file_buffer_.size();
-
+        // Clean up current resources
+        if (data != MAP_FAILED && data != nullptr) {
+            munmap(const_cast<char*>(data), size);
+        }
+        if (fd != -1) {
+            close(fd);
+        }
+        
+        // Move from other
         current_term = std::move(other.current_term);
         current_postings = std::move(other.current_postings);
         current_positions = std::move(other.current_positions);
+        current_sync_points = std::move(other.current_sync_points);
+        data = other.data;
+        size = other.size;
+        fd = other.fd;
         current = other.current;
         has_next = other.has_next;
+        file_path_ = std::move(other.file_path_);
 
+        // Reset other
         other.data = nullptr;
         other.size = 0;
+        other.fd = -1;
         other.current = nullptr;
+        other.has_next = false;
     }
     return *this;
 }
@@ -157,7 +182,7 @@ void BlockReader::read_next() {
     current = pos_ptr;  // Bulk advance pointer after all decodes
 }
 
-Posting* BlockReader::find_posting(uint32_t target_doc_id) {
+Posting* BlockReader::find_posting(uint32_t target_doc_id) const {
     if (current_postings.empty() || target_doc_id < current_postings.front().doc_id ||
         target_doc_id > current_postings.back().doc_id) {
         return nullptr;
@@ -187,7 +212,7 @@ Posting* BlockReader::find_posting(uint32_t target_doc_id) {
     // Linear search from selected sync point
     for (size_t i = start_pos; i < current_postings.size(); i++) {
         if (current_postings[i].doc_id == target_doc_id) {
-            return &current_postings[i];
+            return const_cast<Posting*>(&current_postings[i]);
         } else if (current_postings[i].doc_id > target_doc_id) {
             break;
         }
@@ -196,7 +221,7 @@ Posting* BlockReader::find_posting(uint32_t target_doc_id) {
     return nullptr;
 }
 
-std::vector<uint32_t> BlockReader::get_positions(uint32_t doc_id) {
+std::vector<uint32_t> BlockReader::get_positions(uint32_t doc_id) const {
     Posting* posting = find_posting(doc_id);
     if (!posting || posting->positions_offset == UINT32_MAX)
         return {};
@@ -219,7 +244,33 @@ std::vector<uint32_t> BlockReader::get_positions(uint32_t doc_id) {
     return absolute_positions;
 }
 
-std::vector<uint32_t> BlockReader::get_positions_near(uint32_t doc_id, uint32_t target_position, uint32_t window_size) {
+std::vector<uint32_t> BlockReader::get_positions_by_index(size_t posting_index) const {
+    if (posting_index >= current_postings.size())
+        return {};
+        
+    const Posting& posting = current_postings[posting_index];
+    if (posting.positions_offset == UINT32_MAX)
+        return {};
+
+    // Calculate positions range
+    size_t start = posting.positions_offset;
+    size_t end = (posting_index == current_postings.size() - 1) 
+                ? current_positions.all_positions.size()
+                : current_postings[posting_index + 1].positions_offset;
+
+    // Reconstruct absolute positions from deltas
+    std::vector<uint32_t> absolute_positions;
+    absolute_positions.reserve(end - start);
+    uint32_t current_pos = 0;
+    for (size_t i = start; i < end; i++) {
+        current_pos += current_positions.all_positions[i];  // Add delta
+        absolute_positions.push_back(current_pos);
+    }
+
+    return absolute_positions;
+}
+
+std::vector<uint32_t> BlockReader::get_positions_near(uint32_t doc_id, uint32_t target_position, uint32_t window_size) const {
     Posting* posting = find_posting(doc_id);
     if (!posting || posting->positions_offset == UINT32_MAX)
         return {};
