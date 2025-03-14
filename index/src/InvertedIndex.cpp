@@ -5,9 +5,12 @@
 #include "data/Gzip.h"
 #include "data/Reader.h"
 
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 namespace mithril {
 
@@ -201,82 +204,6 @@ void IndexBuilder::add_document(const std::string& doc_path) {
 
     process_document(doc);
 }
-
-// remnant
-// void IndexBuilder::add_document(const std::string& words_path, const std::string& links_path) {
-//     auto task = [this, words_path, links_path]() {
-//         // Read first line from links file.
-//         std::ifstream links_file(links_path);
-//         std::string line;
-//         if (!std::getline(links_file, line)) {
-//             std::cerr << "Empty links file: " << links_path << std::endl;
-//             return;
-//         }
-
-//         std::string url, title;
-//         if (!parse_link_line(line, url, title)) {
-//             std::cerr << "Invalid link format: " << line << std::endl;
-//             return;
-//         }
-
-//         // Assign document ID (thread-safe)
-//         uint32_t doc_id;
-//         {
-//             std::unique_lock<std::mutex> lock(document_mutex_);
-//             auto it = url_to_id_.find(url);
-//             if (it == url_to_id_.end()) {
-//                 doc_id = documents_.size();
-//                 url_to_id_[url] = doc_id;
-//                 documents_.push_back({doc_id, url, title});
-//             } else {
-//                 doc_id = it->second;
-//             }
-//         }
-
-//         // Build a combined frequency map from the title and the words file.
-//         std::unordered_map<std::string, uint32_t> term_freqs;
-//         {
-//             // Process title from the links file.
-//             std::istringstream iss(title);
-//             std::string word;
-//             while (iss >> word) {
-//                 std::string normalized = TokenNormalizer::normalize(word);
-//                 if (!normalized.empty()) {
-//                     term_freqs[normalized]++;
-//                 }
-//             }
-//         }
-//         {
-//             // Process additional words from the words file.
-//             auto extra_words = read_words(words_path);
-//             for (const auto& w : extra_words) {
-//                 term_freqs[w]++;
-//             }
-//         }
-
-//         // Add terms to the current block (thread-safe)
-//         {
-//             std::unique_lock<std::mutex> lock(block_mutex_);
-//             for (const auto& [term, freq] : term_freqs) {
-//                 // current_block_[term].push_back({doc_id, freq});
-//                 auto& postings = dictionary_.get_or_create(term);
-//                 postings.add({doc_id, freq});
-//                 current_block_size_ += sizeof(Posting) + term.size();
-//             }
-
-//             // Check if block is full
-//             if (current_block_size_ >= MAX_BLOCK_SIZE) {
-//                 flush_block();
-//             }
-//         }
-//     };
-
-//     {
-//         std::unique_lock<std::mutex> lock(queue_mutex_);
-//         tasks_.emplace(task);
-//     }
-//     condition_.notify_one();
-// }
 
 std::future<void> IndexBuilder::flush_block() {
     if (current_block_size_ == 0) {
@@ -723,101 +650,163 @@ void IndexBuilder::save_document_map() {
     }
 }
 
-
 void IndexBuilder::create_term_dictionary() {
     std::string index_path = output_dir_ + "/final_index.bin";
     std::string dict_path = output_dir_ + "/term_dictionary.bin";
 
-    std::ifstream index_file(index_path, std::ios::binary);
-    if (!index_file) {
+    int fd = open(index_path.c_str(), O_RDONLY);
+    if (fd == -1) {
         std::cerr << "Failed to open index file for dictionary creation" << std::endl;
         return;
     }
 
-    std::ofstream dict_file(dict_path, std::ios::binary);
-    if (!dict_file) {
-        std::cerr << "Failed to create dictionary file" << std::endl;
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) {
+        std::cerr << "Failed to get index file size" << std::endl;
+        close(fd);
         return;
     }
 
-    // Read term count from index
-    uint32_t term_count;
-    index_file.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
+    const char* data = static_cast<const char*>(mmap(nullptr, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
+    if (data == MAP_FAILED) {
+        std::cerr << "Failed to memory map index file" << std::endl;
+        close(fd);
+        return;
+    }
 
-    // Write dict header
-    uint32_t magic = 0x4D495448;  // "MITH" as magic number
-    uint32_t version = 1;
-    dict_file.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
-    dict_file.write(reinterpret_cast<const char*>(&version), sizeof(version));
-    dict_file.write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
+    FILE* dict_file = fopen(dict_path.c_str(), "wb");
+    if (!dict_file) {
+        std::cerr << "Failed to create dictionary file" << std::endl;
+        munmap(const_cast<char*>(data), sb.st_size);
+        close(fd);
+        return;
+    }
 
-    // Collect term entries with their offsets
-    std::vector<std::pair<std::string, std::pair<uint64_t, uint32_t>>> term_entries;
+    std::vector<char> write_buffer(16 * 1024 * 1024);
+    setvbuf(dict_file, write_buffer.data(), _IOFBF, write_buffer.size());
+
+    const char* ptr = data;
+    uint32_t term_count = *reinterpret_cast<const uint32_t*>(ptr);
+    ptr += sizeof(uint32_t);
+
+    std::cout << "Creating dictionary for " << term_count << " terms" << std::endl;
+
+    std::vector<std::pair<std::string, uint64_t>> term_entries;
     term_entries.reserve(term_count);
 
-    std::streampos term_start_pos = index_file.tellg();
-
+    const char* term_start_ptr = ptr;
     for (uint32_t i = 0; i < term_count; i++) {
-        // Remember offset of this term
-        uint64_t term_offset = index_file.tellg() - term_start_pos;
+        // Calculate relative offset from start of terms section
+        uint64_t term_offset = ptr - term_start_ptr;
 
-        // Read term
-        uint32_t term_len;
-        index_file.read(reinterpret_cast<char*>(&term_len), sizeof(term_len));
-        std::string term(term_len, '\0');
-        index_file.read(&term[0], term_len);
+        // Read term length and term
+        uint32_t term_len = *reinterpret_cast<const uint32_t*>(ptr);
+        ptr += sizeof(term_len);
 
-        // Read postings size for additional info
-        uint32_t postings_size;
-        index_file.read(reinterpret_cast<char*>(&postings_size), sizeof(postings_size));
+        // Create actual string (needed for sorting and compression)
+        std::string term(ptr, term_len);
+        ptr += term_len;
 
-        // Store term entry
-        term_entries.emplace_back(term, std::make_pair(term_offset, postings_size));
+        // Read postings info (needed for skipping to next term)
+        uint32_t postings_size = *reinterpret_cast<const uint32_t*>(ptr);
+        ptr += sizeof(uint32_t);
 
-        // Skip the rest of this term's data
-        // Read sync points size
-        uint32_t sync_points_size;
-        index_file.read(reinterpret_cast<char*>(&sync_points_size), sizeof(sync_points_size));
-        index_file.seekg(sync_points_size * sizeof(SyncPoint), std::ios::cur);
+        // Skip sync points size and data
+        uint32_t sync_points_size = *reinterpret_cast<const uint32_t*>(ptr);
+        ptr += sizeof(uint32_t);
+        ptr += sync_points_size * sizeof(SyncPoint);
 
-        // Skip postings (VByte encoded)
+        // Skip VByte-encoded postings
         for (uint32_t j = 0; j < postings_size; j++) {
-            VByteCodec::decode(index_file);  // Skip doc_id delta
-            VByteCodec::decode(index_file);  // Skip freq
+            // Skip doc_id delta
+            while (*ptr & 0x80)
+                ptr++;
+            ptr++;
+
+            // Skip frequency
+            while (*ptr & 0x80)
+                ptr++;
+            ptr++;
         }
 
         // Skip positions
-        uint32_t positions_size;
-        index_file.read(reinterpret_cast<char*>(&positions_size), sizeof(positions_size));
+        uint32_t positions_count;
+        std::memcpy(&positions_count, ptr, sizeof(positions_count));
+        ptr += sizeof(positions_count);
 
+        // Skip position sync points
         uint32_t position_sync_points_size;
-        index_file.read(reinterpret_cast<char*>(&position_sync_points_size), sizeof(position_sync_points_size));
-        index_file.seekg(position_sync_points_size * sizeof(PositionSyncPoint), std::ios::cur);
+        std::memcpy(&position_sync_points_size, ptr, sizeof(position_sync_points_size));
+        ptr += sizeof(position_sync_points_size);
+        ptr += position_sync_points_size * sizeof(PositionSyncPoint);
 
-        for (uint32_t j = 0; j < positions_size; j++) {
-            VByteCodec::decode(index_file);  // Skip position delta
+        // Skip positions
+        for (uint32_t j = 0; j < positions_count; j++) {
+            while (*ptr & 0x80)
+                ptr++;
+            ptr++;
         }
 
-        // Show progress
-        if (i % 10000 == 0) {
-            std::cout << "\rCreating term dictionary: " << i << "/" << term_count << " (" << (i * 100 / term_count)
+        // Store term with offset
+        term_entries.emplace_back(term, term_offset);
+
+        if (i % 100000 == 0 || i == term_count - 1) {
+            std::cout << "\rCollecting terms: " << i + 1 << "/" << term_count << " (" << (i + 1) * 100 / term_count
                       << "%)" << std::flush;
         }
     }
 
+    std::cout << "\nSorting terms..." << std::endl;
     std::sort(term_entries.begin(), term_entries.end());
-    for (const auto& [term, offset_info] : term_entries) {
-        uint32_t term_len = term.length();
-        uint64_t offset = offset_info.first;
-        uint32_t postings_count = offset_info.second;
 
-        dict_file.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
-        dict_file.write(term.c_str(), term_len);
-        dict_file.write(reinterpret_cast<const char*>(&offset), sizeof(offset));
-        dict_file.write(reinterpret_cast<const char*>(&postings_count), sizeof(postings_count));
+    // Write dict header
+    uint32_t magic = 0x4D495448;  // "MITH"
+    uint32_t version = 1;
+    fwrite(&magic, sizeof(magic), 1, dict_file);
+    fwrite(&version, sizeof(version), 1, dict_file);
+    fwrite(&term_count, sizeof(term_count), 1, dict_file);
+
+    // Write compressed dict entries using front coding
+    std::string prev_term;
+    uint64_t prev_offset = 0;
+
+    for (uint32_t i = 0; i < term_entries.size(); i++) {
+        const auto& [term, offset] = term_entries[i];
+
+        // Calculate delta offset (better compression)
+        uint64_t delta_offset = offset - prev_offset;
+        prev_offset = offset;
+
+        // Calculate postings count (needed for query planning)
+        uint32_t postings_count = 0;
+        if (i < term_count) {
+            // Read postings size directly from mapped index
+            const char* pos_ptr = term_start_ptr + offset + sizeof(uint32_t) + term.length();
+            postings_count = *reinterpret_cast<const uint32_t*>(pos_ptr);
+        }
+
+        // Write term length and data directly
+        uint32_t term_len = term.length();
+        fwrite(&term_len, sizeof(term_len), 1, dict_file);
+        fwrite(term.data(), 1, term_len, dict_file);
+
+        // Write offset and postings count
+        fwrite(&offset, sizeof(offset), 1, dict_file);
+        fwrite(&postings_count, sizeof(postings_count), 1, dict_file);
+
+        // Show progress
+        if (i % 100000 == 0 || i == term_entries.size() - 1) {
+            std::cout << "\rWriting dictionary: " << i + 1 << "/" << term_entries.size() << " ("
+                      << (i + 1) * 100 / term_entries.size() << "%)" << std::flush;
+        }
     }
 
-    std::cout << "\rCreating term dictionary: " << term_count << "/" << term_count << " (100%)" << std::endl;
+    // Clean up resources
+    fclose(dict_file);
+    munmap(const_cast<char*>(data), sb.st_size);
+    close(fd);
+
+    std::cout << "\nTerm dictionary creation complete" << std::endl;
 }
 
 std::string IndexBuilder::block_path(int block_num) const {

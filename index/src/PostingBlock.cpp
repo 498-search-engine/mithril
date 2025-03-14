@@ -12,13 +12,11 @@
 namespace mithril {
 
 BlockReader::BlockReader(const std::string& path) : file_path_(path) {
-    std::cout << "DEBUG: BlockReader opening file: " << path << std::endl;
     fd = open(path.c_str(), O_RDONLY);
     if (fd == -1) {
         std::cerr << "ERROR: Open failed: " << strerror(errno) << std::endl;
         throw std::runtime_error("Open failed: " + std::string(strerror(errno)));
     }
-    std::cout << "DEBUG: File opened successfully" << std::endl;
 
     // Get file size using stat instead of lseek
     struct stat sb;
@@ -28,17 +26,14 @@ BlockReader::BlockReader(const std::string& path) : file_path_(path) {
         throw std::runtime_error("Failed to get file size: " + std::string(strerror(errno)));
     }
     size = sb.st_size;
-    std::cout << "DEBUG: File size: " << size << " bytes" << std::endl;
 
     // Map file into memory (more efficient than reading)
     data = static_cast<const char*>(mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0));
     if (data == MAP_FAILED) {
         close(fd);
         data = nullptr;  // Ensure data is null if mapping failed
-        std::cerr << "ERROR: Memory mapping failed: " << strerror(errno) << std::endl;
         throw std::runtime_error("Memory mapping failed: " + std::string(strerror(errno)));
     }
-    std::cout << "DEBUG: Memory mapped successfully" << std::endl;
 
     current = data;
 

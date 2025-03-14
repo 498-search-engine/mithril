@@ -1,73 +1,164 @@
-// TermDictionary.cpp
 #include "TermDictionary.h"
 
 #include <algorithm>
+#include <fcntl.h>
 #include <iostream>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 namespace mithril {
 
 TermDictionary::TermDictionary(const std::string& index_dir) {
     std::string dict_path = index_dir + "/term_dictionary.bin";
 
-    std::ifstream file(dict_path, std::ios::binary);
-    if (!file) {
+    dict_fd_ = open(dict_path.c_str(), O_RDONLY);
+    if (dict_fd_ == -1) {
         std::cerr << "Dictionary file not found: " << dict_path << std::endl;
         return;
     }
 
-    // Read header
-    uint32_t magic, version, term_count;
-    file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-    file.read(reinterpret_cast<char*>(&version), sizeof(version));
-    file.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
+    struct stat sb;
+    if (fstat(dict_fd_, &sb) == -1) {
+        std::cerr << "Failed to get dictionary file size" << std::endl;
+        close(dict_fd_);
+        dict_fd_ = -1;
+        return;
+    }
+
+    dict_size_ = sb.st_size;
+
+    dict_data_ = static_cast<const char*>(mmap(nullptr, dict_size_, PROT_READ, MAP_PRIVATE, dict_fd_, 0));
+    if (dict_data_ == MAP_FAILED) {
+        std::cerr << "Failed to memory map dictionary file" << std::endl;
+        close(dict_fd_);
+        dict_fd_ = -1;
+        dict_data_ = nullptr;
+        return;
+    }
+
+    const char* ptr = dict_data_;
+    uint32_t magic = *reinterpret_cast<const uint32_t*>(ptr);
+    ptr += sizeof(uint32_t);
+
+    version_ = *reinterpret_cast<const uint32_t*>(ptr);
+    ptr += sizeof(uint32_t);
+
+    term_count_ = *reinterpret_cast<const uint32_t*>(ptr);
+    ptr += sizeof(uint32_t);
 
     if (magic != 0x4D495448) {
         std::cerr << "Invalid dictionary file format" << std::endl;
         return;
     }
 
-    if (version != 1) {
-        std::cerr << "Unsupported dictionary version: " << version << std::endl;
+    if (version_ != 1) {
+        std::cerr << "Unsupported dictionary version: " << version_ << std::endl;
         return;
     }
 
-    entries_.reserve(term_count);
-    for (uint32_t i = 0; i < term_count; i++) {
-        uint32_t term_len;
-        file.read(reinterpret_cast<char*>(&term_len), sizeof(term_len));
+    // Build simple first-char index for faster lookups
+    std::fill(first_char_index_.begin(), first_char_index_.end(), UINT32_MAX);
 
-        std::string term(term_len, '\0');
-        file.read(&term[0], term_len);
+    const char* entry_ptr = ptr;
+    for (uint32_t i = 0; i < term_count_; i++) {
+        uint32_t term_len = *reinterpret_cast<const uint32_t*>(entry_ptr);
+        entry_ptr += sizeof(uint32_t);
 
-        uint64_t offset;
-        file.read(reinterpret_cast<char*>(&offset), sizeof(offset));
+        // Record the first occurrence of each starting char
+        if (term_len > 0) {
+            unsigned char first_char = static_cast<unsigned char>(entry_ptr[0]);
+            if (first_char_index_[first_char] == UINT32_MAX) {
+                first_char_index_[first_char] = i;
+            }
+        }
 
-        uint32_t postings_count;
-        file.read(reinterpret_cast<char*>(&postings_count), sizeof(postings_count));
-
-        entries_.push_back({term, offset, postings_count});
+        // Skip to next entry
+        entry_ptr += term_len + sizeof(uint64_t) + sizeof(uint32_t);
     }
 
-    std::cout << "Loaded term dictionary with " << entries_.size() << " terms" << std::endl;
+    std::cout << "Memory mapped term dictionary with " << term_count_ << " terms" << std::endl;
     loaded_ = true;
 }
 
-std::optional<TermDictionary::TermEntry> TermDictionary::lookup(const std::string& term) const {
-    return binary_search(term);
+TermDictionary::~TermDictionary() {
+    if (dict_data_ != nullptr && dict_data_ != MAP_FAILED) {
+        munmap(const_cast<char*>(dict_data_), dict_size_);
+    }
+
+    if (dict_fd_ != -1) {
+        close(dict_fd_);
+    }
 }
 
-std::optional<TermDictionary::TermEntry> TermDictionary::binary_search(const std::string& term) const {
-    if (entries_.empty()) {
+std::optional<TermDictionary::TermEntry> TermDictionary::lookup(const std::string& term) const {
+    return search(term);
+}
+
+std::optional<TermDictionary::TermEntry> TermDictionary::search(const std::string& term) const {
+    if (!loaded_ || term_count_ == 0 || term.empty()) {
         return std::nullopt;
     }
 
-    auto it =
-        std::lower_bound(entries_.begin(), entries_.end(), term, [](const TermEntry& entry, const std::string& target) {
-            return entry.term < target;
-        });
+    // Use first char index to narrow search range
+    unsigned char first_char = static_cast<unsigned char>(term[0]);
+    uint32_t start_idx = first_char_index_[first_char];
 
-    if (it != entries_.end() && it->term == term) {
-        return *it;
+    // If no terms start with this char, return null
+    if (start_idx == UINT32_MAX) {
+        return std::nullopt;
+    }
+
+    // Find the end of this char's range
+    uint32_t end_idx = term_count_;
+    for (size_t c = first_char + 1; c < 256; c++) {
+        if (first_char_index_[c] != UINT32_MAX) {
+            end_idx = first_char_index_[c];
+            break;
+        }
+    }
+
+    // ptr to the start of entries section
+    const char* entries_start = dict_data_ + 3 * sizeof(uint32_t);  // Skip header
+    // binary search within char range
+    uint32_t left = start_idx;
+    uint32_t right = end_idx - 1;
+
+    while (left <= right) {
+        uint32_t mid = left + (right - left) / 2;
+
+        // Navigate to mid entry (could be optimized with direct offsets)
+        const char* entry_ptr = entries_start;
+        for (uint32_t i = 0; i < mid; i++) {
+            uint32_t skip_term_len = *reinterpret_cast<const uint32_t*>(entry_ptr);
+            entry_ptr += sizeof(uint32_t) + skip_term_len + sizeof(uint64_t) + sizeof(uint32_t);
+        }
+
+        // Read term at mid
+        uint32_t term_len = *reinterpret_cast<const uint32_t*>(entry_ptr);
+        entry_ptr += sizeof(uint32_t);
+
+        std::string mid_term(entry_ptr, term_len);
+        int comparison = term.compare(mid_term);
+
+        if (comparison == 0) {
+            // Found the term!
+            entry_ptr += term_len;
+
+            TermEntry entry;
+            entry.term = mid_term;
+            entry.index_offset = *reinterpret_cast<const uint64_t*>(entry_ptr);
+            entry_ptr += sizeof(uint64_t);
+            entry.postings_count = *reinterpret_cast<const uint32_t*>(entry_ptr);
+
+            return entry;
+        } else if (comparison < 0) {
+            if (mid == 0)
+                break;
+            right = mid - 1;
+        } else {
+            left = mid + 1;
+        }
     }
 
     return std::nullopt;
