@@ -591,7 +591,16 @@ void Connection::ProcessHeaders() {
     if (contentLengthPos != std::string::npos) {
         contentLengthPos += strlen(ContentLengthHeader);
         auto lengthEnd = headers.find(CRLF, contentLengthPos);
-        contentLength_ = std::stoul(headers.substr(contentLengthPos, lengthEnd - contentLengthPos));
+        try {
+            contentLength_ = std::stoul(headers.substr(contentLengthPos, lengthEnd - contentLengthPos));
+        } catch (const std::invalid_argument&) {
+            state_ = State::UnexpectedEOFError;
+            return;
+        } catch (const std::out_of_range&) {
+            state_ = State::UnexpectedEOFError;
+            return;
+        }
+
         buffer_.reserve(buffer_.size() + contentLength_);
         body_.reserve(contentLength_);
         if (reqOptions_.maxResponseSize > 0 && contentLength_ > reqOptions_.maxResponseSize) {
@@ -662,7 +671,16 @@ void Connection::ProcessChunks() {
             }
 
             auto chunkHeader = std::string{buffer_.begin() + headersLength_ + bodyBytesRead_, chunkHeaderEnd};
-            currentChunkSize_ = std::stoul(chunkHeader, nullptr, 16);
+            try {
+                currentChunkSize_ = std::stoul(chunkHeader, nullptr, 16);
+            } catch (const std::invalid_argument&) {
+                state_ = State::UnexpectedEOFError;
+                return;
+            } catch (const std::out_of_range&) {
+                state_ = State::UnexpectedEOFError;
+                return;
+            }
+
             bodyBytesRead_ += (chunkHeaderEnd - (buffer_.begin() + headersLength_ + bodyBytesRead_)) + 2;
 
             if (currentChunkSize_ == 0) {
