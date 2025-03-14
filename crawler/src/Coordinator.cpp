@@ -1,5 +1,6 @@
 #include "Coordinator.h"
 
+#include "Clock.h"
 #include "Config.h"
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
@@ -60,9 +61,11 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     requestManager_ = core::UniquePtr<RequestManager>(new RequestManager{frontier_.Get(), docQueue_.Get(), config});
 
     metricsServer_ = core::UniquePtr<metrics::MetricsServer>(new metrics::MetricsServer{config.metrics_port});
+
+    frontier_->InitSync(state_->threadSync);
     RegisterCrawlerMetrics(*metricsServer_);
 
-    RecoverState();
+    RecoverState(StatePath());
 }
 
 void Coordinator::Run() {
@@ -102,6 +105,8 @@ void Coordinator::Run() {
     core::Thread metricsThread([&] { metricsServer_->Run(state_->threadSync); });
     ++threadCount;
 
+    core::Thread snapshotThread([this, threadCount] { this->SnapshotThreadEntry(threadCount); });
+
     // Wait for SIGINT or SIGTERM
     sigset_t signals;
     sigemptyset(&signals);
@@ -126,10 +131,11 @@ void Coordinator::Run() {
     for (auto& t : workerThreads) {
         t.Join();
     }
+    snapshotThread.Join();
     metricsThread.Join();
 
     spdlog::info("all threads stopped, saving crawler state");
-    DumpState();
+    DumpState(StatePath());
     spdlog::info("shutdown complete, goodbye!");
 }
 
@@ -137,15 +143,14 @@ std::string Coordinator::StatePath() const {
     return config_.data_directory + "/state.dat";
 }
 
-void Coordinator::DumpState() {
-    auto stateFilePath = StatePath();
-    auto stateFileTempPath = stateFilePath + ".tmp";
+void Coordinator::DumpState(const std::string& file) {
+    auto stateFileTempPath = file + ".tmp";
 
     PersistentState state;
     state.nextDocumentID = state_->nextDocumentID.load();
     frontier_->DumpPendingURLs(state.pendingURLs);
-    requestManager_->ExtractQueuedURLs(state.activeCrawlURLs);
-    docQueue_->ExtractCompletedURLs(state.activeCrawlURLs);
+    requestManager_->DumpQueuedURLs(state.activeCrawlURLs);
+    docQueue_->DumpCompletedURLs(state.activeCrawlURLs);
 
     spdlog::debug("saved state: next document id = {}", state.nextDocumentID);
     spdlog::debug("saved state: pending url count = {}", state.pendingURLs.size());
@@ -159,22 +164,21 @@ void Coordinator::DumpState() {
     }
 
     // Replace any old state file
-    int status = rename(stateFileTempPath.c_str(), stateFilePath.c_str());
+    int status = rename(stateFileTempPath.c_str(), file.c_str());
     if (status == -1) {
         spdlog::error("failed to dump crawler state to disk: {}", std::strerror(errno));
     }
 }
 
-void Coordinator::RecoverState() {
-    auto stateFilePath = StatePath();
-    if (!FileExists(stateFilePath.c_str())) {
-        spdlog::info("no state file found at {}", stateFilePath);
+void Coordinator::RecoverState(const std::string& file) {
+    if (!FileExists(file.c_str())) {
+        spdlog::info("no state file found at {}", file);
         return;
     }
 
     PersistentState state;
     {
-        auto f = data::FileReader{stateFilePath.c_str()};
+        auto f = data::FileReader{file.c_str()};
         data::DeserializeValue(state, f);
     }
 
@@ -185,6 +189,78 @@ void Coordinator::RecoverState() {
     state_->nextDocumentID.store(state.nextDocumentID);
     frontier_->PushURLs(state.pendingURLs);
     requestManager_->RestoreQueuedURLs(state.activeCrawlURLs);
+}
+
+void Coordinator::SnapshotThreadEntry(size_t n) {
+    auto start = MonotonicTime();
+    while (!state_->threadSync.ShouldShutdown()) {
+        sleep(1);
+        if (state_->threadSync.ShouldShutdown()) {
+            return;
+        }
+
+        auto now = MonotonicTime();
+        if (now - start >= config_.snapshot_period_seconds) {
+            DoSnapshot(n);
+            start = MonotonicTime();
+        }
+    }
+}
+
+void Coordinator::DoSnapshot(size_t n) {
+    spdlog::info("requesting pause for snapshot");
+    state_->threadSync.StartPause(static_cast<int>(n));
+    spdlog::info("taking snapshot of crawler state");
+
+    auto snapshotDir = config_.data_directory + "/snapshot";
+    auto snapshotTempDir = config_.data_directory + "/snapshot.tmp";
+    auto snapshotOldDir = config_.data_directory + "/snapshot.old";
+
+    if (DirectoryExists(snapshotTempDir.c_str())) {
+        RmRf(snapshotTempDir.c_str());
+    }
+    mkdir(snapshotTempDir.c_str(), 0755);
+
+    DumpState(snapshotTempDir + "/state.dat");
+    bool ok = frontier_->CopyStateToDirectory(snapshotTempDir);
+    if (!ok) {
+        spdlog::error("failed to copy frontier state to snapshot directory");
+        state_->threadSync.EndPause();
+        return;
+    }
+
+    bool cleanOld = false;
+    if (DirectoryExists(snapshotDir.c_str())) {
+        if (DirectoryExists(snapshotOldDir.c_str())) {
+            RmRf(snapshotOldDir.c_str());
+        }
+
+        int status = rename(snapshotDir.c_str(), snapshotOldDir.c_str());
+        if (status == -1) {
+            spdlog::error("failed to rename old snapshot: {}", std::strerror(errno));
+            state_->threadSync.EndPause();
+            return;
+        }
+        cleanOld = true;
+    }
+
+    int status = rename(snapshotTempDir.c_str(), snapshotDir.c_str());
+    if (status == -1) {
+        spdlog::error("failed to copy frontier state to snapshot directory: {}", std::strerror(errno));
+        state_->threadSync.EndPause();
+        return;
+    }
+
+    if (cleanOld) {
+        RmRf(snapshotOldDir.c_str());
+    }
+
+    spdlog::info("resuming crawler");
+    state_->threadSync.EndPause();
+}
+
+std::string Coordinator::StateSnapshotPath() const {
+    return config_.data_directory + "/state.dat";
 }
 
 }  // namespace mithril

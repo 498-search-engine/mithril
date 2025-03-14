@@ -21,7 +21,7 @@ public:
     void Run(ThreadSync& sync);
 
     void RestoreQueuedURLs(std::vector<std::string>& urls);
-    void ExtractQueuedURLs(std::vector<std::string>& out);
+    void DumpQueuedURLs(std::vector<std::string>& out);
 
 private:
     void DispatchFailedRequest(http::FailedRequest failed);

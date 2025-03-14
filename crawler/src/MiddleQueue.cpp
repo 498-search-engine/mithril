@@ -55,11 +55,12 @@ void MiddleQueue::RestoreFrom(std::vector<std::string>& urls) {
     }
 }
 
-void MiddleQueue::ExtractQueuedURLs(std::vector<std::string>& out) {
+void MiddleQueue::DumpQueuedURLs(std::vector<std::string>& out) {
     for (const auto& entry : hosts_) {
-        while (!entry.second->queue.empty()) {
-            out.push_back(std::move(entry.second->queue.front()));
-            entry.second->queue.pop();
+        auto cpy = entry.second->queue;
+        while (!cpy.empty()) {
+            out.push_back(std::move(cpy.front()));
+            cpy.pop();
         }
     }
 }

@@ -67,6 +67,11 @@ bool UrlFrontier::Empty() const {
     return true;
 }
 
+bool UrlFrontier::CopyStateToDirectory(const std::string& directory) const {
+    core::LockGuard lock(urlQueueMu_);
+    return urlQueue_.CopyStateToDirectory(directory);
+}
+
 void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
     while (true) {
         ProcessRobotsRequests(sync);

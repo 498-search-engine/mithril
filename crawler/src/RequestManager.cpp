@@ -99,8 +99,8 @@ void RequestManager::RestoreQueuedURLs(std::vector<std::string>& urls) {
     middleQueue_.RestoreFrom(urls);
 }
 
-void RequestManager::ExtractQueuedURLs(std::vector<std::string>& out) {
-    middleQueue_.ExtractQueuedURLs(out);
+void RequestManager::DumpQueuedURLs(std::vector<std::string>& out) {
+    middleQueue_.DumpQueuedURLs(out);
     requestExecutor_.DumpUnprocessedRequests(out);
 }
 

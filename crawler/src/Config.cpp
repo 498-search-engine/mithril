@@ -76,6 +76,8 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
             config.concurrent_robots_requests = std::stoul(std::string(value));
         } else if (key == "metrics_port") {
             config.metrics_port = static_cast<uint16_t>(std::stoul(std::string(value)));
+        } else if (key == "snapshot_period_seconds") {
+            config.snapshot_period_seconds = std::stoul(std::string(value));
         }
     }
 

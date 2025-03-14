@@ -48,12 +48,17 @@ std::optional<http::CompleteResponse> DocumentQueue::Pop() {
     return {std::move(res)};
 }
 
-void DocumentQueue::ExtractCompletedURLs(std::vector<std::string>& out) {
+void DocumentQueue::DumpCompletedURLs(std::vector<std::string>& out) {
     core::LockGuard lock(mu_);
-    while (!readyResponses_.empty()) {
-        out.push_back(readyResponses_.front().req.Url().url);
+
+    size_t n = readyResponses_.size();
+    for (size_t i = 0; i < n; ++i) {
+        auto front = std::move(readyResponses_.front());
+        out.push_back(front.req.Url().url);
         readyResponses_.pop();
+        readyResponses_.push(std::move(front));
     }
+    assert(readyResponses_.size() == n);
 }
 
 }  // namespace mithril
