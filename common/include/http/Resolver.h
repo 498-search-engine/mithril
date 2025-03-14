@@ -33,6 +33,8 @@ private:
 
 class Resolver {
 public:
+    virtual ~Resolver() = default;
+
     struct ResolutionResult {
         int status{0};
         std::optional<ResolvedAddr> addr;
