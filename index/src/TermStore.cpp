@@ -1,5 +1,7 @@
 #include "TermStore.h"
 
+#include <algorithm>
+
 namespace mithril {
 
 void PostingList::add(const Posting& posting) {

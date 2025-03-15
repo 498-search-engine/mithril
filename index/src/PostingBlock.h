@@ -1,6 +1,7 @@
 #ifndef INDEX_POSTINGBLOCK_H
 #define INDEX_POSTINGBLOCK_H
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
