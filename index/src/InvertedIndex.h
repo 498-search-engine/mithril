@@ -5,6 +5,8 @@
 #include "data/Document.h"
 
 #include <future>
+#include <queue>
+#include <iostream>
 
 namespace mithril {
 
@@ -13,7 +15,7 @@ using docid_t = data::docid_t;
 
 class IndexBuilder {
 public:
-    explicit IndexBuilder(const std::string& output_dir, size_t num_threads = std::thread::hardware_concurrency());
+    explicit IndexBuilder(const std::string& output_dir, size_t num_threads = std::thread::hardware_concurrency() * 3/2);
     ~IndexBuilder();
 
     void add_document(const std::string& words_path, const std::string& links_path);  // remnant
@@ -33,7 +35,7 @@ private:
 
     // Output config
     const std::string output_dir_;
-    static constexpr size_t MAX_BLOCK_SIZE = 512 * 1024 * 1024;
+    static constexpr size_t MAX_BLOCK_SIZE = 512 * 1024 * 1024;  // 1 GB
     static constexpr size_t MERGE_FACTOR = 32;
 
     // core methods

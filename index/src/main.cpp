@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) {
 
             auto end_time = std::chrono::steady_clock::now();
             auto elapsed =
-                std::max(1LL, std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count());
+                std::max(1L, std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count());
 
             spdlog::info("Completed! Processed {} documents in {} seconds ({:.1f} docs/sec)",
                          processed,

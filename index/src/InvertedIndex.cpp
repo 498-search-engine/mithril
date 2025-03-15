@@ -11,6 +11,7 @@
 #include <iostream>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -442,43 +443,39 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
 }
 
 void IndexBuilder::merge_blocks_tiered() {
-    // Early exit if no blocks to merge
     if (block_count_ <= 1) {
         if (block_count_ == 1) {
-            // For a single block, process it to create the final index
+            spdlog::info("Single block detected, processing to create final index");
             std::vector<std::string> single_block = {block_path(0)};
             merge_block_subset(single_block, 0, 1, true);
         }
         return;
     }
 
-    // Gather all block paths for the initial tier
     std::vector<std::string> current_tier;
     for (int i = 0; i < block_count_; ++i) {
         current_tier.push_back(block_path(i));
     }
 
     int tier_number = 0;
-    // Process blocks in tiers until only one remains
     while (current_tier.size() > 1) {
         tier_number++;
+        spdlog::info("Processing tier {}: merging {} blocks with factor {}", tier_number, current_tier.size(), MERGE_FACTOR);
+        
         std::vector<std::string> next_tier;
-
-        // Merge blocks in groups of MERGE_FACTOR
         for (size_t i = 0; i < current_tier.size(); i += MERGE_FACTOR) {
             size_t end_idx = std::min(i + MERGE_FACTOR, current_tier.size());
-            // Intermediate merges use standard format
+            spdlog::debug("Merging blocks {}-{} of {}", i, end_idx-1, current_tier.size());
             std::string merged_block = merge_block_subset(current_tier, i, end_idx, false);
             next_tier.push_back(merged_block);
         }
         current_tier = std::move(next_tier);
+        spdlog::info("Tier {} complete, produced {} blocks", tier_number, current_tier.size());
     }
 
-    // For the final tier with a single block, create the final index
     if (current_tier.size() == 1) {
+        spdlog::info("Creating final index from last block");
         merge_block_subset(current_tier, 0, 1, true);
-    } else {
-        throw std::runtime_error("Tiered merging failed: no final block produced");
     }
 }
 
@@ -608,8 +605,7 @@ void IndexBuilder::create_term_dictionary() {
         term_entries.emplace_back(term, term_offset);
 
         if (i % 100000 == 0 || i == term_count - 1) {
-            std::cout << "\rCollecting terms: " << i + 1 << "/" << term_count << " (" << (i + 1) * 100 / term_count
-                      << "%)" << std::flush;
+            std::cout << "\rCollecting terms: " << i + 1 << "/" << term_count << " (" << (i + 1) * 100 / term_count << "%)" << std::flush;
         }
     }
 
@@ -675,17 +671,25 @@ void IndexBuilder::finalize() {
         std::unique_lock<std::mutex> lock(queue_mutex_);
         condition_.wait(lock, [this] { return tasks_.empty() && active_tasks_ == 0; });
     }
+    spdlog::info("All document processing tasks completed");
 
-    // Force a final flush if we have any postings
     if (current_block_size_ > 0) {
+        spdlog::info("Flushing final block...");
         auto flush_future = flush_block();
         flush_future.wait();
     }
 
-    // merge_blocks();
+    spdlog::info("Starting block merge with {} blocks...", block_count_);
     merge_blocks_tiered();
+    
+    spdlog::info("Saving document map ({} documents)...", documents_.size());
     save_document_map();
+    
+    spdlog::info("Creating term dictionary...");
     create_term_dictionary();
+    
+    spdlog::info("Cleaning up temporary files...");
     std::filesystem::remove_all(output_dir_ + "/blocks");
+    spdlog::info("Index finalization complete");
 }
 }  // namespace mithril
