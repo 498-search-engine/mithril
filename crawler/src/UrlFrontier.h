@@ -43,6 +43,14 @@ public:
     bool Empty() const;
 
     /**
+     * @brief Copies the URL frontier state into the given directory.
+     *
+     * @param directory Directory to copy into.
+     * @return Whether the operation succeeded.
+     */
+    bool CopyStateToDirectory(const std::string& directory) const;
+
+    /**
      * @brief Runs the robots requests processing thread until an indicated
      * shutdown.
      *
@@ -56,6 +64,11 @@ public:
      * @param sync ThreadSync to communicate shutdown.
      */
     void FreshURLsThread(ThreadSync& sync);
+
+    /**
+     * @brief Resets the timeout progress for all active robots requests.
+     */
+    void TouchRobotRequestTimeouts();
 
     /**
      * @brief Gets at least one URL from the frontier, up to max

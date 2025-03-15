@@ -19,10 +19,15 @@ public:
     void Run();
 
 private:
-    std::string StatePath() const;
+    void SnapshotThreadEntry(size_t n);
+    void DoSnapshot(size_t n);
 
-    void DumpState();
-    void RecoverState();
+    std::string LockPath() const;
+    std::string StatePath() const;
+    std::string StateSnapshotPath() const;
+
+    void DumpState(const std::string& file);
+    void RecoverState(const std::string& file);
 
     const CrawlerConfig config_;
 

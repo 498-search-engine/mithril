@@ -67,6 +67,11 @@ bool UrlFrontier::Empty() const {
     return true;
 }
 
+bool UrlFrontier::CopyStateToDirectory(const std::string& directory) const {
+    core::LockGuard lock(urlQueueMu_);
+    return urlQueue_.CopyStateToDirectory(directory);
+}
+
 void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
     while (true) {
         ProcessRobotsRequests(sync);
@@ -340,6 +345,11 @@ void UrlFrontier::DumpPendingURLs(std::vector<std::string>& urls) {
             }
         }
     }
+}
+
+void UrlFrontier::TouchRobotRequestTimeouts() {
+    core::LockGuard robotsLock(robotsCacheMu_);
+    robotRulesCache_.TouchRobotRequestTimeouts();
 }
 
 }  // namespace mithril

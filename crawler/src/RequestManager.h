@@ -19,9 +19,10 @@ public:
     RequestManager(UrlFrontier* frontier, DocumentQueue* docQueue, const CrawlerConfig& config);
 
     void Run(ThreadSync& sync);
+    void TouchRequestTimeouts();
 
     void RestoreQueuedURLs(std::vector<std::string>& urls);
-    void ExtractQueuedURLs(std::vector<std::string>& out);
+    void DumpQueuedURLs(std::vector<std::string>& out);
 
 private:
     void DispatchFailedRequest(http::FailedRequest failed);

@@ -21,7 +21,7 @@ public:
     void PushAll(std::vector<http::CompleteResponse>& res);
     std::optional<http::CompleteResponse> Pop();
 
-    void ExtractCompletedURLs(std::vector<std::string>& out);
+    void DumpCompletedURLs(std::vector<std::string>& out);
 
 private:
     ThreadSync& sync_;

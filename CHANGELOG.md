@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - reject page based on `Content-Language` header (#52)
 - split url queue into high and low scoring queue (#53)
 - metrics for crawler (#50)
+- async name resolution (#62)
+- periodic crawler state snapshots (#63)
 - index querying support with (docMapReader, ISRs, termReader, termDict) etc and more index niceties (#60)
 
 ### Fixed
@@ -28,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Improve performance by splitting one lock into many (#34)
 - improve robots.txt throughput (probably) (#54)
 - fix getaddrinfo failure handling (#58)
+- catch exceptions around string parsing (#61)
 
 ## [0.1.0] - 2025-02-07
 

@@ -1,8 +1,8 @@
 #include "Config.h"
 #include "Coordinator.h"
+#include "http/AsyncResolver.h"
 #include "http/SSL.h"
 
-#include <cassert>
 #include <csignal>
 #include <exception>
 #include <string>
@@ -19,6 +19,7 @@ int main(int argc, char* argv[]) {
     signal(SIGPIPE, SIG_IGN);
 
     mithril::http::InitializeSSL();
+    mithril::http::ApplicationResolver = core::UniquePtr<mithril::http::Resolver>(new mithril::http::AsyncResolver{});
 
     try {
         auto config = mithril::LoadConfigFromFile(argc > 1 ? argv[1] : "crawler.conf");
@@ -29,6 +30,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    mithril::http::ApplicationResolver.Reset(nullptr);
     mithril::http::DeinitializeSSL();
 
     return 0;

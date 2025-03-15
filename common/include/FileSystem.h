@@ -3,5 +3,8 @@
 
 bool DirectoryExists(const char* path);
 bool FileExists(const char* path);
+bool RmRf(const char* path);
+
+bool CopyFile(const char* src, const char* dst);
 
 #endif
