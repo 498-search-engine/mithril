@@ -39,11 +39,8 @@ namespace {
 
 constexpr size_t MaxHeaderSize = 8192;
 constexpr size_t BufferSize = 8192;
-constexpr const char* ContentLengthHeader = "Content-Length: ";
-constexpr const char* ContentLanguageHeader = "Content-Language: ";
-constexpr const char* TransferEncodingChunkedHeader = "Transfer-Encoding: chunked";
-constexpr const char* HeaderDelimiter = "\r\n\r\n";
-constexpr const char* CRLF = "\r\n";
+constexpr auto HeaderDelimiter = "\r\n\r\n"sv;
+constexpr auto CRLF = "\r\n"sv;
 
 void PrintSSLError(SSL* ssl, int status, const char* operation) {
     int sslErr = SSL_get_error(ssl, status);
@@ -558,7 +555,7 @@ bool Connection::IsReading() const {
 
 void Connection::ProcessHeaders() {
     // Look for header delimiter
-    auto headerEnd = std::search(buffer_.begin(), buffer_.end(), HeaderDelimiter, HeaderDelimiter + 4);
+    auto headerEnd = std::search(buffer_.begin(), buffer_.end(), HeaderDelimiter.begin(), HeaderDelimiter.end());
 
     if (headerEnd == buffer_.end()) {
         if (buffer_.size() > MaxHeaderSize) {
@@ -677,7 +674,7 @@ void Connection::ProcessChunks() {
         if (currentChunkSize_ == 0) {
             // Need to read next chunk size
             auto chunkHeaderEnd =
-                std::search(buffer_.begin() + headersLength_ + bodyBytesRead_, buffer_.end(), CRLF, CRLF + 2);
+                std::search(buffer_.begin() + headersLength_ + bodyBytesRead_, buffer_.end(), CRLF.begin(), CRLF.end());
 
             if (chunkHeaderEnd == buffer_.end()) {
                 return;  // Don't have complete chunk header
