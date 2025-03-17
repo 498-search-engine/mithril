@@ -55,6 +55,9 @@ std::string CanonicalizeURL(const URL& url);
  */
 CanonicalHost CanonicalizeHost(const http::URL& url);
 
+std::string EncodePath(std::string_view u);
+std::string DecodeURL(std::string_view u);
+
 }  // namespace mithril::http
 
 namespace std {

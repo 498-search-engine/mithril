@@ -1,5 +1,6 @@
 #include "http/URL.h"
 
+#include <string>
 #include <string_view>
 #include <gtest/gtest.h>
 
@@ -173,4 +174,127 @@ TEST(URL, CanonicalizeHost) {
         EXPECT_EQ(canonical.host, "github.com");
         EXPECT_EQ(canonical.port, "80");
     }
+}
+
+// Basic path encoding tests
+TEST(URLEncodingTest, BasicPathEncoding) {
+    // Simple paths
+    EXPECT_EQ("/simple/path", EncodePath("/simple/path"));
+
+    // Spaces in path
+    EXPECT_EQ("/test%20path/file", EncodePath("/test path/file"));
+
+    // Mixed path with special characters
+    EXPECT_EQ("/user/john_doe/profile.html", EncodePath("/user/john_doe/profile.html"));
+
+    // Path with reserved characters
+    EXPECT_EQ("/path?with%3Aspecial=chars", EncodePath("/path?with:special=chars"));
+}
+
+// Query parameter tests
+TEST(URLEncodingTest, QueryParameterEncoding) {
+    // Path with query
+    EXPECT_EQ("/search?query=test%20value&page=2", EncodePath("/search?query=test value&page=2"));
+
+    // Multiple parameters
+    EXPECT_EQ("/api/v1?name=John%20Doe&role=admin&active=true",
+              EncodePath("/api/v1?name=John Doe&role=admin&active=true"));
+
+    // Special characters in query
+    EXPECT_EQ("/products?filter=%3C%3E&sort=price", EncodePath("/products?filter=<>&sort=price"));
+
+    // Question mark in query value
+    EXPECT_EQ("/search?q=what%3F&when=now", EncodePath("/search?q=what?&when=now"));
+
+    // Fragment
+    EXPECT_EQ("/search#hello%20world&123", EncodePath("/search#hello world&123"));
+}
+
+// Special character tests
+TEST(URLEncodingTest, SpecialCharacters) {
+    // Control characters
+    EXPECT_EQ("control%09char%0A", EncodePath("control\tchar\n"));
+
+    // International characters
+    EXPECT_EQ("caf%C3%A9/%E2%82%AC", EncodePath("café/€"));
+
+    // Reserved characters per RFC 3986
+    EXPECT_EQ("%21#%24%25&%27%28%29%2A%2B%2C%3B=", EncodePath("!#$%&'()*+,;="));
+}
+
+// Edge cases
+TEST(URLEncodingTest, EdgeCases) {
+    // Empty string
+    EXPECT_EQ("", EncodePath(""));
+
+    // Single character tests
+    EXPECT_EQ("%20", EncodePath(" "));
+    EXPECT_EQ("/", EncodePath("/"));
+    EXPECT_EQ("/?", EncodePath("/?"));
+    EXPECT_EQ("/?%3F", EncodePath("/??"));
+
+    // Percent sign
+    EXPECT_EQ("%25", EncodePath("%"));
+    EXPECT_EQ("%25%25", EncodePath("%%"));
+
+    // Trailing slash
+    EXPECT_EQ("/path/", EncodePath("/path/"));
+}
+
+// Basic decoding tests
+TEST(URLDecodingTest, BasicDecoding) {
+    // Simple encoded strings
+    EXPECT_EQ("Hello World", DecodeURL("Hello%20World"));
+    EXPECT_EQ("/test path/file", DecodeURL("/test%20path/file"));
+
+    // International characters
+    EXPECT_EQ("café/€", DecodeURL("caf%C3%A9/%E2%82%AC"));
+}
+
+// Special decoding cases
+TEST(URLDecodingTest, SpecialCases) {
+    // Percent sign
+    EXPECT_EQ("%", DecodeURL("%25"));
+
+    // Incomplete encoding
+    EXPECT_EQ("%5", DecodeURL("%5"));
+    EXPECT_EQ("%", DecodeURL("%"));
+
+    // Invalid hex in encoding
+    EXPECT_EQ("%XY", DecodeURL("%XY"));
+
+    // Reserved character
+    EXPECT_EQ("%2B", DecodeURL("%2B"));
+
+    // Don't decode reserved characters
+    EXPECT_EQ("example.com/folder%2Ffile.txt", DecodeURL("example.com/folder%2Ffile.txt"));
+}
+
+// Encode-decode consistency
+TEST(URLRoundTripTest, EncodeDecodeConsistency) {
+    // Simple string
+    std::string original = "Hello World";
+    EXPECT_EQ(original, DecodeURL(EncodePath(original)));
+
+    // Complex path with reserved chars
+    EXPECT_EQ(
+        "/api/v1/users?name=John Doe&role=admin&test=<>&special=%3A%2F%3F%23%5B%5D%40%21%24&%27%28%29%2A%2B%2C%3B",
+        DecodeURL(EncodePath("/api/v1/users?name=John Doe&role=admin&test=<>&special=:/?#[]@!$&'()*+,;")));
+
+    // International characters
+    original = "/café/München/北京/";
+    EXPECT_EQ(original, DecodeURL(EncodePath(original)));
+}
+
+// Specific test cases for path encoding rules
+TEST(URLEncodingTest, PathEncodingRules) {
+    // Forward slashes preserved in path
+    EXPECT_EQ("/a/b/c", EncodePath("/a/b/c"));
+
+    // Forward slashes encoded in query
+    EXPECT_EQ("/path?query=a%2Fb%2Fc", EncodePath("/path?query=a/b/c"));
+
+    // Question marks
+    EXPECT_EQ("/path?with%3Fquestions", EncodePath("/path?with?questions"));
+    EXPECT_EQ("/legitimate?param%3Fwith%3Fquestions", EncodePath("/legitimate?param?with?questions"));
 }

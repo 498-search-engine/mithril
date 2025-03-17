@@ -6,6 +6,7 @@
 #include "core/memory.h"
 #include "html/Entity.h"
 #include "html/Tags.h"
+#include "http/URL.h"
 
 #include <cstring>
 #include <string>
@@ -59,9 +60,6 @@ struct ParserState {
 };
 
 std::string_view DecodeStringWithRef(std::string_view s, std::vector<core::UniquePtr<std::string>>& decodedWords) {
-    if (s.find('&') == std::string_view::npos) {
-        return s;
-    }
     auto decoded = DecodeHtmlString(s);
     decodedWords.push_back(core::MakeUnique<std::string>(std::move(decoded)));
     return std::string_view{*decodedWords.back()};
@@ -179,7 +177,7 @@ const char* HandleTagAction(DesiredAction action,
                 if (state.inAnchor) {
                     links.emplace_back(std::move(currentLink));
                 }
-                href = DecodeStringWithRef(href, decodedWords);
+                href = DecodeStringWithRef(http::DecodeURL(href), decodedWords);
                 currentLink = Link{.url = href, .anchorText = {}};
                 state.inAnchor = true;
             }
@@ -194,7 +192,7 @@ const char* HandleTagAction(DesiredAction action,
                 const char* attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "href=", base);
                 if (!attrEnd)
                     return nullptr;
-                base = DecodeStringWithRef(base, decodedWords);
+                base = DecodeStringWithRef(http::DecodeURL(base), decodedWords);
                 state.baseDone = true;
                 return AfterEndingOfTag(attrEnd, bufferEnd);
             }
@@ -210,7 +208,7 @@ const char* HandleTagAction(DesiredAction action,
             if (!attrEnd)
                 return nullptr;
             if (!src.empty()) {
-                src = DecodeStringWithRef(src, decodedWords);
+                src = DecodeStringWithRef(http::DecodeURL(src), decodedWords);
                 links.emplace_back(src);
             }
             return AfterEndingOfTag(attrEnd, bufferEnd);

@@ -1,6 +1,7 @@
 #include "http/URL.h"
 
 #include "Util.h"
+#include "core/array.h"
 
 #include <algorithm>
 #include <cctype>
@@ -228,6 +229,95 @@ CanonicalHost CanonicalizeHost(const http::URL& url) {
     }
 
     return canonical;
+}
+
+constexpr core::Array<char, 16> Hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+std::string EncodePath(std::string_view u) {
+    std::string result;
+    bool inQuery = false;
+
+    auto encodeChar = [&result](unsigned char c) {
+        result += '%';
+        result += Hex[c >> 4];    // First hex digit
+        result += Hex[c & 0x0F];  // Second hex digit
+    };
+
+    for (unsigned char c : u) {
+        bool encode = false;
+        // RFC 3986 section 2.3 Unreserved Characters (allowed unencoded)
+        // ALPHA / DIGIT / "-" / "." / "_" / "~"
+        if (std::isalnum(c) || c == '-' || c == '.' || c == '_' || c == '~') {
+            encode = false;
+        } else if (c == '/') {
+            encode = inQuery;
+        } else if (c == '?' || c == '#') {
+            encode = inQuery;
+            inQuery = true;
+        } else if (c == '&' || c == '=') {
+            encode = !inQuery;
+        } else {
+            encode = true;
+        }
+
+        if (encode) {
+            encodeChar(c);
+        } else {
+            result.push_back(static_cast<char>(c));
+        }
+    }
+
+    return result;
+}
+
+std::string DecodeURL(std::string_view u) {
+    // RFC 3986 2.2
+    constexpr std::string_view ReservedChars = ":/?#[]@!$&'()*+,;="sv;
+
+    std::string result;
+    size_t i = 0;
+
+    while (i < u.size()) {
+        if (u[i] == '%' && i < u.size() - 2) {
+            unsigned char c = 0;
+            auto high = u[i + 1];
+            if (high >= '0' && high <= '9') {
+                c = static_cast<unsigned char>((high - '0') << 4);
+            } else if (high >= 'A' && high <= 'F') {
+                c = static_cast<unsigned char>((high - 'A' + 10) << 4);
+            } else {
+                result.push_back(u[i]);
+                ++i;
+                continue;
+            }
+            auto low = u[i + 2];
+            if (low >= '0' && low <= '9') {
+                c |= static_cast<unsigned char>(low - '0');
+            } else if (low >= 'A' && low <= 'F') {
+                c |= static_cast<unsigned char>(low - 'A' + 10);
+            } else {
+                result.push_back(u[i]);
+                ++i;
+                continue;
+            }
+
+            auto decoded = static_cast<char>(c);
+
+            if (std::find(ReservedChars.begin(), ReservedChars.end(), c) == ReservedChars.end()) {
+                // Not a reserved character
+                result.push_back(static_cast<char>(c));
+                i += 3;
+            } else {
+                // Reserved character, don't decode
+                result.push_back(u[i]);
+                ++i;
+            }
+        } else {
+            result.push_back(u[i]);
+            ++i;
+        }
+    }
+    return result;
 }
 
 }  // namespace mithril::http
