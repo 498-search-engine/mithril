@@ -4,7 +4,7 @@
 #pragma once
 
 #include <cstddef>
-#include <string>
+#include <string_view>
 #include <vector>
 
 namespace mithril::html {
@@ -70,34 +70,18 @@ namespace mithril::html {
 //          added to the links with no anchor text.
 
 
-class Link {
-public:
-    std::string URL;
-    std::vector<std::string> anchorText;
-
-    explicit Link(std::string URL) : URL(std::move(URL)) {}
+struct Link {
+    std::string_view url;
+    std::vector<std::string_view> anchorText;
 };
 
-
-class Parser {
-public:
-    /**
-     * Parses an HTML buffer, extracting words, title words, and links.
-     *
-     * @param buffer Pointer to the HTML content to parse
-     * @param length Length of the HTML content in bytes
-     *
-     * All HTML tags are stripped during parsing. Words are collected from
-     * the document body and title. Links are extracted from anchor tags
-     * and embedded content.
-     */
-    Parser(const char* buffer, size_t length);
-
-    // Parsed content
-    std::vector<std::string> words;
-    std::vector<std::string> titleWords;
+struct ParsedDocument {
+    std::vector<std::string_view> words;
+    std::vector<std::string_view> titleWords;
     std::vector<Link> links;
-    std::string base;
+    std::string_view base;
 };
+
+void ParseDocument(std::string_view doc, ParsedDocument& parsed);
 
 }  // namespace mithril::html
