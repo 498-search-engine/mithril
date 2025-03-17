@@ -1,6 +1,8 @@
 #include "Config.h"
 #include "Coordinator.h"
+#include "core/memory.h"
 #include "http/AsyncResolver.h"
+#include "http/Resolver.h"
 #include "http/SSL.h"
 
 #include <csignal>
