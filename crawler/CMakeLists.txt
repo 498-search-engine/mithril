@@ -9,7 +9,6 @@ add_library(crawler STATIC
     src/RequestManager.cpp
     src/Robots.cpp
     src/UrlFrontier.cpp
-    src/UrlSet.cpp
     src/Worker.cpp
     src/Config.cpp
 )
