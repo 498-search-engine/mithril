@@ -1,7 +1,10 @@
 #include "http/Request.h"
 
+#include "core/array.h"
 #include "http/URL.h"
 
+#include <cctype>
+#include <string>
 #include <utility>
 
 namespace mithril::http {
@@ -52,7 +55,8 @@ std::string BuildRawRequestString(Method method, const URL& url) {
     if (url.path.empty()) {
         rawRequest.append("/");
     } else {
-        rawRequest.append(url.path);
+        auto encoded = EncodePath(url.path);
+        rawRequest.append(encoded);
     }
 
     rawRequest.append(" HTTP/1.1\r\nHost: ");

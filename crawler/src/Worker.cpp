@@ -15,6 +15,7 @@
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
+#include "http/URL.h"
 
 #include <atomic>
 #include <string>
@@ -86,9 +87,17 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
     std::vector<std::string> absoluteURLs;
     for (auto& l : parsedDoc_.links) {
         auto absoluteLink = html::MakeAbsoluteLink(req.Url(), parsedDoc_.base, l.url);
-        if (absoluteLink) {
-            absoluteURLs.push_back(std::move(*absoluteLink));
+        if (!absoluteLink) {
+            continue;
         }
+
+        auto parsed = http::ParseURL(*absoluteLink);
+        if (!parsed) {
+            continue;
+        }
+
+        auto canonical = http::CanonicalizeURL(*parsed);
+        absoluteURLs.push_back(std::move(canonical));
     }
 
     data::docid_t docID = state_.nextDocumentID.fetch_add(1);
