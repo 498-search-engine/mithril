@@ -160,8 +160,8 @@ std::optional<URL> ParseURL(std::string_view s) {
 }
 
 std::string CanonicalizeURL(const URL& url) {
-    std::string normalized;
-    normalized.reserve(url.url.size());
+    std::string canonical;
+    canonical.reserve(url.url.size());
 
     // Lowercase scheme and host
     std::string scheme = url.scheme;
@@ -170,11 +170,11 @@ std::string CanonicalizeURL(const URL& url) {
     std::string host = url.host;
     std::transform(host.begin(), host.end(), host.begin(), [](unsigned char c) { return std::tolower(c); });
 
-    normalized += scheme + "://" + host;
+    canonical += scheme + "://" + host;
 
     // Add non-default port
     if (!url.port.empty() && !((scheme == "http" && url.port == "80") || (scheme == "https" && url.port == "443"))) {
-        normalized += ":" + url.port;
+        canonical += ":" + url.port;
     }
 
     // Normalize path
@@ -182,7 +182,7 @@ std::string CanonicalizeURL(const URL& url) {
     cleanPath.reserve(url.path.size());
     bool prevSlash = false;
 
-    // Ensure leading slash and collapse duplicates
+    // Ensure leading slash and collapse consecutive /'s
     if (url.path.empty() || url.path[0] != '/') {
         cleanPath += '/';
         prevSlash = true;
@@ -194,20 +194,25 @@ std::string CanonicalizeURL(const URL& url) {
                 cleanPath += '/';
                 prevSlash = true;
             }
-        } else {
-            cleanPath += c;
-            prevSlash = false;
+            continue;
         }
+        prevSlash = false;
+
+        if (c == '#') {
+            // Start of fragment, we don't want it
+            break;
+        }
+        cleanPath += c;
     }
 
     // Handle trailing slash for empty paths
     if (cleanPath.empty() || (cleanPath.size() == 1 && cleanPath[0] == '/')) {
-        normalized += "/";
+        canonical += "/";
     } else {
-        normalized += cleanPath;
+        canonical += cleanPath;
     }
 
-    return normalized;
+    return canonical;
 }
 
 CanonicalHost CanonicalizeHost(const http::URL& url) {
