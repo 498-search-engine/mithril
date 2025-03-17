@@ -1,5 +1,5 @@
-#ifndef MITHRIL_TERMOR_H
-#define MITHRIL_TERMOR_H
+#ifndef INDEX_TERMOR_H
+#define INDEX_TERMOR_H
 
 #include "IndexStreamReader.h"
 
@@ -30,4 +30,4 @@ private:
 
 }  // namespace mithril
 
-#endif  // MITHRIL_TERMOR_H
+#endif  // INDEX_TERMOR_H

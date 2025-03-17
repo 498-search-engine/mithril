@@ -1,5 +1,6 @@
 #include "InvertedIndex.h"
 #include "PostingBlock.h"
+#include "Utils.h"
 
 #include <algorithm>
 #include <bitset>

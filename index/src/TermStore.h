@@ -22,7 +22,7 @@ public:
     size_t size_bytes() const;
     void clear();
     bool empty() const;
-    static constexpr uint32_t SYNC_INTERVAL = 1024 * 1024;  // 1 MB
+    static constexpr uint32_t SYNC_INTERVAL = 1024 * 1024;               // 1 MB
     static constexpr uint32_t POSITION_SYNC_INTERVAL = 8 * 1024 * 1024;  // 8 MB
     const std::vector<SyncPoint>& sync_points() const { return sync_points_; }
 

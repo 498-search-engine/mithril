@@ -1,6 +1,7 @@
 #include "PostingBlock.h"
 
 #include "InvertedIndex.h"
+#include "Utils.h"
 
 #include <cerrno>
 #include <fcntl.h>

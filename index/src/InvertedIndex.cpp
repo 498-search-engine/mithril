@@ -1,6 +1,7 @@
 #include "InvertedIndex.h"
 
 #include "TextPreprocessor.h"
+#include "Utils.h"
 #include "data/Deserialize.h"
 #include "data/Gzip.h"
 #include "data/Reader.h"
@@ -9,9 +10,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <spdlog/spdlog.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -460,12 +461,13 @@ void IndexBuilder::merge_blocks_tiered() {
     int tier_number = 0;
     while (current_tier.size() > 1) {
         tier_number++;
-        spdlog::info("Processing tier {}: merging {} blocks with factor {}", tier_number, current_tier.size(), MERGE_FACTOR);
-        
+        spdlog::info(
+            "Processing tier {}: merging {} blocks with factor {}", tier_number, current_tier.size(), MERGE_FACTOR);
+
         std::vector<std::string> next_tier;
         for (size_t i = 0; i < current_tier.size(); i += MERGE_FACTOR) {
             size_t end_idx = std::min(i + MERGE_FACTOR, current_tier.size());
-            spdlog::debug("Merging blocks {}-{} of {}", i, end_idx-1, current_tier.size());
+            spdlog::debug("Merging blocks {}-{} of {}", i, end_idx - 1, current_tier.size());
             std::string merged_block = merge_block_subset(current_tier, i, end_idx, false);
             next_tier.push_back(merged_block);
         }
@@ -605,7 +607,8 @@ void IndexBuilder::create_term_dictionary() {
         term_entries.emplace_back(term, term_offset);
 
         if (i % 100000 == 0 || i == term_count - 1) {
-            std::cout << "\rCollecting terms: " << i + 1 << "/" << term_count << " (" << (i + 1) * 100 / term_count << "%)" << std::flush;
+            std::cout << "\rCollecting terms: " << i + 1 << "/" << term_count << " (" << (i + 1) * 100 / term_count
+                      << "%)" << std::flush;
         }
     }
 
@@ -681,13 +684,13 @@ void IndexBuilder::finalize() {
 
     spdlog::info("Starting block merge with {} blocks...", block_count_);
     merge_blocks_tiered();
-    
+
     spdlog::info("Saving document map ({} documents)...", documents_.size());
     save_document_map();
-    
+
     spdlog::info("Creating term dictionary...");
     create_term_dictionary();
-    
+
     spdlog::info("Cleaning up temporary files...");
     std::filesystem::remove_all(output_dir_ + "/blocks");
     spdlog::info("Index finalization complete");
