@@ -29,7 +29,7 @@ public:
     void DumpQueuedURLs(std::vector<std::string>& out);
 
 private:
-    void DispatchFailedRequest(http::FailedRequest failed);
+    void DispatchFailedRequest(const http::FailedRequest& failed);
 
     size_t targetConcurrentReqs_;
     unsigned long requestTimeout_;
