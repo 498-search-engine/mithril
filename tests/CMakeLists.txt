@@ -9,6 +9,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 set(TEST_SOURCES
+    src/HtmlEntity.cpp
     src/Robots.cpp
     src/Serialization.cpp
     src/URL.cpp

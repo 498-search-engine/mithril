@@ -3,7 +3,10 @@
 
 #pragma once
 
+#include "core/memory.h"
+
 #include <cstddef>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -80,6 +83,8 @@ struct ParsedDocument {
     std::vector<std::string_view> titleWords;
     std::vector<Link> links;
     std::string_view base;
+
+    std::vector<core::UniquePtr<std::string>> decodedWords;
 };
 
 void ParseDocument(std::string_view doc, ParsedDocument& parsed);

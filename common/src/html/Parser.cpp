@@ -3,10 +3,14 @@
 
 #include "html/Parser.h"
 
+#include "core/memory.h"
+#include "html/Entity.h"
 #include "html/Tags.h"
 
 #include <cstring>
+#include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -54,13 +58,28 @@ struct ParserState {
     const char* discardEnd = nullptr;
 };
 
+std::string_view DecodeStringWithRef(std::string_view s, std::vector<core::UniquePtr<std::string>>& decodedWords) {
+    if (s.find('&') == std::string_view::npos) {
+        return s;
+    }
+    auto decoded = DecodeHtmlString(s);
+    decodedWords.push_back(core::MakeUnique<std::string>(std::move(decoded)));
+    return std::string_view{*decodedWords.back()};
+}
+
 void CollectWord(std::string_view word,
                  const ParserState& state,
                  std::vector<std::string_view>& words,
                  std::vector<std::string_view>& titleWords,
-                 Link& currentLink) {
+                 Link& currentLink,
+                 std::vector<core::UniquePtr<std::string>>& decodedWords,
+                 bool needsDecode) {
     if (word.empty())
         return;
+
+    if (needsDecode) {
+        word = DecodeStringWithRef(word, decodedWords);
+    }
 
     if (state.inAnchor) {
         currentLink.anchorText.push_back(word);
@@ -111,7 +130,8 @@ const char* HandleTagAction(DesiredAction action,
                             ParserState& state,
                             Link& currentLink,
                             std::vector<Link>& links,
-                            std::string_view& base) {
+                            std::string_view& base,
+                            std::vector<core::UniquePtr<std::string>>& decodedWords) {
     const char* end;
 
     switch (action) {
@@ -159,6 +179,7 @@ const char* HandleTagAction(DesiredAction action,
                 if (state.inAnchor) {
                     links.emplace_back(std::move(currentLink));
                 }
+                href = DecodeStringWithRef(href, decodedWords);
                 currentLink = Link{.url = href, .anchorText = {}};
                 state.inAnchor = true;
             }
@@ -173,6 +194,7 @@ const char* HandleTagAction(DesiredAction action,
                 const char* attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "href=", base);
                 if (!attrEnd)
                     return nullptr;
+                base = DecodeStringWithRef(base, decodedWords);
                 state.baseDone = true;
                 return AfterEndingOfTag(attrEnd, bufferEnd);
             }
@@ -188,6 +210,7 @@ const char* HandleTagAction(DesiredAction action,
             if (!attrEnd)
                 return nullptr;
             if (!src.empty()) {
+                src = DecodeStringWithRef(src, decodedWords);
                 links.emplace_back(src);
             }
             return AfterEndingOfTag(attrEnd, bufferEnd);
@@ -207,27 +230,42 @@ void ParseDocument(std::string_view doc, ParsedDocument& parsed) {
     auto& titleWords = parsed.titleWords;
     auto& links = parsed.links;
     auto& base = parsed.base;
-    words.reserve(50000);
-    titleWords.reserve(10000);
-    links.reserve(20000);
+    auto& decodedWords = parsed.decodedWords;
+
+    words.clear();
+    titleWords.clear();
+    links.clear();
+    base = std::string_view{};
+    decodedWords.clear();
 
     ParserState state;
     const char* const bufferEnd = buffer + length;
-
 
     size_t currentWordStart = 0;
     size_t currentWordLength = 0;
 
     auto currentLink = Link{};
+    bool needsDecode = false;
+
+    auto collectCurrentWord = [&] {
+        CollectWord(doc.substr(currentWordStart, currentWordLength),
+                    state,
+                    words,
+                    titleWords,
+                    currentLink,
+                    decodedWords,
+                    needsDecode);
+    };
 
     while (buffer < bufferEnd) {
         // Skip whitespace
         if (IsSpace(*buffer)) {
-            CollectWord(doc.substr(currentWordStart, currentWordLength), state, words, titleWords, currentLink);
+            collectCurrentWord();
             while (buffer < bufferEnd && IsSpace(*buffer))
                 buffer++;
             currentWordStart = buffer - doc.data();
             currentWordLength = 0;
+            needsDecode = false;
             continue;
         }
 
@@ -296,29 +334,35 @@ void ParseDocument(std::string_view doc, ParsedDocument& parsed) {
             }
 
             // Real tag - collect current word first
-            CollectWord(doc.substr(currentWordStart, currentWordLength), state, words, titleWords, currentLink);
+            collectCurrentWord();
 
             // Now process the tag
-            buffer = HandleTagAction(action, endTag, nameStart, nameEnd, bufferEnd, state, currentLink, links, base);
+            buffer = HandleTagAction(
+                action, endTag, nameStart, nameEnd, bufferEnd, state, currentLink, links, base, decodedWords);
             if (!buffer)
                 return;
 
             currentWordStart = buffer - doc.data();
             currentWordLength = 0;
+            needsDecode = false;
             continue;
         }
 
         // Normal text processing
         if (!state.discardSection) {
+            if (*buffer == '&') {
+                needsDecode = true;
+            }
             currentWordLength++;
         }
         buffer++;
     }
 
     // Handle any remaining word and link
-    CollectWord(doc.substr(currentWordStart, currentWordLength), state, words, titleWords, currentLink);
+    collectCurrentWord();
     currentWordStart += currentWordLength;
     currentWordLength = 0;
+    needsDecode = false;
 
     if (state.inAnchor && !currentLink.url.empty()) {
         links.emplace_back(std::move(currentLink));
