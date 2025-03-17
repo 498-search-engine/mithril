@@ -28,19 +28,6 @@ enum StatusCode : uint16_t {
     InternalServerError = 500,
 };
 
-struct Response {
-    std::vector<char> header;
-    std::vector<char> body;
-
-    Response(std::vector<char> header, std::vector<char> body);
-
-    Response(const Response&) = delete;
-    Response& operator=(const Response&) = delete;
-
-    Response(Response&&) = default;
-    Response& operator=(Response&&) = default;
-};
-
 struct Header {
     std::string_view name;
     std::string_view value;
@@ -59,7 +46,19 @@ struct ResponseHeader {
 
 std::optional<ResponseHeader> ParseResponseHeader(std::string_view header);
 
-std::optional<ResponseHeader> ParseResponseHeader(const Response& res);
+struct Response {
+    std::vector<char> headerData;
+    std::vector<char> body;
+    ResponseHeader header;
+
+    Response(std::vector<char> header, std::vector<char> body, ResponseHeader parsedHeader);
+
+    Response(const Response&) = delete;
+    Response& operator=(const Response&) = delete;
+
+    Response(Response&&) = default;
+    Response& operator=(Response&&) = default;
+};
 
 }  // namespace mithril::http
 

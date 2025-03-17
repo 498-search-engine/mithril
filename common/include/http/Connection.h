@@ -150,7 +150,10 @@ private:
     size_t currentChunkBytesRead_;
 
     std::vector<char> buffer_;
+    std::vector<char> headers_;
     std::vector<char> body_;
+
+    ResponseHeader parsedHeader_;
 
     SSL* ssl_;
     bool isSecure_;

@@ -3,8 +3,13 @@
 #include "Util.h"
 
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace mithril::http {
 
@@ -29,8 +34,8 @@ void PopulateHeaderFields(ResponseHeader& h) {
 
 }  // namespace
 
-Response::Response(std::vector<char> header, std::vector<char> body)
-    : header(std::move(header)), body(std::move(body)) {}
+Response::Response(std::vector<char> header, std::vector<char> body, ResponseHeader parsedHeader)
+    : headerData(std::move(header)), body(std::move(body)), header(std::move(parsedHeader)) {}
 
 std::optional<ResponseHeader> ParseResponseHeader(std::string_view header) {
     ResponseHeader parsed;
@@ -98,10 +103,6 @@ std::optional<ResponseHeader> ParseResponseHeader(std::string_view header) {
 
     PopulateHeaderFields(parsed);
     return parsed;
-}
-
-std::optional<ResponseHeader> ParseResponseHeader(const Response& res) {
-    return ParseResponseHeader(std::string_view{res.header.data(), res.header.size()});
 }
 
 }  // namespace mithril::http

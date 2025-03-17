@@ -260,11 +260,11 @@ Response Connection::GetResponse() {
     state_ = State::Closed;
     Close();
 
-    auto header = std::vector<char>{buffer_.begin(), buffer_.begin() + headersLength_};
     buffer_.clear();
     return Response{
-        std::move(header),
+        std::move(headers_),
         std::move(body_),
+        std::move(parsedHeader_),
     };
 }
 
@@ -572,24 +572,26 @@ void Connection::ProcessHeaders() {
 
     // Headers are complete
     headersLength_ = headerEnd - buffer_.begin() + 4;  // Include delimiter
-    auto headers = std::string_view{buffer_.data(), headersLength_};
+    headers_.resize(headersLength_);
+    std::memcpy(headers_.data(), buffer_.data(), headersLength_);
 
-    auto parsedHeaders = ParseResponseHeader(headers);
-    if (!parsedHeaders.has_value()) {
+    auto parsedHeader = ParseResponseHeader(std::string_view{headers_.data(), headers_.size()});
+    if (!parsedHeader.has_value()) {
         spdlog::debug("failed to parse headers for {}", url_.url);
         state_ = State::InvalidResponseError;
         return;
     }
+    parsedHeader_ = std::move(*parsedHeader);
 
-    if (!ValidateHeaders(*parsedHeaders)) {
+    if (!ValidateHeaders(parsedHeader_)) {
         // Headers are not valid for request options. State has been set.
         return;
     }
 
     // Check for chunked encoding
-    if (parsedHeaders->TransferEncoding != nullptr) {
+    if (parsedHeader_.TransferEncoding != nullptr) {
         // Only supported transfer encoding is chunked
-        if (!InsensitiveStrEquals(parsedHeaders->TransferEncoding->value, "chunked"sv)) {
+        if (!InsensitiveStrEquals(parsedHeader_.TransferEncoding->value, "chunked"sv)) {
             state_ = State::InvalidResponseError;
             return;
         }
@@ -599,8 +601,8 @@ void Connection::ProcessHeaders() {
     }
 
     // Look for Content-Length header
-    if (parsedHeaders->ContentLength != nullptr) {
-        auto contentLength = std::string{parsedHeaders->ContentLength->value};
+    if (parsedHeader_.ContentLength != nullptr) {
+        auto contentLength = std::string{parsedHeader_.ContentLength->value};
         try {
             contentLength_ = std::stoul(contentLength);
         } catch (const std::invalid_argument&) {
