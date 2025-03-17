@@ -50,9 +50,14 @@ struct ResponseHeader {
     StatusCode status;
     std::vector<Header> headers;
 
+    Header* ContentLanguage = nullptr;
+    Header* ContentLength = nullptr;
     Header* ContentType = nullptr;
     Header* Location = nullptr;
+    Header* TransferEncoding = nullptr;
 };
+
+std::optional<ResponseHeader> ParseResponseHeader(std::string_view header);
 
 std::optional<ResponseHeader> ParseResponseHeader(const Response& res);
 

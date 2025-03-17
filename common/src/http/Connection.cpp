@@ -33,6 +33,8 @@
 
 namespace mithril::http {
 
+using namespace std::string_view_literals;
+
 namespace {
 
 constexpr size_t MaxHeaderSize = 8192;
@@ -523,7 +525,8 @@ bool Connection::IsActive() const {
 
 bool Connection::IsError() const {
     return state_ == State::ConnectError || state_ == State::SocketError || state_ == State::UnexpectedEOFError ||
-           state_ == State::ResponseTooBigError || state_ == State::ResponseWrongLanguage;
+           state_ == State::InvalidResponseError || state_ == State::ResponseTooBigError ||
+           state_ == State::ResponseWrongLanguage;
 }
 
 RequestError Connection::GetError() const {
@@ -535,6 +538,7 @@ RequestError Connection::GetError() const {
     case State::ConnectError:
     case State::SocketError:
     case State::UnexpectedEOFError:
+    case State::InvalidResponseError:
     default:
         return RequestError::ConnectionError;
     }
@@ -568,57 +572,68 @@ void Connection::ProcessHeaders() {
 
     // Headers are complete
     headersLength_ = headerEnd - buffer_.begin() + 4;  // Include delimiter
-    auto headers = std::string{buffer_.begin(), headerEnd};
+    auto headers = std::string_view{buffer_.data(), headersLength_};
 
-    if (!ValidateHeaders(headers)) {
-        // Headers are not valid for request options
+    auto parsedHeaders = ParseResponseHeader(headers);
+    if (!parsedHeaders.has_value()) {
+        spdlog::debug("failed to parse headers for {}", url_.url);
+        state_ = State::InvalidResponseError;
+        return;
+    }
+
+    if (!ValidateHeaders(*parsedHeaders)) {
+        // Headers are not valid for request options. State has been set.
         return;
     }
 
     // Check for chunked encoding
-    if (FindCaseInsensitive(headers, TransferEncodingChunkedHeader) != std::string::npos) {
+    if (parsedHeaders->TransferEncoding != nullptr) {
+        // Only supported transfer encoding is chunked
+        if (!InsensitiveStrEquals(parsedHeaders->TransferEncoding->value, "chunked"sv)) {
+            state_ = State::InvalidResponseError;
+            return;
+        }
         state_ = State::ReadingChunks;
         ProcessChunks();
         return;
     }
 
     // Look for Content-Length header
-    auto contentLengthPos = FindCaseInsensitive(headers, ContentLengthHeader);
-    if (contentLengthPos != std::string::npos) {
-        contentLengthPos += strlen(ContentLengthHeader);
-        auto lengthEnd = headers.find(CRLF, contentLengthPos);
+    if (parsedHeaders->ContentLength != nullptr) {
+        auto contentLength = std::string{parsedHeaders->ContentLength->value};
         try {
-            contentLength_ = std::stoul(headers.substr(contentLengthPos, lengthEnd - contentLengthPos));
+            contentLength_ = std::stoul(contentLength);
         } catch (const std::invalid_argument&) {
-            state_ = State::UnexpectedEOFError;
+            state_ = State::InvalidResponseError;
             return;
         } catch (const std::out_of_range&) {
-            state_ = State::UnexpectedEOFError;
+            state_ = State::InvalidResponseError;
             return;
         }
 
-        buffer_.reserve(buffer_.size() + contentLength_);
-        body_.reserve(contentLength_);
         if (reqOptions_.maxResponseSize > 0 && contentLength_ > reqOptions_.maxResponseSize) {
             // Response is too big
             spdlog::debug("content-length {} for response {} exceeds max response size", contentLength_, url_.url);
             state_ = State::ResponseTooBigError;
             return;
         }
+
+        buffer_.reserve(buffer_.size() + contentLength_);
+        body_.reserve(contentLength_);
+    } else {
+        // No Content-Length or Transfer-Encoding chunked
+        state_ = State::InvalidResponseError;
+        return;
     }
 
     state_ = State::ReadingBody;
     ProcessBody();  // Process any body data we already have
 }
 
-bool Connection::ValidateHeaders(const std::string& headers) {
+bool Connection::ValidateHeaders(const ResponseHeader& headers) {
     if (!reqOptions_.allowedContentLanguage.empty()) {
-        // Look for Content-Language header
-        auto contentLanguagePos = FindCaseInsensitive(headers, ContentLanguageHeader);
-        if (contentLanguagePos != std::string::npos) {
-            contentLanguagePos += strlen(ContentLanguageHeader);
-            auto langEnd = headers.find(CRLF, contentLanguagePos);
-            auto contentLanguage = headers.substr(contentLanguagePos, langEnd - contentLanguagePos);
+        if (headers.ContentLanguage != nullptr) {
+            auto contentLanguage = headers.ContentLanguage->value;
             auto anyMatch = std::any_of(
                 reqOptions_.allowedContentLanguage.begin(),
                 reqOptions_.allowedContentLanguage.end(),
@@ -670,10 +685,10 @@ void Connection::ProcessChunks() {
             try {
                 currentChunkSize_ = std::stoul(chunkHeader, nullptr, 16);
             } catch (const std::invalid_argument&) {
-                state_ = State::UnexpectedEOFError;
+                state_ = State::InvalidResponseError;
                 return;
             } catch (const std::out_of_range&) {
-                state_ = State::UnexpectedEOFError;
+                state_ = State::InvalidResponseError;
                 return;
             }
 
