@@ -19,8 +19,8 @@ public:
     void Run();
 
 private:
-    void ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header);
-    void ProcessHTMLDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header);
+    void ProcessDocument(const http::Request& req, const http::Response& res);
+    void ProcessHTMLDocument(const http::Request& req, const http::Response& res);
 
     LiveState& state_;
     DocumentQueue* docQueue_;

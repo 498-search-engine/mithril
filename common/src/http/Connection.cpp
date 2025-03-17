@@ -33,15 +33,14 @@
 
 namespace mithril::http {
 
+using namespace std::string_view_literals;
+
 namespace {
 
 constexpr size_t MaxHeaderSize = 8192;
 constexpr size_t BufferSize = 8192;
-constexpr const char* ContentLengthHeader = "Content-Length: ";
-constexpr const char* ContentLanguageHeader = "Content-Language: ";
-constexpr const char* TransferEncodingChunkedHeader = "Transfer-Encoding: chunked";
-constexpr const char* HeaderDelimiter = "\r\n\r\n";
-constexpr const char* CRLF = "\r\n";
+constexpr auto HeaderDelimiter = "\r\n\r\n"sv;
+constexpr auto CRLF = "\r\n"sv;
 
 void PrintSSLError(SSL* ssl, int status, const char* operation) {
     int sslErr = SSL_get_error(ssl, status);
@@ -258,11 +257,11 @@ Response Connection::GetResponse() {
     state_ = State::Closed;
     Close();
 
-    auto header = std::vector<char>{buffer_.begin(), buffer_.begin() + headersLength_};
     buffer_.clear();
     return Response{
-        std::move(header),
+        std::move(headers_),
         std::move(body_),
+        std::move(parsedHeader_),
     };
 }
 
@@ -523,7 +522,8 @@ bool Connection::IsActive() const {
 
 bool Connection::IsError() const {
     return state_ == State::ConnectError || state_ == State::SocketError || state_ == State::UnexpectedEOFError ||
-           state_ == State::ResponseTooBigError || state_ == State::ResponseWrongLanguage;
+           state_ == State::InvalidResponseError || state_ == State::ResponseTooBigError ||
+           state_ == State::ResponseWrongLanguage;
 }
 
 RequestError Connection::GetError() const {
@@ -535,6 +535,7 @@ RequestError Connection::GetError() const {
     case State::ConnectError:
     case State::SocketError:
     case State::UnexpectedEOFError:
+    case State::InvalidResponseError:
     default:
         return RequestError::ConnectionError;
     }
@@ -554,7 +555,7 @@ bool Connection::IsReading() const {
 
 void Connection::ProcessHeaders() {
     // Look for header delimiter
-    auto headerEnd = std::search(buffer_.begin(), buffer_.end(), HeaderDelimiter, HeaderDelimiter + 4);
+    auto headerEnd = std::search(buffer_.begin(), buffer_.end(), HeaderDelimiter.begin(), HeaderDelimiter.end());
 
     if (headerEnd == buffer_.end()) {
         if (buffer_.size() > MaxHeaderSize) {
@@ -568,57 +569,70 @@ void Connection::ProcessHeaders() {
 
     // Headers are complete
     headersLength_ = headerEnd - buffer_.begin() + 4;  // Include delimiter
-    auto headers = std::string{buffer_.begin(), headerEnd};
+    headers_.resize(headersLength_);
+    std::memcpy(headers_.data(), buffer_.data(), headersLength_);
 
-    if (!ValidateHeaders(headers)) {
-        // Headers are not valid for request options
+    auto parsedHeader = ParseResponseHeader(std::string_view{headers_.data(), headers_.size()});
+    if (!parsedHeader.has_value()) {
+        spdlog::debug("failed to parse headers for {}", url_.url);
+        state_ = State::InvalidResponseError;
+        return;
+    }
+    parsedHeader_ = std::move(*parsedHeader);
+
+    if (!ValidateHeaders(parsedHeader_)) {
+        // Headers are not valid for request options. State has been set.
         return;
     }
 
     // Check for chunked encoding
-    if (FindCaseInsensitive(headers, TransferEncodingChunkedHeader) != std::string::npos) {
+    if (parsedHeader_.TransferEncoding != nullptr) {
+        // Only supported transfer encoding is chunked
+        if (!InsensitiveStrEquals(parsedHeader_.TransferEncoding->value, "chunked"sv)) {
+            state_ = State::InvalidResponseError;
+            return;
+        }
         state_ = State::ReadingChunks;
         ProcessChunks();
         return;
     }
 
     // Look for Content-Length header
-    auto contentLengthPos = FindCaseInsensitive(headers, ContentLengthHeader);
-    if (contentLengthPos != std::string::npos) {
-        contentLengthPos += strlen(ContentLengthHeader);
-        auto lengthEnd = headers.find(CRLF, contentLengthPos);
+    if (parsedHeader_.ContentLength != nullptr) {
+        auto contentLength = std::string{parsedHeader_.ContentLength->value};
         try {
-            contentLength_ = std::stoul(headers.substr(contentLengthPos, lengthEnd - contentLengthPos));
+            contentLength_ = std::stoul(contentLength);
         } catch (const std::invalid_argument&) {
-            state_ = State::UnexpectedEOFError;
+            state_ = State::InvalidResponseError;
             return;
         } catch (const std::out_of_range&) {
-            state_ = State::UnexpectedEOFError;
+            state_ = State::InvalidResponseError;
             return;
         }
 
-        buffer_.reserve(buffer_.size() + contentLength_);
-        body_.reserve(contentLength_);
         if (reqOptions_.maxResponseSize > 0 && contentLength_ > reqOptions_.maxResponseSize) {
             // Response is too big
             spdlog::debug("content-length {} for response {} exceeds max response size", contentLength_, url_.url);
             state_ = State::ResponseTooBigError;
             return;
         }
+
+        buffer_.reserve(buffer_.size() + contentLength_);
+        body_.reserve(contentLength_);
+    } else {
+        // No Content-Length or Transfer-Encoding chunked
+        state_ = State::InvalidResponseError;
+        return;
     }
 
     state_ = State::ReadingBody;
     ProcessBody();  // Process any body data we already have
 }
 
-bool Connection::ValidateHeaders(const std::string& headers) {
+bool Connection::ValidateHeaders(const ResponseHeader& headers) {
     if (!reqOptions_.allowedContentLanguage.empty()) {
-        // Look for Content-Language header
-        auto contentLanguagePos = FindCaseInsensitive(headers, ContentLanguageHeader);
-        if (contentLanguagePos != std::string::npos) {
-            contentLanguagePos += strlen(ContentLanguageHeader);
-            auto langEnd = headers.find(CRLF, contentLanguagePos);
-            auto contentLanguage = headers.substr(contentLanguagePos, langEnd - contentLanguagePos);
+        if (headers.ContentLanguage != nullptr) {
+            auto contentLanguage = headers.ContentLanguage->value;
             auto anyMatch = std::any_of(
                 reqOptions_.allowedContentLanguage.begin(),
                 reqOptions_.allowedContentLanguage.end(),
@@ -660,7 +674,7 @@ void Connection::ProcessChunks() {
         if (currentChunkSize_ == 0) {
             // Need to read next chunk size
             auto chunkHeaderEnd =
-                std::search(buffer_.begin() + headersLength_ + bodyBytesRead_, buffer_.end(), CRLF, CRLF + 2);
+                std::search(buffer_.begin() + headersLength_ + bodyBytesRead_, buffer_.end(), CRLF.begin(), CRLF.end());
 
             if (chunkHeaderEnd == buffer_.end()) {
                 return;  // Don't have complete chunk header
@@ -670,10 +684,10 @@ void Connection::ProcessChunks() {
             try {
                 currentChunkSize_ = std::stoul(chunkHeader, nullptr, 16);
             } catch (const std::invalid_argument&) {
-                state_ = State::UnexpectedEOFError;
+                state_ = State::InvalidResponseError;
                 return;
             } catch (const std::out_of_range&) {
-                state_ = State::UnexpectedEOFError;
+                state_ = State::InvalidResponseError;
                 return;
             }
 

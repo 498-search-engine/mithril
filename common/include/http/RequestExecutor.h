@@ -36,7 +36,6 @@ struct RequestState {
 struct CompleteResponse {
     Request req;
     Response res;
-    ResponseHeader header;
 };
 
 enum class RequestError : uint8_t {

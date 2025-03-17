@@ -49,7 +49,7 @@ void Worker::Run() {
         }
 
         auto start = MonotonicTimeMs();
-        ProcessDocument(doc->req, doc->res, doc->header);
+        ProcessDocument(doc->req, doc->res);
         auto end = MonotonicTimeMs();
         auto elapsedMs = end - start;
 
@@ -67,9 +67,7 @@ void Worker::Run() {
  * - Status code is 200 OK
  * - Content-Type is text/html
  */
-void Worker::ProcessHTMLDocument(const http::Request& req,
-                                 const http::Response& res,
-                                 const http::ResponseHeader& header) {
+void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response& res) {
     // TODO: early return if non latin script page
     html::ParseDocument(std::string_view{res.body.data(), res.body.size()}, parsedDoc_);
 
@@ -117,24 +115,24 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
     DocumentSizeBytesMetric.Observe(res.body.size());
 }
 
-void Worker::ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header) {
+void Worker::ProcessDocument(const http::Request& req, const http::Response& res) {
     DocumentsProcessedMetric.Inc();
     CrawlResponseCodesMetric
         .WithLabels({
-            {"status", std::to_string(header.status)}
+            {"status", std::to_string(res.header.status)}
     })
         .Inc();
 
-    switch (header.status) {
+    switch (res.header.status) {
     case http::StatusCode::OK:
-        if (!header.ContentType) {
+        if (!res.header.ContentType) {
             SPDLOG_TRACE("missing content-type header for {}", req.Url().url);
             return;
         }
-        if (header.ContentType->value.starts_with("text/html")) {
-            ProcessHTMLDocument(req, res, header);
+        if (res.header.ContentType->value.starts_with("text/html")) {
+            ProcessHTMLDocument(req, res);
         } else {
-            spdlog::debug("unsupported content-type {} for {}", header.ContentType->value, req.Url().url);
+            spdlog::debug("unsupported content-type {} for {}", res.header.ContentType->value, req.Url().url);
         }
         break;
 
@@ -144,11 +142,11 @@ void Worker::ProcessDocument(const http::Request& req, const http::Response& res
     case http::StatusCode::TemporaryRedirect:
     case http::StatusCode::PermanentRedirect:
         {
-            if (!header.Location) {
+            if (!res.header.Location) {
                 return;
             }
 
-            std::string location{header.Location->value};
+            std::string location{res.header.Location->value};
             auto newUrl = html::MakeAbsoluteLink(req.Url(),
                                                  "",  // No base tag for redirects
                                                  location);
@@ -162,7 +160,7 @@ void Worker::ProcessDocument(const http::Request& req, const http::Response& res
         }
 
     default:
-        spdlog::info("unhandled status {} for {}", header.status, req.Url().url);
+        spdlog::info("unhandled status {} for {}", res.header.status, req.Url().url);
         break;
     }
 }

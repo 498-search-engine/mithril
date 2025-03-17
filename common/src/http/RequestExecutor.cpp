@@ -359,14 +359,10 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
     assert(conn.IsComplete());
 
     auto res = conn.GetResponse();
-    auto header = ParseResponseHeader(res);
-    if (!header) {
-        return HandleConnError(connIt, RequestError::InvalidResponseData);
-    }
 
     if (req.Options().followRedirects > 0) {
         // Check for redirects
-        switch (header->status) {
+        switch (res.header.status) {
         case StatusCode::MovedPermanently:
         case StatusCode::Found:
         case StatusCode::SeeOther:
@@ -379,7 +375,7 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
                 }
 
                 // Do redirect
-                auto* loc = header->Location;
+                auto* loc = res.header.Location;
                 if (loc == nullptr) {
                     // No `Location` header
                     return HandleConnError(connIt, RequestError::InvalidResponseData);
@@ -421,7 +417,6 @@ bool RequestExecutor::HandleConnComplete(std::unordered_map<int, ReqConn>::itera
     readyResponses_.push_back({
         .req = std::move(req),
         .res = std::move(res),
-        .header = std::move(*header),
     });
 
     activeConnections_.erase(connIt);

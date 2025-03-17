@@ -421,7 +421,7 @@ void RobotRulesCache::ProcessPendingRequests() {
 void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
     RobotsResponseCodesMetric
         .WithLabels({
-            {"status", std::to_string(r.header.status)}
+            {"status", std::to_string(r.res.header.status)}
     })
         .Inc();
 
@@ -435,9 +435,9 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
         return;
     }
 
-    switch (r.header.status) {
+    switch (r.res.header.status) {
     case http::StatusCode::OK:
-        HandleRobotsOK(r.header, r.res, it->second);
+        HandleRobotsOK(r.res.header, r.res, it->second);
         break;
 
     case http::StatusCode::NotFound:
@@ -448,7 +448,7 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
     case http::StatusCode::Unauthorized:
     case http::StatusCode::Forbidden:
     default:
-        spdlog::info("got robots.txt status {} for {}", r.header.status, canonicalHost.url);
+        spdlog::info("got robots.txt status {} for {}", r.res.header.status, canonicalHost.url);
         it->second.rules = RobotRules{true};
         it->second.valid = true;
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
