@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace mithril::data {
@@ -21,10 +22,28 @@ struct Document {
     std::vector<std::string> words;
 };
 
+struct DocumentView {
+    docid_t id;
+    std::string url;
+    const std::vector<std::string_view>& title;
+    const std::vector<std::string_view>& words;
+};
+
 template<>
 struct Serialize<Document> {
     template<Writer W>
     static void Write(const Document& doc, W& w) {
+        SerializeValue(doc.id, w);
+        SerializeValue(doc.url, w);
+        SerializeValue(doc.title, w);
+        SerializeValue(doc.words, w);
+    }
+};
+
+template<>
+struct Serialize<DocumentView> {
+    template<Writer W>
+    static void Write(const DocumentView& doc, W& w) {
         SerializeValue(doc.id, w);
         SerializeValue(doc.url, w);
         SerializeValue(doc.title, w);

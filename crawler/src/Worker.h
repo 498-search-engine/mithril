@@ -4,6 +4,7 @@
 #include "DocumentQueue.h"
 #include "State.h"
 #include "UrlFrontier.h"
+#include "html/Parser.h"
 #include "http/Request.h"
 #include "http/Response.h"
 
@@ -26,6 +27,8 @@ private:
     UrlFrontier* frontier_;
 
     std::string docsDirectory_;
+
+    html::ParsedDocument parsedDoc_;
 };
 
 }  // namespace mithril

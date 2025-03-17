@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
@@ -26,7 +27,7 @@ namespace mithril {
 
 namespace {
 
-void WriteDocumentToFile(const std::string& fileName, const data::Document& doc) {
+void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& doc) {
     auto fWriter = data::FileWriter{fileName.c_str()};
     auto zipWriter = data::GzipWriter{fWriter};
     data::SerializeValue(doc, zipWriter);
@@ -70,12 +71,12 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
                                  const http::Response& res,
                                  const http::ResponseHeader& header) {
     // TODO: early return if non latin script page
-    html::Parser parser(res.body.data(), res.body.size());
+    html::ParseDocument(std::string_view{res.body.data(), res.body.size()}, parsedDoc_);
 
     // TODO: do better logging, tracking
     std::string title;
-    if (!parser.titleWords.empty()) {
-        for (auto& w : parser.titleWords) {
+    if (!parsedDoc_.titleWords.empty()) {
+        for (auto& w : parsedDoc_.titleWords) {
             title.append(w);
             title.push_back(' ');
         }
@@ -85,8 +86,8 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
     spdlog::info("processing {} ({})", req.Url().url, title);
 
     std::vector<std::string> absoluteURLs;
-    for (auto& l : parser.links) {
-        auto absoluteLink = html::MakeAbsoluteLink(req.Url(), parser.base, l.URL);
+    for (auto& l : parsedDoc_.links) {
+        auto absoluteLink = html::MakeAbsoluteLink(req.Url(), parsedDoc_.base, l.url);
         if (absoluteLink) {
             absoluteURLs.push_back(std::move(*absoluteLink));
         }
@@ -101,11 +102,11 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
     fileName.append(idStr);
 
     WriteDocumentToFile(fileName,
-                        data::Document{
+                        data::DocumentView{
                             .id = docID,
                             .url = req.Url().url,
-                            .title = std::move(parser.titleWords),
-                            .words = std::move(parser.words),
+                            .title = parsedDoc_.titleWords,
+                            .words = parsedDoc_.words,
                         });
 
     if (!absoluteURLs.empty()) {
