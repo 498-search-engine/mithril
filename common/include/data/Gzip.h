@@ -60,9 +60,14 @@ public:
             if (strm_.avail_in == 0) {
                 auto remaining = underlying_.Remaining();
                 auto sizeToRead = std::min(remaining, inBuffer_.size());
+                if (sizeToRead == 0) {
+                    break;
+                }
+
                 if (!underlying_.Read(inBuffer_.data(), sizeToRead)) {
                     break;
                 }
+
                 strm_.avail_in = inBuffer_.size();
                 strm_.next_in = reinterpret_cast<Bytef*>(inBuffer_.data());
             }
@@ -85,7 +90,7 @@ public:
         return static_cast<int>(bytesRead);
     }
 
-    bool Read(void* out, size_t size) { return ReadAmount(out, size) == size; }
+    bool Read(void* out, size_t size) { return ReadAmount(out, size) == size && size != 0; }
 
     size_t Remaining() { return 0; }
 

@@ -6,6 +6,7 @@
 #include "data/Reader.h"
 #include "spdlog/spdlog.h"
 
+#include <cassert>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -53,6 +54,7 @@ std::vector<char> Gunzip(const std::vector<char>& data) {
     do {
         read = gzr.ReadAmount(buf.Data(), buf.Size());
         if (read > 0) {
+            assert(read <= buf.Size());
             out.insert(out.end(), buf.begin(), buf.begin() + read);
         }
     } while (read > 0);
