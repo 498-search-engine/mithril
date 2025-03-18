@@ -37,6 +37,7 @@ struct ResponseHeader {
     StatusCode status;
     std::vector<Header> headers;
 
+    Header* ContentEncoding = nullptr;
     Header* ContentLanguage = nullptr;
     Header* ContentLength = nullptr;
     Header* ContentType = nullptr;
@@ -47,6 +48,7 @@ struct ResponseHeader {
 std::optional<ResponseHeader> ParseResponseHeader(std::string_view header);
 
 struct Response {
+public:
     std::vector<char> headerData;
     std::vector<char> body;
     ResponseHeader header;
@@ -58,6 +60,11 @@ struct Response {
 
     Response(Response&&) = default;
     Response& operator=(Response&&) = default;
+
+    void DecodeBody();
+
+private:
+    bool decoded_;
 };
 
 }  // namespace mithril::http

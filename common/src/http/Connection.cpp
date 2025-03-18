@@ -121,7 +121,7 @@ Connection::Connection(int fd, Method method, const URL& url, RequestOptions opt
       url_(url),
       port_(url.port.empty() ? (url.scheme == "https" ? "443" : "80") : url.port),
       reqOptions_(std::move(options)),
-      rawRequest_(BuildRawRequestString(method, url)),
+      rawRequest_(BuildRawRequestString(method, url, options)),
       requestBytesSent_(0),
       contentLength_(0),
       headersLength_(0),

@@ -14,6 +14,7 @@
 #include <vector>
 #include <zconf.h>
 #include <zlib.h>
+#include <sys/types.h>
 
 namespace mithril::data {
 
@@ -36,7 +37,7 @@ public:
 
     ~GzipReader() { inflateEnd(&strm_); }
 
-    bool Read(void* out, size_t size) {
+    ssize_t ReadAmount(void* out, size_t size) {
         auto* outPtr = static_cast<uint8_t*>(out);
         size_t bytesRead = 0;
 
@@ -52,7 +53,7 @@ public:
             }
 
             if (eof_) {
-                return false;
+                break;
             }
 
             // Read more input if needed
@@ -60,9 +61,6 @@ public:
                 auto remaining = underlying_.Remaining();
                 auto sizeToRead = std::min(remaining, inBuffer_.size());
                 if (!underlying_.Read(inBuffer_.data(), sizeToRead)) {
-                    if (bytesRead == 0) {
-                        return false;
-                    }
                     break;
                 }
                 strm_.avail_in = inBuffer_.size();
@@ -84,8 +82,10 @@ public:
             outPos_ = 0;
         }
 
-        return bytesRead == size;
+        return static_cast<int>(bytesRead);
     }
+
+    bool Read(void* out, size_t size) { return ReadAmount(out, size) == size; }
 
     size_t Remaining() { return 0; }
 

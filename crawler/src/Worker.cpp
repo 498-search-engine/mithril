@@ -18,6 +18,7 @@
 #include "http/URL.h"
 
 #include <atomic>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -124,13 +125,22 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
     DocumentSizeBytesMetric.Observe(res.body.size());
 }
 
-void Worker::ProcessDocument(const http::Request& req, const http::Response& res) {
+void Worker::ProcessDocument(const http::Request& req, http::Response& res) {
     DocumentsProcessedMetric.Inc();
     CrawlResponseCodesMetric
         .WithLabels({
             {"status", std::to_string(res.header.status)}
     })
         .Inc();
+
+    try {
+        // First, decode the body if it is encoded.
+        res.DecodeBody();
+    } catch (const std::runtime_error& e) {
+        // Something went wrong while decoding
+        spdlog::warn("encountered error while decoding body for {}: {}", req.Url().url, e.what());
+        return;
+    }
 
     switch (res.header.status) {
     case http::StatusCode::OK:
