@@ -177,7 +177,7 @@ private:
      */
     void Fetch(const http::CanonicalHost& canonicalHost);
 
-    void HandleRobotsResponse(const http::CompleteResponse& r);
+    void HandleRobotsResponse(http::CompleteResponse r);
     void HandleRobotsResponseFailed(const http::FailedRequest& failed);
 
     static void HandleRobotsOK(const http::ResponseHeader& header, const http::Response& res, RobotCacheEntry& entry);

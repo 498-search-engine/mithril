@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -378,6 +379,7 @@ void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
             .followRedirects = MaxRobotsTxtRedirects,
             .timeout = RobotsTxtRequestTimeoutSeconds,
             .maxResponseSize = MaxRobotsTxtSize,
+            .enableCompression = true,
         }));
 }
 
@@ -402,8 +404,8 @@ void RobotRulesCache::ProcessPendingRequests() {
     // Process connections with ready responses
     auto& ready = executor_.ReadyResponses();
     if (!ready.empty()) {
-        for (const auto& r : ready) {
-            HandleRobotsResponse(r);
+        for (auto& r : ready) {
+            HandleRobotsResponse(std::move(r));
         }
         ready.clear();
     }
@@ -418,7 +420,7 @@ void RobotRulesCache::ProcessPendingRequests() {
     }
 }
 
-void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
+void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
     RobotsResponseCodesMetric
         .WithLabels({
             {"status", std::to_string(r.res.header.status)}
@@ -432,6 +434,15 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
     // Would it matter?
     auto it = cache_.find(canonicalHost.url);
     if (it == cache_.end()) {
+        return;
+    }
+
+    try {
+        // Decode the body if it is encoded.
+        r.res.DecodeBody();
+    } catch (const std::runtime_error& e) {
+        // Something went wrong while decoding
+        spdlog::warn("encountered error while decoding body for {}: {}", r.req.Url().url, e.what());
         return;
     }
 

@@ -2,6 +2,7 @@ find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 
 add_library(common STATIC
+    src/data/Gzip.cpp
     src/data/Reader.cpp
     src/data/Writer.cpp
 

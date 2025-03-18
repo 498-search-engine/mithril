@@ -1,11 +1,17 @@
 #include "http/Response.h"
 
 #include "Util.h"
+#include "core/array.h"
+#include "data/Gzip.h"
+#include "data/Reader.h"
+#include "spdlog/spdlog.h"
 
+#include <cassert>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -13,12 +19,16 @@
 
 namespace mithril::http {
 
+using namespace std::string_view_literals;
+
 namespace {
 
 void PopulateHeaderFields(ResponseHeader& h) {
     using namespace std::string_view_literals;
     for (auto& header : h.headers) {
-        if (InsensitiveStrEquals(header.name, "Content-Language"sv)) {
+        if (InsensitiveStrEquals(header.name, "Content-Encoding"sv)) {
+            h.ContentEncoding = &header;
+        } else if (InsensitiveStrEquals(header.name, "Content-Language"sv)) {
             h.ContentLanguage = &header;
         } else if (InsensitiveStrEquals(header.name, "Content-Length"sv)) {
             h.ContentLength = &header;
@@ -35,7 +45,31 @@ void PopulateHeaderFields(ResponseHeader& h) {
 }  // namespace
 
 Response::Response(std::vector<char> header, std::vector<char> body, ResponseHeader parsedHeader)
-    : headerData(std::move(header)), body(std::move(body)), header(std::move(parsedHeader)) {}
+    : headerData(std::move(header)), body(std::move(body)), header(std::move(parsedHeader)), decoded_(false) {}
+
+void Response::DecodeBody() {
+    if (decoded_) {
+        return;
+    }
+
+    if (header.ContentEncoding == nullptr) {
+        // No Content-Encoding
+        decoded_ = true;
+        return;
+    }
+
+    if (header.ContentEncoding->value == "gzip"sv) {
+        auto unzipped = data::Gunzip(body);
+        body = std::move(unzipped);
+    } else if (header.ContentEncoding->value == "none"sv || header.ContentEncoding->value == "identity"sv) {
+        // Nothing to do
+    } else {
+        spdlog::error("got unsupported Content-Encoding {}", header.ContentEncoding->value);
+        throw std::runtime_error("unsupported Content-Encoding");
+    }
+
+    decoded_ = true;
+}
 
 std::optional<ResponseHeader> ParseResponseHeader(std::string_view header) {
     ResponseHeader parsed;
@@ -73,7 +107,7 @@ std::optional<ResponseHeader> ParseResponseHeader(std::string_view header) {
         }
 
         // Find end of current header
-        size_t headerEnd = header.find("\r\n", headerStart);
+        size_t headerEnd = header.find("\r\n"sv, headerStart);
         if (headerEnd == std::string::npos) {
             return std::nullopt;
         }
