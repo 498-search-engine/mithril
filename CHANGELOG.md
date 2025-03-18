@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - parser improvements and html entity decoding (#66)
 - url encoding and decoding, canonicalization (#68)
 - add gzip support to requests (#69)
+- split documents into chunk directories (#70)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
