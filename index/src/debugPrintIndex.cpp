@@ -3,7 +3,6 @@
 #include "Utils.h"
 
 #include <algorithm>
-#include <bitset>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -32,24 +31,17 @@ struct DocumentMeta {
 struct IndexStats {
     size_t total_terms = 0;
     size_t total_postings = 0;
-    size_t total_positions = 0;
-    size_t total_position_bytes = 0;
     size_t total_sync_points = 0;
-    size_t total_position_sync_points = 0;
     size_t total_bytes = 0;
 
     // Term frequency distribution
     std::vector<size_t> term_freq_dist;
-
-    // Position deltas for compression analysis
-    std::vector<uint32_t> position_deltas;
 
     // Term statistics
     struct TermStats {
         std::string term;
         size_t doc_freq = 0;
         size_t total_term_freq = 0;
-        size_t positions_size = 0;
 
         bool operator<(const TermStats& other) const {
             return doc_freq > other.doc_freq;  // For descending sort by doc frequency
@@ -196,36 +188,9 @@ public:
                 uint32_t doc_id = last_doc_id + doc_id_delta;
                 last_doc_id = doc_id;
 
-                Posting p{doc_id, freq, 0};  // Position offset not available in this format
+                Posting p{doc_id, freq};
                 postings.push_back(p);
                 total_freq += freq;
-            }
-
-            // Read positions count
-            uint32_t positions_size;
-            in.read(reinterpret_cast<char*>(&positions_size), sizeof(positions_size));
-            stats_.total_positions += positions_size;
-
-            // Read position sync points
-            uint32_t position_sync_points_size;
-            in.read(reinterpret_cast<char*>(&position_sync_points_size), sizeof(position_sync_points_size));
-            stats_.total_position_sync_points += position_sync_points_size;
-
-            // Skip position sync points data
-            in.seekg(position_sync_points_size * sizeof(PositionSyncPoint), std::ios::cur);
-
-            // Read and process position deltas for statistics
-            std::vector<uint32_t> position_deltas;
-            position_deltas.reserve(positions_size);
-
-            for (uint32_t i = 0; i < positions_size; ++i) {
-                uint32_t delta = VByteCodec::decode(in);
-                position_deltas.push_back(delta);
-
-                // Collect deltas for global statistics (sample if too many)
-                if (stats_.position_deltas.size() < 10000 || delta > 1000 || (rand() % 100 == 0)) {
-                    stats_.position_deltas.push_back(delta);
-                }
             }
 
             // Record term statistics
@@ -234,7 +199,6 @@ public:
             term_stat.term = term;
             term_stat.doc_freq = postings_size;
             term_stat.total_term_freq = total_freq;
-            term_stat.positions_size = positions_size;
             stats_.term_stats.push_back(term_stat);
 
             // Update term frequency distribution
@@ -245,14 +209,14 @@ public:
 
             // Write term details to file
             if (term_out) {
-                term_out << term << "\t" << postings_size << "\t" << total_freq << "\t" << positions_size << std::endl;
+                term_out << term << "\t" << postings_size << "\t" << total_freq << std::endl;
             }
 
             // Output term details if verbose
             if (verbose_) {
                 if (term_idx < 20 || term_idx % 10000 == 0 || postings_size > 1000) {
                     std::cout << "  " << std::left << std::setw(20) << term << "docs: " << std::setw(6) << postings_size
-                              << "positions: " << std::setw(8) << positions_size << std::endl;
+                              << "total freq: " << std::setw(8) << total_freq << std::endl;
 
                     // Print first few postings
                     if (postings_size > 0 && postings_size < 10) {
@@ -281,45 +245,24 @@ public:
         // Sort term stats by document frequency
         std::sort(stats_.term_stats.begin(), stats_.term_stats.end());
 
-        // Calculate position delta statistics
-        std::cout << "\nPosition Storage Statistics:" << std::endl;
+        // Print key index statistics
+        std::cout << "\nIndex Statistics:" << std::endl;
         std::cout << "  Total terms: " << stats_.total_terms << std::endl;
-        std::cout << "  Total positions: " << stats_.total_positions << std::endl;
-
-        // Estimate position bytes using VByte encoding formula
-        stats_.total_position_bytes = 0;
-        for (uint32_t delta : stats_.position_deltas) {
-            stats_.total_position_bytes += VByteCodec::max_bytes_needed(delta);
-        }
-        size_t raw_position_bytes = stats_.total_positions * sizeof(uint32_t);
-        double compression_ratio = static_cast<double>(raw_position_bytes) / stats_.total_position_bytes;
-
-        std::cout << "  Total position bytes: " << format_size(stats_.total_position_bytes) << std::endl;
-        std::cout << "  Total position sync points: " << stats_.total_position_sync_points << std::endl;
-
-        // Calculate and print position delta statistics
-        if (!stats_.position_deltas.empty()) {
-            double avg_delta = std::accumulate(stats_.position_deltas.begin(), stats_.position_deltas.end(), 0.0) /
-                               stats_.position_deltas.size();
-            auto max_delta = *std::max_element(stats_.position_deltas.begin(), stats_.position_deltas.end());
-
-            std::cout << "  Average delta between positions: " << std::fixed << std::setprecision(2) << avg_delta
-                      << std::endl;
-            std::cout << "  Largest delta: " << max_delta << std::endl;
-            std::cout << "  Compression ratio: " << std::fixed << std::setprecision(2) << compression_ratio << "x"
-                      << std::endl;
-        }
+        std::cout << "  Total postings: " << stats_.total_postings << std::endl;
+        std::cout << "  Total sync points: " << stats_.total_sync_points << std::endl;
+        std::cout << "  Average postings per term: " << std::fixed << std::setprecision(2)
+                  << (double)stats_.total_postings / std::max<size_t>(1, stats_.total_terms) << std::endl;
+        std::cout << "  Document count: " << documents_.size() << std::endl;
 
         // Print top terms by document frequency
         std::cout << "\nTop 20 terms by document frequency:" << std::endl;
-        std::cout << std::left << std::setw(20) << "Term" << std::setw(12) << "Doc Freq" << std::setw(12) << "Term Freq"
-                  << "Positions" << std::endl;
-        std::cout << std::string(50, '-') << std::endl;
+        std::cout << std::left << std::setw(20) << "Term" << std::setw(12) << "Doc Freq" << "Term Freq" << std::endl;
+        std::cout << std::string(45, '-') << std::endl;
 
         for (size_t i = 0; i < std::min<size_t>(20, stats_.term_stats.size()); ++i) {
             const auto& term_stat = stats_.term_stats[i];
             std::cout << std::left << std::setw(20) << term_stat.term << std::setw(12) << term_stat.doc_freq
-                      << std::setw(12) << term_stat.total_term_freq << term_stat.positions_size << std::endl;
+                      << term_stat.total_term_freq << std::endl;
         }
 
         // Print distribution of term frequencies
@@ -365,6 +308,8 @@ public:
                   << format_size(stats_.total_bytes / (documents_.empty() ? 1 : documents_.size())) << std::endl;
         std::cout << "  Average bytes per term: "
                   << format_size(stats_.total_bytes / (stats_.total_terms ? stats_.total_terms : 1)) << std::endl;
+        std::cout << "  Average bytes per posting: "
+                  << format_size(stats_.total_bytes / (stats_.total_postings ? stats_.total_postings : 1)) << std::endl;
     }
 
     void export_detailed_stats() {
@@ -462,22 +407,6 @@ public:
                     VByteCodec::decode(in);  // Skip doc_id delta
                     VByteCodec::decode(in);  // Skip freq
                 }
-            }
-
-            // Read positions count
-            uint32_t positions_size;
-            in.read(reinterpret_cast<char*>(&positions_size), sizeof(positions_size));
-
-            // Read position sync points
-            uint32_t position_sync_points_size;
-            in.read(reinterpret_cast<char*>(&position_sync_points_size), sizeof(position_sync_points_size));
-
-            // Skip position sync points data
-            in.seekg(position_sync_points_size * sizeof(PositionSyncPoint), std::ios::cur);
-
-            // Skip position deltas
-            for (uint32_t i = 0; i < positions_size; ++i) {
-                VByteCodec::decode(in);
             }
 
             // Show progress

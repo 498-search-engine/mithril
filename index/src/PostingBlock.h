@@ -10,22 +10,11 @@ namespace mithril {
 struct Posting {
     uint32_t doc_id;
     uint32_t freq;
-    uint32_t positions_offset;
 };
 
 struct SyncPoint {
     uint32_t doc_id;        // First document ID at this position
     uint32_t plist_offset;  // Offset from start of postings list
-};
-
-struct PositionSyncPoint {
-    uint32_t pos_offset;    // Offset in the postns array
-    uint32_t absolute_pos;  // Reconstructed absolute position
-};
-
-struct PositionsStore {
-    std::vector<uint32_t> all_positions;
-    std::vector<PositionSyncPoint> sync_points;
 };
 
 class BlockReader {
@@ -40,10 +29,6 @@ public:
     void read_next();
 
     Posting* find_posting(uint32_t target_doc_id) const;
-    PositionsStore current_positions;
-    std::vector<uint32_t> get_positions(uint32_t doc_id) const;
-    std::vector<uint32_t> get_positions_by_index(size_t posting_index) const;
-    std::vector<uint32_t> get_positions_near(uint32_t doc_id, uint32_t target_position, uint32_t window_size) const;
 
     // Move support for priority queue
     BlockReader(BlockReader&& other) noexcept;
@@ -62,7 +47,6 @@ private:
     std::string file_path_;
     // std::vector<char> file_buffer_;
 
-    size_t find_nearest_position_sync_point(uint32_t target_position) const;
     bool validate_remaining(size_t needed) const { return (current + needed <= data + size); }
 };
 }  // namespace mithril

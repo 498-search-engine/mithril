@@ -52,19 +52,19 @@ int main(int argc, char* argv[]) {
                 std::cout << std::endl;
             }
 
-            try {
-                auto positions = term_reader.currentPositions();
-                std::cout << "  Positions:";
-                for (size_t i = 0; i < positions.size() && i < 10; ++i) {
-                    std::cout << " " << positions[i];
-                }
-                if (positions.size() > 10) {
-                    std::cout << " ... (" << positions.size() - 10 << " more)";
-                }
-                std::cout << std::endl << std::endl;
-            } catch (const std::exception& e) {
-                std::cout << "  Error getting positions: " << e.what() << std::endl << std::endl;
-            }
+            // try {
+            //     auto positions = term_reader.currentPositions();
+            //     std::cout << "  Positions:";
+            //     for (size_t i = 0; i < positions.size() && i < 10; ++i) {
+            //         std::cout << " " << positions[i];
+            //     }
+            //     if (positions.size() > 10) {
+            //         std::cout << " ... (" << positions.size() - 10 << " more)";
+            //     }
+            //     std::cout << std::endl << std::endl;
+            // } catch (const std::exception& e) {
+            //     std::cout << "  Error getting positions: " << e.what() << std::endl << std::endl;
+            // }
 
             term_reader.moveNext();
             count++;

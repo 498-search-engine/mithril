@@ -118,10 +118,8 @@ void IndexBuilder::process_document(const Document& doc) {
     }
 
     auto task = [this, doc]() {
-        std::unordered_map<std::string, std::vector<uint32_t>> term_positions;
-        uint32_t position = 0;
-
-        // Process URL with URL field type
+        std::unordered_map<std::string, uint32_t> term_freqs;
+        // Process URL
         std::string url_copy = doc.url;
         // Replace common delimiters with spaces for tokenization
         std::replace(url_copy.begin(), url_copy.end(), '/', ' ');
@@ -131,13 +129,12 @@ void IndexBuilder::process_document(const Document& doc) {
         std::replace(url_copy.begin(), url_copy.end(), '?', ' ');
         std::replace(url_copy.begin(), url_copy.end(), '&', ' ');
         std::replace(url_copy.begin(), url_copy.end(), '=', ' ');
-
         std::istringstream url_stream(url_copy);
         std::string url_part;
         while (url_stream >> url_part) {
             std::string normalized = TokenNormalizer::normalize(url_part, FieldType::URL);
             if (!normalized.empty()) {
-                term_positions[normalized].push_back(position++);
+                term_freqs[normalized]++;
             }
         }
 
@@ -145,7 +142,7 @@ void IndexBuilder::process_document(const Document& doc) {
         for (const auto& word : doc.title) {
             std::string normalized = TokenNormalizer::normalize(word, FieldType::TITLE);
             if (!normalized.empty()) {
-                term_positions[normalized].push_back(position++);
+                term_freqs[normalized]++;
             }
         }
 
@@ -153,7 +150,7 @@ void IndexBuilder::process_document(const Document& doc) {
         for (const auto& word : doc.words) {
             std::string normalized = TokenNormalizer::normalize(word, FieldType::BODY);
             if (!normalized.empty()) {
-                term_positions[normalized].push_back(position++);
+                term_freqs[normalized]++;
             }
         }
 
@@ -164,13 +161,13 @@ void IndexBuilder::process_document(const Document& doc) {
             documents_.push_back(doc);
         }
 
-        // Add terms to the dictionary with positions
+        // Add terms to the dict with freqs
         {
             std::lock_guard<std::mutex> lock(block_mutex_);
-            for (const auto& [term, positions] : term_positions) {
+            for (const auto& [term, freq] : term_freqs) {
                 auto& postings = dictionary_.get_or_create(term);
-                postings.add_with_positions(doc.id, positions.size(), positions);
-                current_block_size_ += sizeof(Posting) + positions.size() * sizeof(uint32_t);
+                postings.add(doc.id, freq);
+                current_block_size_ += sizeof(Posting);
             }
         }
     };
@@ -213,10 +210,10 @@ std::future<void> IndexBuilder::flush_block() {
     }
 
     // Get sorted terms and their postings
-    std::vector<std::tuple<std::string, std::vector<Posting>, std::vector<uint32_t>>> sorted_terms;
+    std::vector<std::tuple<std::string, std::vector<Posting>>> sorted_terms;
     dictionary_.iterate_terms([&](const std::string& term, const PostingList& postings) {
         if (!postings.empty())
-            sorted_terms.emplace_back(term, postings.postings(), postings.positions_store_.all_positions);
+            sorted_terms.emplace_back(term, postings.postings());
     });
 
     if (sorted_terms.empty()) {
@@ -231,11 +228,10 @@ std::future<void> IndexBuilder::flush_block() {
     std::string block_path = this->block_path(block_count_++);
     return std::async(std::launch::async, [sorted_terms = std::move(sorted_terms), block_path]() {
         std::ofstream out(block_path, std::ios::binary);
-
         uint32_t num_terms = sorted_terms.size();
         out.write(reinterpret_cast<const char*>(&num_terms), sizeof(num_terms));
 
-        for (const auto& [term, postings, positions] : sorted_terms) {
+        for (const auto& [term, postings] : sorted_terms) {
             uint32_t term_len = term.size();
             out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
             out.write(term.c_str(), term_len);
@@ -251,39 +247,15 @@ std::future<void> IndexBuilder::flush_block() {
                     sync_points.push_back(sp);
                 }
             }
+
             uint32_t sync_points_size = sync_points.size();
             out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
             if (sync_points_size > 0) {
                 out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(SyncPoint));
             }
+
             // Write the actual postings
             out.write(reinterpret_cast<const char*>(postings.data()), postings_size * sizeof(Posting));
-
-            // Write positions count and data
-            uint32_t positions_size = positions.size();
-            out.write(reinterpret_cast<const char*>(&positions_size), sizeof(positions_size));
-            if (positions_size > 0) {
-                // For sync points, we need to store both position offsets and absolute positions
-                std::vector<PositionSyncPoint> sync_points;
-                uint32_t prev_pos = 0;
-                // Compute and write sync points
-                for (size_t i = 0; i < positions.size(); i++) {
-                    if (i % PostingList::POSITION_SYNC_INTERVAL == 0) {
-                        sync_points.push_back({static_cast<uint32_t>(i), positions[i]});
-                    }
-                }
-                // Write sync points count and data
-                uint32_t sync_points_size = sync_points.size();
-                out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
-                if (sync_points_size > 0) {
-                    out.write(reinterpret_cast<const char*>(sync_points.data()),
-                              sync_points_size * sizeof(PositionSyncPoint));
-                }
-                // Write VByte encoded positions
-                for (size_t i = 0; i < positions.size(); i++) {
-                    VByteCodec::encode(positions[i], out);
-                }
-            }
         }
     });
 }
@@ -328,25 +300,16 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
     while (!pq.empty()) {
         std::string current_term = pq.top()->current_term;
         std::vector<Posting> merged_postings;
-        PositionsStore merged_positions;
 
         // Merge all postings for the current term
         while (!pq.empty() && pq.top()->current_term == current_term) {
             BlockReaderPtr reader = std::move(const_cast<BlockReaderPtr&>(pq.top()));
             pq.pop();
 
-            size_t positions_offset_adjustment = merged_positions.all_positions.size();
+            // Simply add the postings
             for (auto& posting : reader->current_postings) {
-                Posting adjusted_posting = posting;
-                if (posting.positions_offset != UINT32_MAX) {
-                    adjusted_posting.positions_offset += static_cast<uint32_t>(positions_offset_adjustment);
-                }
-                merged_postings.push_back(adjusted_posting);
+                merged_postings.push_back(posting);
             }
-
-            merged_positions.all_positions.insert(merged_positions.all_positions.end(),
-                                                  reader->current_positions.all_positions.begin(),
-                                                  reader->current_positions.all_positions.end());
 
             try {
                 reader->read_next();
@@ -375,11 +338,12 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
         // Calculate and write sync points for postings
         std::vector<SyncPoint> sync_points;
         for (uint32_t i = 0; i < postings_size; i += PostingList::SYNC_INTERVAL) {
-            if (i < postings_size) {  // Extra safety check
+            if (i < postings_size) {
                 SyncPoint sp{merged_postings[i].doc_id, i};
                 sync_points.push_back(sp);
             }
         }
+
         uint32_t sync_points_size = sync_points.size();
         out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
         if (sync_points_size > 0) {
@@ -397,35 +361,8 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
                 last_doc_id = posting.doc_id;
             }
         } else {
-            // Use raw Posting structs for intermediate blocks (consistent with BlockReader)
+            // Use raw Posting structs for intermediate blocks
             out.write(reinterpret_cast<const char*>(merged_postings.data()), postings_size * sizeof(Posting));
-        }
-
-        // Write positions
-        uint32_t positions_size = merged_positions.all_positions.size();
-        out.write(reinterpret_cast<const char*>(&positions_size), sizeof(positions_size));
-
-        // Calculate and write position sync points
-        std::vector<PositionSyncPoint> pos_sync_points;
-        if (positions_size > 0) {
-            uint32_t absolute_pos = 0;
-            for (size_t i = 0; i < merged_positions.all_positions.size(); i++) {
-                absolute_pos += merged_positions.all_positions[i];
-                if (i % PostingList::POSITION_SYNC_INTERVAL == 0) {
-                    pos_sync_points.push_back({static_cast<uint32_t>(i), absolute_pos});
-                }
-            }
-        }
-        uint32_t pos_sync_points_size = pos_sync_points.size();
-        out.write(reinterpret_cast<const char*>(&pos_sync_points_size), sizeof(pos_sync_points_size));
-        if (pos_sync_points_size > 0) {
-            out.write(reinterpret_cast<const char*>(pos_sync_points.data()),
-                      pos_sync_points_size * sizeof(PositionSyncPoint));
-        }
-
-        // Write the positions consistently for both formats
-        for (size_t i = 0; i < positions_size; i++) {
-            VByteCodec::encode(merged_positions.all_positions[i], out);
         }
 
         total_terms++;
@@ -580,24 +517,6 @@ void IndexBuilder::create_term_dictionary() {
             ptr++;
 
             // Skip frequency
-            while (*ptr & 0x80)
-                ptr++;
-            ptr++;
-        }
-
-        // Skip positions
-        uint32_t positions_count;
-        std::memcpy(&positions_count, ptr, sizeof(positions_count));
-        ptr += sizeof(positions_count);
-
-        // Skip position sync points
-        uint32_t position_sync_points_size;
-        std::memcpy(&position_sync_points_size, ptr, sizeof(position_sync_points_size));
-        ptr += sizeof(position_sync_points_size);
-        ptr += position_sync_points_size * sizeof(PositionSyncPoint);
-
-        // Skip positions
-        for (uint32_t j = 0; j < positions_count; j++) {
             while (*ptr & 0x80)
                 ptr++;
             ptr++;
