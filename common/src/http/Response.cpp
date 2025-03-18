@@ -81,7 +81,7 @@ void Response::DecodeBody() {
     if (header.ContentEncoding->value == "gzip"sv) {
         auto unzipped = Gunzip(body);
         body = std::move(unzipped);
-    } else if (header.ContentEncoding->value == "none"sv) {
+    } else if (header.ContentEncoding->value == "none"sv || header.ContentEncoding->value == "identity"sv) {
         // Nothing to do
     } else {
         spdlog::error("got unsupported Content-Encoding {}", header.ContentEncoding->value);
