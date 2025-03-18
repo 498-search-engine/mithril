@@ -42,26 +42,6 @@ void PopulateHeaderFields(ResponseHeader& h) {
     }
 }
 
-std::vector<char> Gunzip(const std::vector<char>& data) {
-    data::BufferReader r{data};
-    data::GzipReader gzr{r};
-
-    std::vector<char> out;
-    out.reserve(data.size() * 4);
-
-    core::Array<char, data::GzipChunkSize> buf{};
-    ssize_t read;
-    do {
-        read = gzr.ReadAmount(buf.Data(), buf.Size());
-        if (read > 0) {
-            assert(read <= buf.Size());
-            out.insert(out.end(), buf.begin(), buf.begin() + read);
-        }
-    } while (read > 0);
-
-    return out;
-}
-
 }  // namespace
 
 Response::Response(std::vector<char> header, std::vector<char> body, ResponseHeader parsedHeader)
@@ -79,7 +59,7 @@ void Response::DecodeBody() {
     }
 
     if (header.ContentEncoding->value == "gzip"sv) {
-        auto unzipped = Gunzip(body);
+        auto unzipped = data::Gunzip(body);
         body = std::move(unzipped);
     } else if (header.ContentEncoding->value == "none"sv || header.ContentEncoding->value == "identity"sv) {
         // Nothing to do

@@ -1,6 +1,7 @@
 #ifndef COMMON_DATA_GZIP_H
 #define COMMON_DATA_GZIP_H
 
+#include "core/array.h"
 #include "data/Reader.h"
 #include "data/Writer.h"
 
@@ -11,6 +12,7 @@
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 #include <zconf.h>
 #include <zlib.h>
@@ -64,12 +66,17 @@ public:
                     break;
                 }
 
-                if (!underlying_.Read(inBuffer_.data(), sizeToRead)) {
-                    break;
+                if constexpr (std::is_same_v<R, BufferReader>) {
+                    strm_.avail_in = sizeToRead;
+                    strm_.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(underlying_.Data()));
+                    underlying_.SeekForward(sizeToRead);
+                } else {
+                    if (!underlying_.Read(inBuffer_.data(), sizeToRead)) {
+                        break;
+                    }
+                    strm_.avail_in = sizeToRead;
+                    strm_.next_in = reinterpret_cast<Bytef*>(inBuffer_.data());
                 }
-
-                strm_.avail_in = inBuffer_.size();
-                strm_.next_in = reinterpret_cast<Bytef*>(inBuffer_.data());
             }
 
             // Decompress
@@ -193,6 +200,8 @@ private:
     std::vector<char> buffer_;
     bool finished_ = false;
 };
+
+std::vector<char> Gunzip(const std::vector<char>& compressed);
 
 }  // namespace mithril::data
 

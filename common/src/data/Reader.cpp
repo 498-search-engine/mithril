@@ -67,13 +67,21 @@ bool BufferReader::Read(void* out, size_t size) {
     if (position_ + size > data_.size()) {
         return false;
     }
-    memcpy(out, data_.data() + position_, size);
-    position_ += size;
+    memcpy(out, Data(), size);
+    SeekForward(size);
     return true;
 }
 
 size_t BufferReader::Remaining() {
     return data_.size() - position_;
+}
+
+const char* BufferReader::Data() const {
+    return data_.data() + position_;
+}
+
+void BufferReader::SeekForward(size_t amount) {
+    position_ += amount;
 }
 
 
