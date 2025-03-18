@@ -40,6 +40,10 @@ public:
     ~GzipReader() { inflateEnd(&strm_); }
 
     ssize_t ReadAmount(void* out, size_t size) {
+        if (size == 0) {
+            return 0;
+        }
+
         auto* outPtr = static_cast<uint8_t*>(out);
         size_t bytesRead = 0;
 
@@ -97,7 +101,7 @@ public:
         return static_cast<int>(bytesRead);
     }
 
-    bool Read(void* out, size_t size) { return ReadAmount(out, size) == size && size != 0; }
+    bool Read(void* out, size_t size) { return ReadAmount(out, size) == size; }
 
     size_t Remaining() { return 0; }
 
