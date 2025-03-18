@@ -18,12 +18,16 @@
 #include "http/URL.h"
 
 #include <atomic>
+#include <cerrno>
+#include <cstddef>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
+#include <sys/stat.h>
 
 namespace mithril {
 
@@ -34,6 +38,20 @@ void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& 
     auto zipWriter = data::GzipWriter{fWriter};
     data::SerializeValue(doc, zipWriter);
     zipWriter.Finish();
+}
+
+std::string NumberedEntity(std::string_view entity, size_t num, int pad) {
+    std::string res;
+    res.reserve(entity.size() + pad + 1);
+
+    res.append(entity);
+    res.push_back('_');
+    auto numStr = std::to_string(num);
+    for (int i = 0; i < pad - numStr.size(); ++i) {
+        res.push_back('0');
+    }
+    res.append(numStr);
+    return res;
 }
 
 }  // namespace
@@ -101,15 +119,13 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
         absoluteURLs.push_back(std::move(canonical));
     }
 
-    data::docid_t docID = state_.nextDocumentID.fetch_add(1);
-    auto idStr = std::to_string(docID);
-    auto fileName = docsDirectory_ + "/doc_";
-    for (int i = 0; i < 10 - idStr.size(); ++i) {
-        fileName.push_back('0');
+    auto [docID, docPath] = NextDocument();
+    if (docPath.empty()) {
+        spdlog::error("failed to get next document path");
+        return;
     }
-    fileName.append(idStr);
 
-    WriteDocumentToFile(fileName,
+    WriteDocumentToFile(docPath,
                         data::DocumentView{
                             .id = docID,
                             .url = req.Url().url,
@@ -182,6 +198,29 @@ void Worker::ProcessDocument(const http::Request& req, http::Response& res) {
         spdlog::info("unhandled status {} for {}", res.header.status, req.Url().url);
         break;
     }
+}
+
+std::pair<data::docid_t, std::string> Worker::NextDocument() {
+    using namespace std::string_view_literals;
+    data::docid_t docID = state_.nextDocumentID.fetch_add(1);
+    auto chunk = docID / DocumentChunkSize;
+
+    auto chunkStr = NumberedEntity("chunk"sv, chunk, 10);
+    auto docStr = NumberedEntity("doc"sv, docID, 10);
+
+    auto chunkPath = docsDirectory_ + "/" + chunkStr;
+    if (!lastChunk_.HasValue() || chunk != *lastChunk_) {
+        lastChunk_ = {chunk};
+        if (mkdir(chunkPath.c_str(), 0755) != 0) {
+            if (errno != EEXIST) {
+                spdlog::error("failed to create chunk {}: {}", chunkPath, strerror(errno));
+                return {docID, ""};
+            }
+        }
+    }
+
+    auto docPath = chunkPath + "/" + docStr;
+    return {docID, std::move(docPath)};
 }
 
 }  // namespace mithril
