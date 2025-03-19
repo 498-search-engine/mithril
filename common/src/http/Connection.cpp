@@ -645,8 +645,8 @@ void Connection::ProcessHeaders() {
 }
 
 bool Connection::ValidateHeaders(const ResponseHeader& headers) {
-    // Check Content-Type if specified in options
-    if (!reqOptions_.allowedMimeType.empty()) {
+    // Check Content-Type if specified in options AND 2xx status code
+    if (!reqOptions_.allowedMimeType.empty() && headers.status / 100 == 2) {
         if (headers.ContentType == nullptr) {
             spdlog::debug("content-type <none> for response {} is not acceptable", url_.url);
             state_ = State::ResponseWrongType;
