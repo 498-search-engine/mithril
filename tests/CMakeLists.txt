@@ -12,6 +12,7 @@ set(TEST_SOURCES
     src/HtmlEntity.cpp
     src/Robots.cpp
     src/Serialization.cpp
+    src/StringTrie.cpp
     src/URL.cpp
 )
 

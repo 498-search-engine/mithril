@@ -28,6 +28,7 @@ add_library(common STATIC
 
     src/Clock.cpp
     src/FileSystem.cpp
+    src/StringTrie.cpp
     src/ThreadSync.cpp
     src/Util.cpp
 )
