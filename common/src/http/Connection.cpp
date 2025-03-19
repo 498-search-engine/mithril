@@ -76,6 +76,18 @@ void PrintSSLConnectError(SSL* ssl, int status) {
     }
 }
 
+bool ContentTypeMatches(std::string_view header, std::string_view mimeType) {
+    auto semicolonPos = header.find(';');
+    std::string_view headerMimeType = header.substr(0, semicolonPos);
+
+    // Trim trailing whitespace
+    while (!headerMimeType.empty() && std::isspace(static_cast<unsigned char>(headerMimeType.back()))) {
+        headerMimeType.remove_suffix(1);
+    }
+
+    return InsensitiveStrEquals(headerMimeType, mimeType);
+}
+
 bool ContentLanguageMatches(std::string_view header, std::string_view lang) {
     if (lang.empty()) {
         return true;
@@ -93,6 +105,7 @@ bool ContentLanguageMatches(std::string_view header, std::string_view lang) {
         return InsensitiveStrEquals(header, lang);
     }
 }
+
 
 }  // namespace
 
@@ -523,13 +536,15 @@ bool Connection::IsActive() const {
 bool Connection::IsError() const {
     return state_ == State::ConnectError || state_ == State::SocketError || state_ == State::UnexpectedEOFError ||
            state_ == State::InvalidResponseError || state_ == State::ResponseTooBigError ||
-           state_ == State::ResponseWrongLanguage;
+           state_ == State::ResponseWrongType || state_ == State::ResponseWrongLanguage;
 }
 
 RequestError Connection::GetError() const {
     switch (state_) {
     case State::ResponseTooBigError:
         return RequestError::ResponseTooBig;
+    case State::ResponseWrongType:
+        return RequestError::ResponseWrongType;
     case State::ResponseWrongLanguage:
         return RequestError::ResponseWrongLanguage;
     case State::ConnectError:
@@ -630,6 +645,27 @@ void Connection::ProcessHeaders() {
 }
 
 bool Connection::ValidateHeaders(const ResponseHeader& headers) {
+    // Check Content-Type if specified in options
+    if (!reqOptions_.allowedMimeType.empty()) {
+        if (headers.ContentType == nullptr) {
+            spdlog::debug("content-type <none> for response {} is not acceptable", url_.url);
+            state_ = State::ResponseWrongType;
+            return false;
+        }
+
+        auto contentType = headers.ContentType->value;
+        auto anyMatch =
+            std::any_of(reqOptions_.allowedMimeType.begin(),
+                        reqOptions_.allowedMimeType.end(),
+                        [contentType](std::string_view mimeType) { return ContentTypeMatches(contentType, mimeType); });
+        if (!anyMatch) {
+            spdlog::debug("content-type {} for response {} is not acceptable", contentType, url_.url);
+            state_ = State::ResponseWrongType;
+            return false;
+        }
+    }
+
+    // Check Content-Language if specified in options
     if (!reqOptions_.allowedContentLanguage.empty()) {
         if (headers.ContentLanguage != nullptr) {
             auto contentLanguage = headers.ContentLanguage->value;
