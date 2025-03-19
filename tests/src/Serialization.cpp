@@ -4,9 +4,7 @@
 #include "data/Writer.h"
 
 #include <cstdint>
-#include <limits>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
