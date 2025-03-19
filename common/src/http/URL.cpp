@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <spdlog/spdlog.h>
 
 namespace mithril::http {
@@ -159,22 +160,26 @@ std::optional<URL> ParseURL(std::string_view s) {
     return u;
 }
 
-std::string CanonicalizeURL(const URL& url) {
-    std::string canonical;
-    canonical.reserve(url.url.size());
+URL CanonicalizeURL(const URL& url) {
+    URL canonical{};
+    std::string canonicalFull;
+    canonicalFull.reserve(url.url.size());
 
     // Lowercase scheme and host
     std::string scheme = url.scheme;
     std::transform(scheme.begin(), scheme.end(), scheme.begin(), [](unsigned char c) { return std::tolower(c); });
+    canonical.scheme = scheme;
 
     std::string host = url.host;
     std::transform(host.begin(), host.end(), host.begin(), [](unsigned char c) { return std::tolower(c); });
+    canonical.host = host;
 
-    canonical += scheme + "://" + host;
+    canonicalFull += scheme + "://" + host;
 
     // Add non-default port
     if (!url.port.empty() && !((scheme == "http" && url.port == "80") || (scheme == "https" && url.port == "443"))) {
-        canonical += ":" + url.port;
+        canonicalFull += ":" + url.port;
+        canonical.port = url.port;
     }
 
     // Normalize path
@@ -205,13 +210,12 @@ std::string CanonicalizeURL(const URL& url) {
         cleanPath += c;
     }
 
-    // Handle trailing slash for empty paths
-    if (cleanPath.empty() || (cleanPath.size() == 1 && cleanPath[0] == '/')) {
-        canonical += "/";
-    } else {
-        canonical += cleanPath;
-    }
+    cleanPath = ResolvePath(cleanPath);  // Resolve directory . and ..
 
+    canonicalFull += cleanPath;
+    canonical.path = cleanPath;
+
+    canonical.url = std::move(canonicalFull);
     return canonical;
 }
 

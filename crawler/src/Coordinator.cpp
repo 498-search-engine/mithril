@@ -103,7 +103,7 @@ void Coordinator::Run() {
 
     for (size_t i = 0; i < config_.num_workers; ++i) {
         workerThreads.emplace_back([&] {
-            Worker w(*state_, docQueue_.Get(), frontier_.Get(), docsDirectory_);
+            Worker w(*state_, docQueue_.Get(), frontier_.Get(), docsDirectory_, config_.blacklist_hosts);
             w.Run();
         });
         ++threadCount;

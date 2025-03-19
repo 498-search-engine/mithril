@@ -311,7 +311,7 @@ protected:
 
     // Helper method to test canonicalization
     static void TestCanonicalizationImpl(const std::string& input,
-                                         const std::string& expected,
+                                         const std::string& expectedStr,
                                          const char* file = __FILE__,
                                          int line = __LINE__) {
         auto urlOpt = ParseURL(input);
@@ -320,9 +320,32 @@ protected:
             return;
         }
 
-        std::string result = CanonicalizeURL(*urlOpt);
-        if (result != expected) {
-            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected: " << expected << "\nActual: " << result;
+        auto expected = ParseURL(expectedStr);
+        if (!expected.has_value()) {
+            ADD_FAILURE_AT(file, line) << "Failed to parse expected URL: " << expectedStr;
+            return;
+        }
+
+        auto result = CanonicalizeURL(*urlOpt);
+        if (result.url != expected->url) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected url: " << expected->url
+                                       << "\nActual url: " << result.url;
+        }
+        if (result.scheme != expected->scheme) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected scheme: " << expected->scheme
+                                       << "\nActual scheme: " << result.scheme;
+        }
+        if (result.host != expected->host) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected host: " << expected->host
+                                       << "\nActual host: " << result.host;
+        }
+        if (result.port != expected->port) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected port: " << expected->port
+                                       << "\nActual port: " << result.port;
+        }
+        if (result.path != expected->path) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected path: " << expected->path
+                                       << "\nActual path: " << result.path;
         }
     }
 };
@@ -391,6 +414,15 @@ TEST_F(CanonicalizeURLTest, EmptyPath) {
     TestCanonicalization("http://example.com", "http://example.com/");
     TestCanonicalization("http://example.com/", "http://example.com/");
     TestCanonicalization("http://example.com?query=value", "http://example.com/?query=value");
+}
+
+// Test with relative directory traversal
+TEST_F(CanonicalizeURLTest, DirectoryTraversal) {
+    TestCanonicalization("http://example.com/a/b/../c/d/", "http://example.com/a/c/d/");
+    TestCanonicalization("http://example.com/a/b/../c/d", "http://example.com/a/c/d");
+    TestCanonicalization("http://example.com/../../a/./b/./c", "http://example.com/a/b/c");
+    TestCanonicalization("http://example.com/a/b/c/../../d/e/../f", "http://example.com/a/d/f");
+    TestCanonicalization("http://example.com/a/b/c/../../d/e/../f?123=456", "http://example.com/a/d/f?123=456");
 }
 
 // Test edge cases

@@ -10,6 +10,7 @@
 #include "http/Request.h"
 #include "http/Response.h"
 
+#include <set>
 #include <string>
 #include <utility>
 
@@ -19,7 +20,11 @@ constexpr auto DocumentChunkSize = 10000;
 
 class Worker {
 public:
-    Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier_, std::string docsDirectory_);
+    Worker(LiveState& state,
+           DocumentQueue* docQueue,
+           UrlFrontier* frontier,
+           std::string docsDirectory,
+           const std::set<std::string>& blacklistedHosts);
 
     void Run();
 
@@ -34,6 +39,7 @@ private:
     UrlFrontier* frontier_;
 
     std::string docsDirectory_;
+    const std::set<std::string>& blacklistedHosts_;
 
     html::ParsedDocument parsedDoc_;
     core::Optional<data::docid_t> lastChunk_;

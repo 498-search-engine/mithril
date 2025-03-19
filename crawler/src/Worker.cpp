@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstring>
 #include <exception>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -60,8 +61,16 @@ std::string NumberedEntity(std::string_view entity, size_t num, int pad) {
 
 }  // namespace
 
-Worker::Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier, std::string docsDirectory)
-    : state_(state), docQueue_(docQueue), frontier_(frontier), docsDirectory_(std::move(docsDirectory)) {}
+Worker::Worker(LiveState& state,
+               DocumentQueue* docQueue,
+               UrlFrontier* frontier,
+               std::string docsDirectory,
+               const std::set<std::string>& blacklistedHosts)
+    : state_(state),
+      docQueue_(docQueue),
+      frontier_(frontier),
+      docsDirectory_(std::move(docsDirectory)),
+      blacklistedHosts_(blacklistedHosts) {}
 
 void Worker::Run() {
     spdlog::info("worker starting");
@@ -125,7 +134,10 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
         }
 
         auto canonical = http::CanonicalizeURL(*parsed);
-        absoluteURLs.push_back(std::move(canonical));
+        if (blacklistedHosts_.contains(canonical.host)) {
+            continue;
+        }
+        absoluteURLs.push_back(std::move(canonical.url));
     }
 
     auto [docID, docPath] = NextDocument();
