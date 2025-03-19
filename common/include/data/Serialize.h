@@ -6,6 +6,8 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -73,6 +75,9 @@ template<>
 struct Serialize<std::string> {
     template<Writer W>
     static void Write(const std::string& val, W& w) {
+        if (val.length() > std::numeric_limits<uint32_t>::max()) {
+            throw std::invalid_argument("length of string exceeds max length");
+        }
         auto length = static_cast<uint32_t>(val.length());
         auto orderedLength = hton(length);
         w.Write(&orderedLength, sizeof(orderedLength));
@@ -85,6 +90,9 @@ template<>
 struct Serialize<std::string_view> {
     template<Writer W>
     static void Write(std::string_view val, W& w) {
+        if (val.length() > std::numeric_limits<uint32_t>::max()) {
+            throw std::invalid_argument("length of string exceeds max length");
+        }
         auto length = static_cast<uint32_t>(val.length());
         auto orderedLength = hton(length);
         w.Write(&orderedLength, sizeof(orderedLength));
@@ -97,6 +105,9 @@ template<Serializable T>
 struct Serialize<std::vector<T>> {
     template<Writer W>
     static void Write(const std::vector<T>& val, W& w) {
+        if (val.size() > std::numeric_limits<uint32_t>::max()) {
+            throw std::invalid_argument("length of vector exceeds max length");
+        }
         auto size = static_cast<uint32_t>(val.size());
         auto orderedSize = hton(size);
         w.Write(&orderedSize, sizeof(orderedSize));
@@ -111,11 +122,16 @@ template<>
 struct Serialize<std::vector<std::string>> {
     template<Writer W>
     static void Write(const std::vector<std::string>& val, W& w) {
-        uint32_t totalSize = 0;
+        size_t totalSize = 0;
         for (const auto& e : val) {
             totalSize += e.size() + 1;
         }
-        auto orderedSize = hton(totalSize);
+
+        if (totalSize > std::numeric_limits<uint32_t>::max()) {
+            throw std::invalid_argument("length of string data exceeds max length");
+        }
+
+        auto orderedSize = hton(static_cast<uint32_t>(totalSize));
         w.Write(&orderedSize, sizeof(orderedSize));
         for (const auto& e : val) {
             w.Write(e.c_str(), e.size() + 1);
@@ -128,12 +144,16 @@ template<>
 struct Serialize<std::vector<std::string_view>> {
     template<Writer W>
     static void Write(const std::vector<std::string_view>& val, W& w) {
-        uint32_t totalSize = 0;
+        size_t totalSize = 0;
         for (const auto& e : val) {
             totalSize += e.size() + 1;
         }
 
-        auto orderedSize = hton(totalSize);
+        if (totalSize > std::numeric_limits<uint32_t>::max()) {
+            throw std::invalid_argument("length of string data exceeds max length");
+        }
+
+        auto orderedSize = hton(static_cast<uint32_t>(totalSize));
         w.Write(&orderedSize, sizeof(orderedSize));
         for (const auto& e : val) {
             w.Write(e.data(), e.size());

@@ -21,7 +21,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
-#include <stdexcept>
+#include <exception>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -34,10 +34,14 @@ namespace mithril {
 namespace {
 
 void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& doc) {
-    auto fWriter = data::FileWriter{fileName.c_str()};
-    auto zipWriter = data::GzipWriter{fWriter};
-    data::SerializeValue(doc, zipWriter);
-    zipWriter.Finish();
+    try {
+        auto fWriter = data::FileWriter{fileName.c_str()};
+        auto zipWriter = data::GzipWriter{fWriter};
+        data::SerializeValue(doc, zipWriter);
+        zipWriter.Finish();
+    } catch (const std::exception& e) {
+        spdlog::error("failed to write document {} ({}): {}", doc.id, doc.url, e.what());
+    }
 }
 
 std::string NumberedEntity(std::string_view entity, size_t num, int pad) {
@@ -152,7 +156,7 @@ void Worker::ProcessDocument(const http::Request& req, http::Response& res) {
     try {
         // First, decode the body if it is encoded.
         res.DecodeBody();
-    } catch (const std::runtime_error& e) {
+    } catch (const std::exception& e) {
         // Something went wrong while decoding
         spdlog::warn("encountered error while decoding body for {}: {}", req.Url().url, e.what());
         return;
