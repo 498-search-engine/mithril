@@ -151,10 +151,7 @@ public:
             throw std::runtime_error("Cannot write after finishing");
         }
 
-        auto* x = alloca(size);
-        std::memcpy(x, data, size);
-
-        strm_.next_in = static_cast<Bytef*>(x);
+        strm_.next_in = static_cast<Bytef*>(const_cast<void*>(data));
         strm_.avail_in = size;
 
         do {
