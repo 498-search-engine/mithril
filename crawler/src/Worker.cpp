@@ -4,8 +4,10 @@
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "State.h"
+#include "StringTrie.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
+#include "Util.h"
 #include "data/Document.h"
 #include "data/Gzip.h"
 #include "data/Serialize.h"
@@ -17,11 +19,13 @@
 #include "http/Response.h"
 #include "http/URL.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
 #include <exception>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -60,8 +64,16 @@ std::string NumberedEntity(std::string_view entity, size_t num, int pad) {
 
 }  // namespace
 
-Worker::Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier, std::string docsDirectory)
-    : state_(state), docQueue_(docQueue), frontier_(frontier), docsDirectory_(std::move(docsDirectory)) {}
+Worker::Worker(LiveState& state,
+               DocumentQueue* docQueue,
+               UrlFrontier* frontier,
+               std::string docsDirectory,
+               const StringTrie& blacklistedHosts)
+    : state_(state),
+      docQueue_(docQueue),
+      frontier_(frontier),
+      docsDirectory_(std::move(docsDirectory)),
+      blacklistedHosts_(blacklistedHosts) {}
 
 void Worker::Run() {
     spdlog::info("worker starting");
@@ -95,7 +107,12 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
     // TODO: early return if non latin script page
     html::ParseDocument(std::string_view{res.body.data(), res.body.size()}, parsedDoc_);
 
-    // TODO: do better logging, tracking
+    if (parsedDoc_.titleWords.empty() || parsedDoc_.words.empty()) {
+        // Not worth indexing
+        spdlog::info("discarding {} due to empty title/words", req.Url().url);
+        return;
+    }
+
     std::string title;
     if (!parsedDoc_.titleWords.empty()) {
         for (auto& w : parsedDoc_.titleWords) {
@@ -120,7 +137,15 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
         }
 
         auto canonical = http::CanonicalizeURL(*parsed);
-        absoluteURLs.push_back(std::move(canonical));
+
+        auto hostParts = SplitString(canonical.host, '.');
+        std::reverse(hostParts.begin(), hostParts.end());
+        if (blacklistedHosts_.ContainsPrefix(hostParts)) {
+            SPDLOG_TRACE("url {} is from blacklisted host", canonical.url);
+            continue;
+        }
+
+        absoluteURLs.push_back(std::move(canonical.url));
     }
 
     auto [docID, docPath] = NextDocument();

@@ -43,7 +43,7 @@ std::optional<URL> ParseURL(std::string_view s);
 /**
  * @brief Transforms a URL into its canonical form.
  */
-std::string CanonicalizeURL(const URL& url);
+URL CanonicalizeURL(const URL& url);
 
 /**
  * @brief Transforms a URL into a canonical representation of just the host

@@ -3,6 +3,7 @@
 
 #include "DocumentQueue.h"
 #include "State.h"
+#include "StringTrie.h"
 #include "UrlFrontier.h"
 #include "core/optional.h"
 #include "data/Document.h"
@@ -19,7 +20,11 @@ constexpr auto DocumentChunkSize = 10000;
 
 class Worker {
 public:
-    Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier_, std::string docsDirectory_);
+    Worker(LiveState& state,
+           DocumentQueue* docQueue,
+           UrlFrontier* frontier,
+           std::string docsDirectory,
+           const StringTrie& blacklistedHosts);
 
     void Run();
 
@@ -34,6 +39,7 @@ private:
     UrlFrontier* frontier_;
 
     std::string docsDirectory_;
+    const StringTrie& blacklistedHosts_;
 
     html::ParsedDocument parsedDoc_;
     core::Optional<data::docid_t> lastChunk_;

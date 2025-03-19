@@ -8,7 +8,6 @@
 #include "core/memory.h"
 #include "core/optional.h"
 #include "http/URL.h"
-#include "spdlog/spdlog.h"
 
 #include <algorithm>
 #include <cassert>
@@ -86,8 +85,6 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
         if (sync.ShouldSynchronize()) {
             return;
         }
-
-        SPDLOG_TRACE("middle queue: got {} out of {} max atLeastOne = {}", r.size(), totalTargetQueuedURLs, atLeastOne);
 
         // Push all obtained URLs into the middle queue
         now = MonotonicTimeMs();

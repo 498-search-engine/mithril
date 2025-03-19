@@ -31,6 +31,12 @@ struct RequestOptions {
     int maxResponseSize{0};
 
     /**
+     * @brief Allowed Content-Type mime headers. If empty, Content-Type header
+     * is not inspected.
+     */
+    std::vector<std::string> allowedMimeType;
+
+    /**
      * @brief Allowed Content-Language language headers. If empty,
      * Content-Language header is not inspected.
      */

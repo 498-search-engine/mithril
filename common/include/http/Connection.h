@@ -96,6 +96,7 @@ private:
         UnexpectedEOFError,     // Got unexpected EOF while reading response
         InvalidResponseError,   // Generic bad response data
         ResponseTooBigError,    // Response body or header was too big
+        ResponseWrongType,      // Response Content-Type header was unacceptable
         ResponseWrongLanguage,  // Response Content-Language header was unacceptable
     };
 

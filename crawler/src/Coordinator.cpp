@@ -8,6 +8,7 @@
 #include "RequestManager.h"
 #include "State.h"
 #include "UrlFrontier.h"
+#include "Util.h"
 #include "Worker.h"
 #include "core/memory.h"
 #include "core/thread.h"
@@ -15,8 +16,10 @@
 #include "data/Reader.h"
 #include "data/Serialize.h"
 #include "data/Writer.h"
+#include "http/URL.h"
 #include "metrics/MetricsServer.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <csignal>
 #include <cstddef>
@@ -67,6 +70,13 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
         mkdir(docsDirectory_.c_str(), 0755);
     }
 
+    for (const auto& host : config_.blacklist_hosts) {
+        auto h = ToLowerCase(host);
+        auto parts = SplitString(h, '.');
+        std::reverse(parts.begin(), parts.end());
+        blacklistedHostsTrie_.Insert(parts);
+    }
+
     state_ = core::UniquePtr<LiveState>(new LiveState{});
 
     docQueue_ = core::UniquePtr<DocumentQueue>(new DocumentQueue{state_->threadSync});
@@ -103,7 +113,7 @@ void Coordinator::Run() {
 
     for (size_t i = 0; i < config_.num_workers; ++i) {
         workerThreads.emplace_back([&] {
-            Worker w(*state_, docQueue_.Get(), frontier_.Get(), docsDirectory_);
+            Worker w(*state_, docQueue_.Get(), frontier_.Get(), docsDirectory_, blacklistedHostsTrie_);
             w.Run();
         });
         ++threadCount;
