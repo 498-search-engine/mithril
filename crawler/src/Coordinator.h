@@ -5,6 +5,7 @@
 #include "DocumentQueue.h"
 #include "RequestManager.h"
 #include "State.h"
+#include "StringTrie.h"
 #include "UrlFrontier.h"
 #include "core/memory.h"
 #include "metrics/MetricsServer.h"
@@ -30,6 +31,7 @@ private:
     void RecoverState(const std::string& file);
 
     const CrawlerConfig config_;
+    StringTrie blacklistedHostsTrie_;
 
     std::string frontierDirectory_;
     std::string docsDirectory_;

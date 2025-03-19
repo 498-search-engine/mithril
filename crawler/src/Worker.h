@@ -3,6 +3,7 @@
 
 #include "DocumentQueue.h"
 #include "State.h"
+#include "StringTrie.h"
 #include "UrlFrontier.h"
 #include "core/optional.h"
 #include "data/Document.h"
@@ -10,7 +11,6 @@
 #include "http/Request.h"
 #include "http/Response.h"
 
-#include <set>
 #include <string>
 #include <utility>
 
@@ -24,7 +24,7 @@ public:
            DocumentQueue* docQueue,
            UrlFrontier* frontier,
            std::string docsDirectory,
-           const std::set<std::string>& blacklistedHosts);
+           const StringTrie& blacklistedHosts);
 
     void Run();
 
@@ -39,7 +39,7 @@ private:
     UrlFrontier* frontier_;
 
     std::string docsDirectory_;
-    const std::set<std::string>& blacklistedHosts_;
+    const StringTrie& blacklistedHosts_;
 
     html::ParsedDocument parsedDoc_;
     core::Optional<data::docid_t> lastChunk_;

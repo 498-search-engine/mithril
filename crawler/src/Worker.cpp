@@ -4,8 +4,10 @@
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "State.h"
+#include "StringTrie.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
+#include "Util.h"
 #include "data/Document.h"
 #include "data/Gzip.h"
 #include "data/Serialize.h"
@@ -17,6 +19,7 @@
 #include "http/Response.h"
 #include "http/URL.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cstddef>
@@ -65,7 +68,7 @@ Worker::Worker(LiveState& state,
                DocumentQueue* docQueue,
                UrlFrontier* frontier,
                std::string docsDirectory,
-               const std::set<std::string>& blacklistedHosts)
+               const StringTrie& blacklistedHosts)
     : state_(state),
       docQueue_(docQueue),
       frontier_(frontier),
@@ -134,9 +137,14 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
         }
 
         auto canonical = http::CanonicalizeURL(*parsed);
-        if (blacklistedHosts_.contains(canonical.host)) {
+
+        auto hostParts = SplitString(canonical.host, '.');
+        std::reverse(hostParts.begin(), hostParts.end());
+        if (blacklistedHosts_.ContainsPrefix(hostParts)) {
+            SPDLOG_TRACE("url {} is from blacklisted host", canonical.url);
             continue;
         }
+
         absoluteURLs.push_back(std::move(canonical.url));
     }
 
