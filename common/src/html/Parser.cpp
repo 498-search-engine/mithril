@@ -114,8 +114,16 @@ const char* ProcessTagAttributes(const char* start, const char* end, const char*
             }
         }
 
-        while (start < end && !IsSpace(*start) && *start != '>')
-            start++;
+        while (start < end && !IsSpace(*start) && *start != '>') {
+            if (*start == '"' && start[-1] == '=') {
+                ++start;
+                while (start < end && *start != '"' && start[-1] != '\\') {
+                    ++start;
+                }
+                continue;
+            }
+            ++start;
+        }
     }
     return start;
 }
@@ -128,6 +136,7 @@ const char* HandleTagAction(DesiredAction action,
                             ParserState& state,
                             Link& currentLink,
                             std::vector<Link>& links,
+                            std::map<std::string_view, std::string_view>& metas,
                             std::string_view& base,
                             std::vector<core::UniquePtr<std::string>>& decodedWords) {
     const char* end;
@@ -214,6 +223,32 @@ const char* HandleTagAction(DesiredAction action,
             return AfterEndingOfTag(attrEnd, bufferEnd);
         }
 
+    case DesiredAction::Meta:
+        {
+            if (endTag) {
+                return AfterEndingOfTag(nameEnd, bufferEnd);
+            }
+
+            std::string_view name;
+            const char* attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "name=", name);
+            if (!attrEnd || name.empty()) {
+                attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "property=", name);
+                if (!attrEnd) {
+                    return nullptr;
+                }
+            }
+            std::string_view content;
+            attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "content=", content);
+            if (!attrEnd) {
+                return nullptr;
+            }
+
+            if (!name.empty() && !content.empty()) {
+                metas[name] = content;
+            }
+            return AfterEndingOfTag(attrEnd, bufferEnd);
+        }
+
     default:  // OrdinaryText
         return nameEnd;
     }
@@ -227,12 +262,14 @@ void ParseDocument(std::string_view doc, ParsedDocument& parsed) {
     auto& words = parsed.words;
     auto& titleWords = parsed.titleWords;
     auto& links = parsed.links;
+    auto& metas = parsed.metas;
     auto& base = parsed.base;
     auto& decodedWords = parsed.decodedWords;
 
     words.clear();
     titleWords.clear();
     links.clear();
+    metas.clear();
     base = std::string_view{};
     decodedWords.clear();
 
@@ -336,7 +373,7 @@ void ParseDocument(std::string_view doc, ParsedDocument& parsed) {
 
             // Now process the tag
             buffer = HandleTagAction(
-                action, endTag, nameStart, nameEnd, bufferEnd, state, currentLink, links, base, decodedWords);
+                action, endTag, nameStart, nameEnd, bufferEnd, state, currentLink, links, metas, base, decodedWords);
             if (!buffer)
                 return;
 

@@ -43,19 +43,7 @@ std::string ToLowerCase(std::string_view s) {
 }
 
 std::vector<std::string_view> SplitString(std::string_view s, char c) {
-    std::vector<std::string_view> res;
-    size_t pos = 0;
-    while (pos < s.size()) {
-        auto lineEnd = s.find(c, pos);
-        if (lineEnd == std::string::npos) {
-            lineEnd = s.size();
-        }
-
-        auto line = s.substr(pos, lineEnd - pos);
-        res.push_back(line);
-        pos = lineEnd + 1;
-    }
-    return res;
+    return SplitStringOn(s, [c](char x) { return x == c; });
 }
 
 std::string ReadFile(const char* filepath) {

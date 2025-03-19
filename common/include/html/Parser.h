@@ -6,6 +6,7 @@
 #include "core/memory.h"
 
 #include <cstddef>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -78,10 +79,16 @@ struct Link {
     std::vector<std::string_view> anchorText;
 };
 
+struct Meta {
+    std::string_view name;
+    std::string_view content;
+};
+
 struct ParsedDocument {
     std::vector<std::string_view> words;
     std::vector<std::string_view> titleWords;
     std::vector<Link> links;
+    std::map<std::string_view, std::string_view> metas;
     std::string_view base;
 
     std::vector<core::UniquePtr<std::string>> decodedWords;

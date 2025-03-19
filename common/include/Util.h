@@ -1,6 +1,8 @@
 #ifndef COMMON_UTIL_H
 #define COMMON_UTIL_H
 
+#include <algorithm>
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -73,6 +75,26 @@ static_assert(ResolvePath("/a/b/./c/d/../e/f") == "/a/b/c/e/f");
 static_assert(ResolvePath("/a/../../../c") == "/c");
 static_assert(ResolvePath("/a/./././.") == "/a");
 static_assert(ResolvePath("/a/././././") == "/a/");
+
+template<typename F>
+std::vector<std::string_view> SplitStringOn(std::string_view s, F f) {
+    std::vector<std::string_view> res;
+    size_t pos = 0;
+    while (pos < s.size()) {
+        size_t lineEnd;
+        auto it = std::find_if(s.begin() + pos, s.end(), f);
+        if (it == s.end()) {
+            lineEnd = s.size();
+        } else {
+            lineEnd = it - s.begin();
+        }
+
+        auto line = s.substr(pos, lineEnd - pos);
+        res.push_back(line);
+        pos = lineEnd + 1;
+    }
+    return res;
+}
 
 std::vector<std::string_view> SplitString(std::string_view s, char c);
 
