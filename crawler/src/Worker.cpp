@@ -21,11 +21,11 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
 #include <exception>
-#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -60,6 +60,17 @@ std::string NumberedEntity(std::string_view entity, size_t num, int pad) {
     }
     res.append(numStr);
     return res;
+}
+
+std::vector<std::string_view> GetDescription(const html::ParsedDocument& doc) {
+    using namespace std::string_view_literals;
+
+    auto descIt = doc.metas.find("description"sv);
+    if (descIt == doc.metas.end()) {
+        return {};
+    }
+
+    return SplitStringOn(descIt->second, [](unsigned char c) { return std::isspace(c); });
 }
 
 }  // namespace
@@ -104,7 +115,11 @@ void Worker::Run() {
  * - Content-Type is text/html
  */
 void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response& res) {
-    // TODO: early return if non latin script page
+    bool indexDocument = true;
+    bool followLinks = true;
+
+    // Parse HTML document from response body
+    spdlog::info("processing document {}", req.Url().url);
     html::ParseDocument(std::string_view{res.body.data(), res.body.size()}, parsedDoc_);
 
     if (parsedDoc_.titleWords.empty() || parsedDoc_.words.empty()) {
@@ -113,61 +128,38 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
         return;
     }
 
-    std::string title;
-    if (!parsedDoc_.titleWords.empty()) {
-        for (auto& w : parsedDoc_.titleWords) {
-            title.append(w);
-            title.push_back(' ');
-        }
-        title.pop_back();
+    auto followURLs = GetFollowURLs(parsedDoc_, req.Url());
+
+    if (indexDocument) {
+        // Extract description from <meta name="description"> tag if present
+        auto description = GetDescription(parsedDoc_);
+
+        // Save document to crawl corpus
+        SaveDocument(data::DocumentView{
+            .url = req.Url().url,
+            .title = parsedDoc_.titleWords,
+            .description = description,
+            .words = parsedDoc_.words,
+        });
+
+        DocumentSizeBytesMetric.Observe(res.body.size());
     }
 
-    spdlog::info("processing {} ({})", req.Url().url, title);
-
-    std::vector<std::string> absoluteURLs;
-    for (auto& l : parsedDoc_.links) {
-        auto absoluteLink = html::MakeAbsoluteLink(req.Url(), parsedDoc_.base, l.url);
-        if (!absoluteLink) {
-            continue;
-        }
-
-        auto parsed = http::ParseURL(*absoluteLink);
-        if (!parsed) {
-            continue;
-        }
-
-        auto canonical = http::CanonicalizeURL(*parsed);
-
-        auto hostParts = SplitString(canonical.host, '.');
-        std::reverse(hostParts.begin(), hostParts.end());
-        if (blacklistedHosts_.ContainsPrefix(hostParts)) {
-            SPDLOG_TRACE("url {} is from blacklisted host", canonical.url);
-            continue;
-        }
-
-        absoluteURLs.push_back(std::move(canonical.url));
+    if (followLinks && !followURLs.empty()) {
+        // Push links found on page into frontier
+        frontier_->PushURLs(followURLs);
     }
+}
 
+void Worker::SaveDocument(data::DocumentView doc) {
     auto [docID, docPath] = NextDocument();
     if (docPath.empty()) {
         spdlog::error("failed to get next document path");
         return;
     }
 
-    WriteDocumentToFile(docPath,
-                        data::DocumentView{
-                            .id = docID,
-                            .url = req.Url().url,
-                            .title = parsedDoc_.titleWords,
-                            .words = parsedDoc_.words,
-                        });
-
-    if (!absoluteURLs.empty()) {
-        frontier_->PushURLs(absoluteURLs);
-        absoluteURLs.clear();
-    }
-
-    DocumentSizeBytesMetric.Observe(res.body.size());
+    doc.id = docID;
+    WriteDocumentToFile(docPath, doc);
 }
 
 void Worker::ProcessDocument(const http::Request& req, http::Response& res) {
@@ -250,6 +242,37 @@ std::pair<data::docid_t, std::string> Worker::NextDocument() {
 
     auto docPath = chunkPath + "/" + docStr;
     return {docID, std::move(docPath)};
+}
+
+std::vector<std::string> Worker::GetFollowURLs(const html::ParsedDocument& doc, const http::URL& url) const {
+    std::vector<std::string> absoluteURLs;
+    absoluteURLs.reserve(doc.links.size());
+    for (const auto& l : doc.links) {
+        // Handle relative URLs
+        auto absoluteLink = html::MakeAbsoluteLink(url, doc.base, l.url);
+        if (!absoluteLink) {
+            continue;
+        }
+
+        auto parsed = http::ParseURL(*absoluteLink);
+        if (!parsed) {
+            continue;
+        }
+
+        // Canonicalize URL
+        auto canonical = http::CanonicalizeURL(*parsed);
+
+        // Check whether host is blacklisted
+        auto hostParts = SplitString(canonical.host, '.');
+        std::reverse(hostParts.begin(), hostParts.end());
+        if (blacklistedHosts_.ContainsPrefix(hostParts)) {
+            SPDLOG_TRACE("url {} is from blacklisted host", canonical.url);
+            continue;
+        }
+
+        absoluteURLs.push_back(std::move(canonical.url));
+    }
+    return absoluteURLs;
 }
 
 }  // namespace mithril
