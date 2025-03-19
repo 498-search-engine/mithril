@@ -73,6 +73,7 @@ struct Deserialize<std::string> {
         if (!Deserialize<uint32_t>::Read(length, reader)) {
             return false;
         }
+        value.clear();
         value.resize(length);
         return reader.Read(value.data(), length);
     }
@@ -109,6 +110,11 @@ struct Deserialize<std::vector<std::string>> {
         uint32_t length;
         if (!Deserialize<uint32_t>::Read(length, reader)) {
             return false;
+        }
+
+        if (length == 0) {
+            val.clear();
+            return true;
         }
 
         std::vector<char> raw;

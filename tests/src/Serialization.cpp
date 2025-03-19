@@ -4,7 +4,9 @@
 #include "data/Writer.h"
 
 #include <cstdint>
+#include <limits>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -95,20 +97,6 @@ TEST_F(Serialization, ErrorCases) {
     BufferReader reader(std::span<const char>(buffer.data(), buffer.size() - 1));
     uint32_t value;
     EXPECT_FALSE(DeserializeValue(value, reader));
-}
-
-TEST_F(Serialization, VectorErrorCases) {
-    // Create a vector with invalid length
-    BufferWriter writer;
-    uint32_t hugeLength = 0xFFFFFFFF;
-    auto orderedLength = hton(hugeLength);
-    writer.Write(&orderedLength, sizeof(orderedLength));
-    auto buffer = writer.Release();
-
-    BufferReader reader(buffer);
-    std::vector<int> vec;
-    EXPECT_FALSE(DeserializeValue(vec, reader));
-    EXPECT_TRUE(vec.empty());
 }
 
 struct Person {

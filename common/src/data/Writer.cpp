@@ -46,6 +46,9 @@ FileWriter& FileWriter::operator=(FileWriter&& other) noexcept {
 }
 
 void FileWriter::Write(const void* data, size_t size) {
+    if (size == 0) {
+        return;
+    }
     assert(file_ != nullptr);
     if (fwrite(data, 1, size, file_) != size) {
         throw std::runtime_error("Failed to write to file");
@@ -67,6 +70,9 @@ void FileWriter::Close() {
 }
 
 void BufferWriter::Write(const void* data, size_t size) {
+    if (size == 0) {
+        return;
+    }
     const auto* charPtr = static_cast<const char*>(data);
     buffer_.insert(buffer_.end(), charPtr, charPtr + size);
 }
