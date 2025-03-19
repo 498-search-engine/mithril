@@ -95,7 +95,12 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
     // TODO: early return if non latin script page
     html::ParseDocument(std::string_view{res.body.data(), res.body.size()}, parsedDoc_);
 
-    // TODO: do better logging, tracking
+    if (parsedDoc_.titleWords.empty() || parsedDoc_.words.empty()) {
+        // Not worth indexing
+        spdlog::info("discarding {} due to empty title/words", req.Url().url);
+        return;
+    }
+
     std::string title;
     if (!parsedDoc_.titleWords.empty()) {
         for (auto& w : parsedDoc_.titleWords) {
