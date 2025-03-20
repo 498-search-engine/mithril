@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
         std::cout << "-------------------------------" << std::endl;
 
         int count = 0;
-        const int MAX_DOCS = 5;
+        const int MAX_DOCS = 10;
 
         while (term_reader.hasNext() && count < MAX_DOCS) {
             mithril::data::docid_t doc_id = term_reader.currentDocID();
@@ -52,19 +52,17 @@ int main(int argc, char* argv[]) {
                 std::cout << std::endl;
             }
 
-            // try {
-            //     auto positions = term_reader.currentPositions();
-            //     std::cout << "  Positions:";
-            //     for (size_t i = 0; i < positions.size() && i < 10; ++i) {
-            //         std::cout << " " << positions[i];
-            //     }
-            //     if (positions.size() > 10) {
-            //         std::cout << " ... (" << positions.size() - 10 << " more)";
-            //     }
-            //     std::cout << std::endl << std::endl;
-            // } catch (const std::exception& e) {
-            //     std::cout << "  Error getting positions: " << e.what() << std::endl << std::endl;
-            // }
+            if (term_reader.hasPositions()) {
+                auto positions = term_reader.currentPositions();
+                std::cout << "  Positions:";
+                for (size_t i = 0; i < positions.size() && i < 20; ++i) {
+                    std::cout << " " << positions[i];
+                }
+                if (positions.size() > 20) {
+                    std::cout << " ... (" << positions.size() - 20 << " more)";
+                }
+                std::cout << std::endl;
+            }
 
             term_reader.moveNext();
             count++;

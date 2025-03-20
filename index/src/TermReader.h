@@ -2,6 +2,7 @@
 #define INDEX_TERMREADER_H
 
 #include "IndexStreamReader.h"
+#include "PositionIndex.h"
 #include "TermDictionary.h"
 
 #include <fstream>
@@ -22,10 +23,14 @@ public:
     data::docid_t currentDocID() const override;
     void seekToDocID(data::docid_t target_doc_id) override;
 
-    // term specific func
+    // term specific funcs
     uint32_t currentFrequency() const;
     std::string getTerm() const { return term_; }
     uint32_t getDocumentCount() const { return postings_.size(); }
+
+    // postion specific funcs
+    bool hasPositions() const;
+    std::vector<uint32_t> currentPositions() const;
 
 private:
     std::string term_;
@@ -37,6 +42,8 @@ private:
     // Current posting state
     std::vector<std::pair<uint32_t, uint32_t>> postings_;  // doc_id, freq pairs
     size_t current_posting_index_{0};
+
+    mutable std::shared_ptr<PositionIndex> position_index_;
 
     bool findTerm(const std::string& term);
     bool findTermWithDict(const std::string& term, const TermDictionary& dictionary);

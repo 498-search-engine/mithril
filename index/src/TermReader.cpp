@@ -162,4 +162,33 @@ void TermReader::seekToDocID(data::docid_t target_doc_id) {
     }
 }
 
+bool TermReader::hasPositions() const {
+    if (!found_term_ || at_end_) {
+        return false;
+    }
+
+    if (!position_index_) {
+        // Extract just the dir part of the index path
+        std::string index_dir = index_path_;
+        size_t last_slash = index_dir.find_last_of("/\\");
+        if (last_slash != std::string::npos) {
+            index_dir = index_dir.substr(0, last_slash);
+        }
+
+        position_index_ = std::make_shared<PositionIndex>(index_dir);
+    }
+
+    return position_index_->hasPositions(term_, currentDocID());
+}
+
+std::vector<uint32_t> TermReader::currentPositions() const {
+    if (!found_term_ || at_end_) {
+        return {};
+    }
+    if (!position_index_) {
+        position_index_ = std::make_shared<PositionIndex>(index_path_);
+    }
+    return position_index_->getPositions(term_, currentDocID());
+}
+
 }  // namespace mithril

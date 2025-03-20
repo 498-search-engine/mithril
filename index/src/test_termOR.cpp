@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl << "-------------------------------" << std::endl;
 
         int count = 0;
-        const int MAX_DOCS = 5;
+        const int MAX_DOCS = 10;
 
         // Iterate through matching documents
         while (or_reader.hasNext() && count < MAX_DOCS) {
