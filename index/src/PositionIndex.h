@@ -55,8 +55,7 @@ private:
     static std::unordered_map<std::string, std::vector<PositionEntry>> position_buffer_;
     static size_t buffer_size_;
     static int buffer_counter_;
-    static constexpr size_t MAX_BUFFER_SIZE =
-        16 * 1024 * 1024;  // found lower buff size better for overall perf atlast for 15k
+    static constexpr size_t MAX_BUFFER_SIZE = 64 * 1024 * 1024;  // found higher buff for flush better for overall perf
 
     static void flushBuffer(const std::string& output_dir);
     static void mergePositionBuffers(const std::string& output_dir);
