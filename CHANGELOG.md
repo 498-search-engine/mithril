@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - metrics for crawler (#50)
 - async name resolution (#62)
 - periodic crawler state snapshots (#63)
+- index querying support with (docMapReader, ISRs, sep opt positions idx, termReader, termDict) etc and more index niceties (#60)
+    - more details mostly in a index handoff doc soon
 - parser improvements and html entity decoding (#66)
 - url encoding and decoding, canonicalization (#68)
 - add gzip support to requests (#69)

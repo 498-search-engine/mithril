@@ -49,7 +49,7 @@ public:
         }
 
         if (exists) {
-            struct stat st {};
+            struct stat st{};
             if (fstat(fd_, &st) == -1) {
                 close(fd_);
                 throw std::runtime_error("failed to get string file size");
