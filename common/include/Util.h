@@ -74,4 +74,10 @@ static_assert(ResolvePath("/a/../../../c") == "/c");
 static_assert(ResolvePath("/a/./././.") == "/a");
 static_assert(ResolvePath("/a/././././") == "/a/");
 
+std::vector<std::string_view> SplitString(std::string_view s, char c);
+
+std::string ReadFile(const char* filepath);
+
+std::vector<std::string_view> GetLines(std::string_view data);
+
 #endif

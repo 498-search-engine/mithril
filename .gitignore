@@ -9,4 +9,4 @@ bench/
 tags
 
 # crawler data
-data/
+/data/

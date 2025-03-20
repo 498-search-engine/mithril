@@ -4,8 +4,10 @@
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "State.h"
+#include "StringTrie.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
+#include "Util.h"
 #include "data/Document.h"
 #include "data/Gzip.h"
 #include "data/Serialize.h"
@@ -15,28 +17,63 @@
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
+#include "http/URL.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cerrno>
+#include <cstddef>
+#include <cstring>
+#include <exception>
+#include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
+#include <sys/stat.h>
 
 namespace mithril {
 
 namespace {
 
-void WriteDocumentToFile(const std::string& fileName, const data::Document& doc) {
-    auto fWriter = data::FileWriter{fileName.c_str()};
-    auto zipWriter = data::GzipWriter{fWriter};
-    data::SerializeValue(doc, zipWriter);
-    zipWriter.Finish();
+void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& doc) {
+    try {
+        auto fWriter = data::FileWriter{fileName.c_str()};
+        auto zipWriter = data::GzipWriter{fWriter};
+        data::SerializeValue(doc, zipWriter);
+        zipWriter.Finish();
+    } catch (const std::exception& e) {
+        spdlog::error("failed to write document {} ({}): {}", doc.id, doc.url, e.what());
+    }
+}
+
+std::string NumberedEntity(std::string_view entity, size_t num, int pad) {
+    std::string res;
+    res.reserve(entity.size() + pad + 1);
+
+    res.append(entity);
+    res.push_back('_');
+    auto numStr = std::to_string(num);
+    for (int i = 0; i < pad - numStr.size(); ++i) {
+        res.push_back('0');
+    }
+    res.append(numStr);
+    return res;
 }
 
 }  // namespace
 
-Worker::Worker(LiveState& state, DocumentQueue* docQueue, UrlFrontier* frontier, std::string docsDirectory)
-    : state_(state), docQueue_(docQueue), frontier_(frontier), docsDirectory_(std::move(docsDirectory)) {}
+Worker::Worker(LiveState& state,
+               DocumentQueue* docQueue,
+               UrlFrontier* frontier,
+               std::string docsDirectory,
+               const StringTrie& blacklistedHosts)
+    : state_(state),
+      docQueue_(docQueue),
+      frontier_(frontier),
+      docsDirectory_(std::move(docsDirectory)),
+      blacklistedHosts_(blacklistedHosts) {}
 
 void Worker::Run() {
     spdlog::info("worker starting");
@@ -48,7 +85,7 @@ void Worker::Run() {
         }
 
         auto start = MonotonicTimeMs();
-        ProcessDocument(doc->req, doc->res, doc->header);
+        ProcessDocument(doc->req, doc->res);
         auto end = MonotonicTimeMs();
         auto elapsedMs = end - start;
 
@@ -66,16 +103,19 @@ void Worker::Run() {
  * - Status code is 200 OK
  * - Content-Type is text/html
  */
-void Worker::ProcessHTMLDocument(const http::Request& req,
-                                 const http::Response& res,
-                                 const http::ResponseHeader& header) {
+void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response& res) {
     // TODO: early return if non latin script page
-    html::Parser parser(res.body.data(), res.body.size());
+    html::ParseDocument(std::string_view{res.body.data(), res.body.size()}, parsedDoc_);
 
-    // TODO: do better logging, tracking
+    if (parsedDoc_.titleWords.empty() || parsedDoc_.words.empty()) {
+        // Not worth indexing
+        spdlog::info("discarding {} due to empty title/words", req.Url().url);
+        return;
+    }
+
     std::string title;
-    if (!parser.titleWords.empty()) {
-        for (auto& w : parser.titleWords) {
+    if (!parsedDoc_.titleWords.empty()) {
+        for (auto& w : parsedDoc_.titleWords) {
             title.append(w);
             title.push_back(' ');
         }
@@ -85,27 +125,41 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
     spdlog::info("processing {} ({})", req.Url().url, title);
 
     std::vector<std::string> absoluteURLs;
-    for (auto& l : parser.links) {
-        auto absoluteLink = html::MakeAbsoluteLink(req.Url(), parser.base, l.URL);
-        if (absoluteLink) {
-            absoluteURLs.push_back(std::move(*absoluteLink));
+    for (auto& l : parsedDoc_.links) {
+        auto absoluteLink = html::MakeAbsoluteLink(req.Url(), parsedDoc_.base, l.url);
+        if (!absoluteLink) {
+            continue;
         }
+
+        auto parsed = http::ParseURL(*absoluteLink);
+        if (!parsed) {
+            continue;
+        }
+
+        auto canonical = http::CanonicalizeURL(*parsed);
+
+        auto hostParts = SplitString(canonical.host, '.');
+        std::reverse(hostParts.begin(), hostParts.end());
+        if (blacklistedHosts_.ContainsPrefix(hostParts)) {
+            SPDLOG_TRACE("url {} is from blacklisted host", canonical.url);
+            continue;
+        }
+
+        absoluteURLs.push_back(std::move(canonical.url));
     }
 
-    data::docid_t docID = state_.nextDocumentID.fetch_add(1);
-    auto idStr = std::to_string(docID);
-    auto fileName = docsDirectory_ + "/doc_";
-    for (int i = 0; i < 10 - idStr.size(); ++i) {
-        fileName.push_back('0');
+    auto [docID, docPath] = NextDocument();
+    if (docPath.empty()) {
+        spdlog::error("failed to get next document path");
+        return;
     }
-    fileName.append(idStr);
 
-    WriteDocumentToFile(fileName,
-                        data::Document{
+    WriteDocumentToFile(docPath,
+                        data::DocumentView{
                             .id = docID,
                             .url = req.Url().url,
-                            .title = std::move(parser.titleWords),
-                            .words = std::move(parser.words),
+                            .title = parsedDoc_.titleWords,
+                            .words = parsedDoc_.words,
                         });
 
     if (!absoluteURLs.empty()) {
@@ -116,24 +170,33 @@ void Worker::ProcessHTMLDocument(const http::Request& req,
     DocumentSizeBytesMetric.Observe(res.body.size());
 }
 
-void Worker::ProcessDocument(const http::Request& req, const http::Response& res, const http::ResponseHeader& header) {
+void Worker::ProcessDocument(const http::Request& req, http::Response& res) {
     DocumentsProcessedMetric.Inc();
     CrawlResponseCodesMetric
         .WithLabels({
-            {"status", std::to_string(header.status)}
+            {"status", std::to_string(res.header.status)}
     })
         .Inc();
 
-    switch (header.status) {
+    try {
+        // First, decode the body if it is encoded.
+        res.DecodeBody();
+    } catch (const std::exception& e) {
+        // Something went wrong while decoding
+        spdlog::warn("encountered error while decoding body for {}: {}", req.Url().url, e.what());
+        return;
+    }
+
+    switch (res.header.status) {
     case http::StatusCode::OK:
-        if (!header.ContentType) {
+        if (!res.header.ContentType) {
             SPDLOG_TRACE("missing content-type header for {}", req.Url().url);
             return;
         }
-        if (header.ContentType->value.starts_with("text/html")) {
-            ProcessHTMLDocument(req, res, header);
+        if (res.header.ContentType->value.starts_with("text/html")) {
+            ProcessHTMLDocument(req, res);
         } else {
-            spdlog::debug("unsupported content-type {} for {}", header.ContentType->value, req.Url().url);
+            spdlog::debug("unsupported content-type {} for {}", res.header.ContentType->value, req.Url().url);
         }
         break;
 
@@ -143,11 +206,11 @@ void Worker::ProcessDocument(const http::Request& req, const http::Response& res
     case http::StatusCode::TemporaryRedirect:
     case http::StatusCode::PermanentRedirect:
         {
-            if (!header.Location) {
+            if (!res.header.Location) {
                 return;
             }
 
-            std::string location{header.Location->value};
+            std::string location{res.header.Location->value};
             auto newUrl = html::MakeAbsoluteLink(req.Url(),
                                                  "",  // No base tag for redirects
                                                  location);
@@ -161,9 +224,32 @@ void Worker::ProcessDocument(const http::Request& req, const http::Response& res
         }
 
     default:
-        spdlog::info("unhandled status {} for {}", header.status, req.Url().url);
+        spdlog::info("unhandled status {} for {}", res.header.status, req.Url().url);
         break;
     }
+}
+
+std::pair<data::docid_t, std::string> Worker::NextDocument() {
+    using namespace std::string_view_literals;
+    data::docid_t docID = state_.nextDocumentID.fetch_add(1);
+    auto chunk = docID / DocumentChunkSize;
+
+    auto chunkStr = NumberedEntity("chunk"sv, chunk, 10);
+    auto docStr = NumberedEntity("doc"sv, docID, 10);
+
+    auto chunkPath = docsDirectory_ + "/" + chunkStr;
+    if (!lastChunk_.HasValue() || chunk != *lastChunk_) {
+        lastChunk_ = {chunk};
+        if (mkdir(chunkPath.c_str(), 0755) != 0) {
+            if (errno != EEXIST) {
+                spdlog::error("failed to create chunk {}: {}", chunkPath, strerror(errno));
+                return {docID, ""};
+            }
+        }
+    }
+
+    auto docPath = chunkPath + "/" + docStr;
+    return {docID, std::move(docPath)};
 }
 
 }  // namespace mithril

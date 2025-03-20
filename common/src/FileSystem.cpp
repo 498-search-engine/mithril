@@ -9,7 +9,10 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <ftw.h>
+#include <libgen.h>
+#include <string>
 #include <unistd.h>
+#include <vector>
 #include <sys/stat.h>
 #include <sys/unistd.h>
 
@@ -75,7 +78,7 @@ bool CopyFile(const char* src, const char* dst) {
     }
 
     // Get source file size
-    struct stat statBuf{};
+    struct stat statBuf {};
     if (fstat(srcFd, &statBuf) == -1) {
         spdlog::error("copy file: stat source file: {}", strerror(errno));
         close(srcFd);
@@ -159,4 +162,13 @@ bool CopyFile(const char* src, const char* dst) {
 #endif
 
     return result;
+}
+
+std::string Dirname(const char* path) {
+    auto len = strlen(path);
+    auto pathCopy = std::vector<char>{};
+    pathCopy.resize(len + 1);
+    memcpy(pathCopy.data(), path, len + 1);
+
+    return std::string{dirname(pathCopy.data())};
 }

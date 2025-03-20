@@ -31,10 +31,21 @@ struct RequestOptions {
     int maxResponseSize{0};
 
     /**
+     * @brief Allowed Content-Type mime headers. If empty, Content-Type header
+     * is not inspected.
+     */
+    std::vector<std::string> allowedMimeType;
+
+    /**
      * @brief Allowed Content-Language language headers. If empty,
      * Content-Language header is not inspected.
      */
     std::vector<std::string> allowedContentLanguage;
+
+    /**
+     * @brief Whether to enable gzip compression.
+     */
+    bool enableCompression{false};
 };
 
 class Request {
@@ -54,7 +65,7 @@ private:
 };
 
 std::string BuildRawRequestString(const Request& req);
-std::string BuildRawRequestString(Method method, const URL& url);
+std::string BuildRawRequestString(Method method, const URL& url, const RequestOptions& options);
 
 }  // namespace mithril::http
 

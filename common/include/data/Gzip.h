@@ -1,6 +1,7 @@
 #ifndef COMMON_DATA_GZIP_H
 #define COMMON_DATA_GZIP_H
 
+#include "core/array.h"
 #include "data/Reader.h"
 #include "data/Writer.h"
 
@@ -11,9 +12,11 @@
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 #include <zconf.h>
 #include <zlib.h>
+#include <sys/types.h>
 
 namespace mithril::data {
 
@@ -36,7 +39,11 @@ public:
 
     ~GzipReader() { inflateEnd(&strm_); }
 
-    bool Read(void* out, size_t size) {
+    ssize_t ReadAmount(void* out, size_t size) {
+        if (size == 0) {
+            return 0;
+        }
+
         auto* outPtr = static_cast<uint8_t*>(out);
         size_t bytesRead = 0;
 
@@ -52,21 +59,28 @@ public:
             }
 
             if (eof_) {
-                return false;
+                break;
             }
 
             // Read more input if needed
             if (strm_.avail_in == 0) {
                 auto remaining = underlying_.Remaining();
                 auto sizeToRead = std::min(remaining, inBuffer_.size());
-                if (!underlying_.Read(inBuffer_.data(), sizeToRead)) {
-                    if (bytesRead == 0) {
-                        return false;
-                    }
+                if (sizeToRead == 0) {
                     break;
                 }
-                strm_.avail_in = inBuffer_.size();
-                strm_.next_in = reinterpret_cast<Bytef*>(inBuffer_.data());
+
+                if constexpr (std::is_same_v<R, BufferReader>) {
+                    strm_.avail_in = sizeToRead;
+                    strm_.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(underlying_.Data()));
+                    underlying_.SeekForward(sizeToRead);
+                } else {
+                    if (!underlying_.Read(inBuffer_.data(), sizeToRead)) {
+                        break;
+                    }
+                    strm_.avail_in = sizeToRead;
+                    strm_.next_in = reinterpret_cast<Bytef*>(inBuffer_.data());
+                }
             }
 
             // Decompress
@@ -84,8 +98,10 @@ public:
             outPos_ = 0;
         }
 
-        return bytesRead == size;
+        return static_cast<int>(bytesRead);
     }
+
+    bool Read(void* out, size_t size) { return ReadAmount(out, size) == size; }
 
     size_t Remaining() { return 0; }
 
@@ -135,10 +151,7 @@ public:
             throw std::runtime_error("Cannot write after finishing");
         }
 
-        auto* x = alloca(size);
-        std::memcpy(x, data, size);
-
-        strm_.next_in = static_cast<Bytef*>(x);
+        strm_.next_in = static_cast<Bytef*>(const_cast<void*>(data));
         strm_.avail_in = size;
 
         do {
@@ -188,6 +201,8 @@ private:
     std::vector<char> buffer_;
     bool finished_ = false;
 };
+
+std::vector<char> Gunzip(const std::vector<char>& compressed);
 
 }  // namespace mithril::data
 

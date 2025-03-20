@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -12,7 +13,9 @@ struct CrawlerConfig {
     size_t num_workers = 2;
     size_t concurrent_requests = 10;
     unsigned long request_timeout = 10;  // seconds
+
     std::vector<std::string> seed_urls;
+    std::set<std::string> blacklist_hosts;
 
     std::string data_directory = "data";
 

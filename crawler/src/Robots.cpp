@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -378,6 +379,7 @@ void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
             .followRedirects = MaxRobotsTxtRedirects,
             .timeout = RobotsTxtRequestTimeoutSeconds,
             .maxResponseSize = MaxRobotsTxtSize,
+            .enableCompression = true,
         }));
 }
 
@@ -402,8 +404,8 @@ void RobotRulesCache::ProcessPendingRequests() {
     // Process connections with ready responses
     auto& ready = executor_.ReadyResponses();
     if (!ready.empty()) {
-        for (const auto& r : ready) {
-            HandleRobotsResponse(r);
+        for (auto& r : ready) {
+            HandleRobotsResponse(std::move(r));
         }
         ready.clear();
     }
@@ -418,10 +420,10 @@ void RobotRulesCache::ProcessPendingRequests() {
     }
 }
 
-void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
+void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
     RobotsResponseCodesMetric
         .WithLabels({
-            {"status", std::to_string(r.header.status)}
+            {"status", std::to_string(r.res.header.status)}
     })
         .Inc();
 
@@ -435,9 +437,18 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
         return;
     }
 
-    switch (r.header.status) {
+    try {
+        // Decode the body if it is encoded.
+        r.res.DecodeBody();
+    } catch (const std::runtime_error& e) {
+        // Something went wrong while decoding
+        spdlog::warn("encountered error while decoding body for {}: {}", r.req.Url().url, e.what());
+        return;
+    }
+
+    switch (r.res.header.status) {
     case http::StatusCode::OK:
-        HandleRobotsOK(r.header, r.res, it->second);
+        HandleRobotsOK(r.res.header, r.res, it->second);
         break;
 
     case http::StatusCode::NotFound:
@@ -448,7 +459,7 @@ void RobotRulesCache::HandleRobotsResponse(const http::CompleteResponse& r) {
     case http::StatusCode::Unauthorized:
     case http::StatusCode::Forbidden:
     default:
-        spdlog::info("got robots.txt status {} for {}", r.header.status, canonicalHost.url);
+        spdlog::info("got robots.txt status {} for {}", r.res.header.status, canonicalHost.url);
         it->second.rules = RobotRules{true};
         it->second.valid = true;
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;

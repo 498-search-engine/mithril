@@ -55,7 +55,9 @@ void RequestManager::Run(ThreadSync& sync) {
                                            http::RequestOptions{
                                                .timeout = 30, // seconds
                                                .maxResponseSize = 2 * 1024 * 1024, // 2 MB
+                                               .allowedMimeType = {"text/html"}, // HTML
                                                .allowedContentLanguage = {"en", "en-*", "en_*"}, // English
+                                               .enableCompression = true,
                     }));
                 } else {
                     spdlog::info("frontier failed to parse url {}", url);

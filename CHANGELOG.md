@@ -23,7 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - metrics for crawler (#50)
 - async name resolution (#62)
 - periodic crawler state snapshots (#63)
-- index querying support with (docMapReader, ISRs, termReader, termDict) etc and more index niceties (#60)
+- index querying support with (docMapReader, ISRs, sep opt positions idx, termReader, termDict) etc and more index niceties (#60)
+    - more details mostly in a index handoff doc soon
+- parser improvements and html entity decoding (#66)
+- url encoding and decoding, canonicalization (#68)
+- add gzip support to requests (#69)
+- split documents into chunk directories (#70)
+- more document pruning and better configurability (#73)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
@@ -31,6 +37,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - improve robots.txt throughput (probably) (#54)
 - fix getaddrinfo failure handling (#58)
 - catch exceptions around string parsing (#61)
+- use spec-compliant header parsing in connection machinery (#67)
+- fix: allow gzip reads of size 0 (#72)
+- remove problematic alloca for const_cast (#74)
 
 ## [0.1.0] - 2025-02-07
 

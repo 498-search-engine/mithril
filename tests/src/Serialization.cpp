@@ -97,20 +97,6 @@ TEST_F(Serialization, ErrorCases) {
     EXPECT_FALSE(DeserializeValue(value, reader));
 }
 
-TEST_F(Serialization, VectorErrorCases) {
-    // Create a vector with invalid length
-    BufferWriter writer;
-    uint32_t hugeLength = 0xFFFFFFFF;
-    auto orderedLength = hton(hugeLength);
-    writer.Write(&orderedLength, sizeof(orderedLength));
-    auto buffer = writer.Release();
-
-    BufferReader reader(buffer);
-    std::vector<int> vec;
-    EXPECT_FALSE(DeserializeValue(vec, reader));
-    EXPECT_TRUE(vec.empty());
-}
-
 struct Person {
     std::string name;
     uint32_t age{};

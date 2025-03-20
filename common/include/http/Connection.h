@@ -94,7 +94,9 @@ private:
         ConnectError,           // Error while establishing connection
         SocketError,            // Error while reading/writing from socket
         UnexpectedEOFError,     // Got unexpected EOF while reading response
+        InvalidResponseError,   // Generic bad response data
         ResponseTooBigError,    // Response body or header was too big
+        ResponseWrongType,      // Response Content-Type header was unacceptable
         ResponseWrongLanguage,  // Response Content-Language header was unacceptable
     };
 
@@ -125,7 +127,7 @@ private:
     void ProcessBody();
     void ProcessChunks();
 
-    bool ValidateHeaders(const std::string& headers);
+    bool ValidateHeaders(const ResponseHeader& headers);
 
     int SocketDescriptor() const;
     bool IsSecure() const;
@@ -149,7 +151,10 @@ private:
     size_t currentChunkBytesRead_;
 
     std::vector<char> buffer_;
+    std::vector<char> headers_;
     std::vector<char> body_;
+
+    ResponseHeader parsedHeader_;
 
     SSL* ssl_;
     bool isSecure_;
