@@ -21,7 +21,7 @@ public:
     void clear();
     bool empty() const;
 
-    static constexpr uint32_t SYNC_INTERVAL = 8 * 1024 * 1024;               // 1 MB
+    static constexpr uint32_t SYNC_INTERVAL = 8 * 1024 * 1024;  // 1 MB
 
 private:
     std::vector<Posting> postings_;

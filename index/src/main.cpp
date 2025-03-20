@@ -111,7 +111,8 @@ int main(int argc, char* argv[]) {
         size_t processed = 0;
         auto start_time = std::chrono::steady_clock::now();
 
-        // in the future for xM docs and multiple chunks i could also opt this more to build index per chunk, so one more layer of merging ig
+        // in the future for xM docs and multiple chunks i could also opt this more to build index per chunk, so one
+        // more layer of merging ig
         for (const auto& entry : std::filesystem::recursive_directory_iterator(input_dir)) {
             if (shutdown_requested) {
                 spdlog::warn("\nShutdown requested. Cleaning up...");
@@ -119,7 +120,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (!entry.is_regular_file()) {
-                continue; // skip chunk dir
+                continue;  // skip chunk dir
             }
 
             try {
@@ -145,11 +146,11 @@ int main(int argc, char* argv[]) {
 
             auto end_time = std::chrono::steady_clock::now();
             auto elapsed =
-            #if defined(__APPLE__)
+#if defined(__APPLE__)
                 std::max(1LL, std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count());
-            #else
+#else
                 std::max(1L, std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count());
-            #endif
+#endif
 
             spdlog::info("Completed! Processed {} documents in {} seconds ({:.1f} docs/sec)",
                          processed,

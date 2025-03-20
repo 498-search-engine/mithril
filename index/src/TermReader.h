@@ -6,10 +6,10 @@
 #include "TermDictionary.h"
 
 #include <fstream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
-#include <memory>
 
 namespace mithril {
 
