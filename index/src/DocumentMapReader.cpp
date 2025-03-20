@@ -8,7 +8,7 @@
 namespace mithril {
 
 DocumentMapReader::DocumentMapReader(const std::string& index_dir) {
-    loadDocumentMap(index_dir + "/document_map.bin");
+    loadDocumentMap(index_dir + "/document_map.data");
 }
 
 void DocumentMapReader::loadDocumentMap(const std::string& path) {

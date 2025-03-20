@@ -10,7 +10,7 @@
 namespace mithril {
 
 TermDictionary::TermDictionary(const std::string& index_dir) {
-    std::string dict_path = index_dir + "/term_dictionary.bin";
+    std::string dict_path = index_dir + "/term_dictionary.data";
 
     dict_fd_ = open(dict_path.c_str(), O_RDONLY);
     if (dict_fd_ == -1) {

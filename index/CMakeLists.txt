@@ -8,6 +8,7 @@ add_library(index STATIC
     src/IndexStreamReader.cpp
     src/TermOR.cpp
     src/TermAND.cpp
+    src/PositionIndex.cpp
 )
 target_include_directories(index PUBLIC src)
 target_link_libraries(index PUBLIC

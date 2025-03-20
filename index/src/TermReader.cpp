@@ -8,7 +8,7 @@
 namespace mithril {
 
 TermReader::TermReader(const std::string& index_path, const std::string& term)
-    : term_(term), index_path_(index_path + "/final_index.bin") {
+    : term_(term), index_path_(index_path + "/final_index.data") {
 
     // Open the index file
     index_file_.open(index_path_, std::ios::binary);

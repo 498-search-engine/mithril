@@ -70,8 +70,8 @@ class IndexDebugger {
 public:
     explicit IndexDebugger(const std::string& index_dir, bool verbose = false)
         : index_dir_(index_dir), verbose_(verbose) {
-        document_map_path_ = index_dir_ + "/document_map.bin";
-        index_path_ = index_dir_ + "/final_index.bin";
+        document_map_path_ = index_dir_ + "/document_map.data";
+        index_path_ = index_dir_ + "/final_index.data";
     }
 
     bool load_documents() {

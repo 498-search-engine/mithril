@@ -1,5 +1,6 @@
 #include "InvertedIndex.h"
 
+#include "PositionIndex.h"
 #include "TextPreprocessor.h"
 #include "Utils.h"
 #include "data/Deserialize.h"
@@ -119,7 +120,12 @@ void IndexBuilder::process_document(const Document& doc) {
 
     auto task = [this, doc]() {
         std::unordered_map<std::string, uint32_t> term_freqs;
-        // Process URL
+        std::unordered_map<std::string, std::vector<uint32_t>> term_positions;
+
+        // Global position counter across all fields
+        uint32_t position = 0;
+
+        // Process URL - tokenize and normalize
         std::string url_copy = doc.url;
         // Replace common delimiters with spaces for tokenization
         std::replace(url_copy.begin(), url_copy.end(), '/', ' ');
@@ -129,12 +135,14 @@ void IndexBuilder::process_document(const Document& doc) {
         std::replace(url_copy.begin(), url_copy.end(), '?', ' ');
         std::replace(url_copy.begin(), url_copy.end(), '&', ' ');
         std::replace(url_copy.begin(), url_copy.end(), '=', ' ');
+
         std::istringstream url_stream(url_copy);
         std::string url_part;
         while (url_stream >> url_part) {
             std::string normalized = TokenNormalizer::normalize(url_part, FieldType::URL);
             if (!normalized.empty()) {
                 term_freqs[normalized]++;
+                term_positions[normalized].push_back(position++);
             }
         }
 
@@ -143,6 +151,7 @@ void IndexBuilder::process_document(const Document& doc) {
             std::string normalized = TokenNormalizer::normalize(word, FieldType::TITLE);
             if (!normalized.empty()) {
                 term_freqs[normalized]++;
+                term_positions[normalized].push_back(position++);
             }
         }
 
@@ -151,6 +160,7 @@ void IndexBuilder::process_document(const Document& doc) {
             std::string normalized = TokenNormalizer::normalize(word, FieldType::BODY);
             if (!normalized.empty()) {
                 term_freqs[normalized]++;
+                term_positions[normalized].push_back(position++);
             }
         }
 
@@ -161,7 +171,12 @@ void IndexBuilder::process_document(const Document& doc) {
             documents_.push_back(doc);
         }
 
-        // Add terms to the dict with freqs
+        // Write positions to position index
+        for (const auto& [term, positions] : term_positions) {
+            PositionIndex::addPositions(output_dir_, term, doc.id, positions);
+        }
+
+        // Add terms to the main inverted index with freqs
         {
             std::lock_guard<std::mutex> lock(block_mutex_);
             for (const auto& [term, freq] : term_freqs) {
@@ -266,10 +281,10 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
                                              bool is_final_output) {
     std::string output_path;
     if (is_final_output) {
-        output_path = output_dir_ + "/final_index.bin";
+        output_path = output_dir_ + "/final_index.data";
     } else {
         output_path =
-            output_dir_ + "/blocks/intermediate_" + std::to_string(start_idx) + "_" + std::to_string(end_idx) + ".bin";
+            output_dir_ + "/blocks/intermediate_" + std::to_string(start_idx) + "_" + std::to_string(end_idx) + ".data";
     }
 
     std::ofstream out(output_path, std::ios::binary);
@@ -419,7 +434,7 @@ void IndexBuilder::merge_blocks_tiered() {
 }
 
 void IndexBuilder::save_document_map() {
-    std::ofstream out(output_dir_ + "/document_map.bin", std::ios::binary);
+    std::ofstream out(output_dir_ + "/document_map.data", std::ios::binary);
 
     uint32_t num_docs = documents_.size();
     out.write(reinterpret_cast<const char*>(&num_docs), sizeof(num_docs));
@@ -444,8 +459,8 @@ void IndexBuilder::save_document_map() {
 }
 
 void IndexBuilder::create_term_dictionary() {
-    std::string index_path = output_dir_ + "/final_index.bin";
-    std::string dict_path = output_dir_ + "/term_dictionary.bin";
+    std::string index_path = output_dir_ + "/final_index.data";
+    std::string dict_path = output_dir_ + "/term_dictionary.data";
 
     int fd = open(index_path.c_str(), O_RDONLY);
     if (fd == -1) {
@@ -585,7 +600,7 @@ void IndexBuilder::create_term_dictionary() {
 }
 
 std::string IndexBuilder::block_path(int block_num) const {
-    return output_dir_ + "/blocks/block_" + std::to_string(block_num) + ".bin";
+    return output_dir_ + "/blocks/block_" + std::to_string(block_num) + ".data";
 }
 
 void IndexBuilder::finalize() {
@@ -607,6 +622,9 @@ void IndexBuilder::finalize() {
     spdlog::info("Saving document map ({} documents)...", documents_.size());
     save_document_map();
 
+    spdlog::info("Finalizing position index...");
+    PositionIndex::finalizeIndex(output_dir_);
+
     spdlog::info("Creating term dictionary...");
     create_term_dictionary();
 
@@ -614,4 +632,5 @@ void IndexBuilder::finalize() {
     std::filesystem::remove_all(output_dir_ + "/blocks");
     spdlog::info("Index finalization complete");
 }
+
 }  // namespace mithril
