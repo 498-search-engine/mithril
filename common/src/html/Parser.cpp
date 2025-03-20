@@ -60,6 +60,9 @@ struct ParserState {
 };
 
 std::string_view DecodeStringWithRef(std::string_view s, std::vector<core::UniquePtr<std::string>>& decodedWords) {
+    if (s.empty()) {
+        return {};
+    }
     auto decoded = DecodeHtmlString(s);
     decodedWords.push_back(core::MakeUnique<std::string>(std::move(decoded)));
     return std::string_view{*decodedWords.back()};
@@ -89,35 +92,50 @@ void CollectWord(std::string_view word,
     }
 }
 
-const char* ProcessTagAttributes(const char* start, const char* end, const char* attr, std::string_view& result) {
-    const char* attr_start = nullptr;
-
+std::string_view ProcessTagAttributes(const char* start, const char* end, std::string_view attr) {
     while (start < end) {
-        while (start < end && IsSpace(*start))
+        // Consume whitespace
+        while (start < end && IsSpace(*start)) {
             start++;
-        if (start >= end || *start == '>')
-            return start;
+        }
 
-        if (std::strncmp(start, attr, std::strlen(attr)) == 0) {
-            start += std::strlen(attr);
-            while (start < end && IsSpace(*start))
+        if (start >= end || *start == '>') {
+            // Reached end/closing
+            return {};
+        }
+
+        auto remaining = end - start;
+        if (remaining >= attr.size() + 1 && std::strncmp(start, attr.data(), attr.size()) == 0 &&
+            start[attr.size()] == '=') {
+            start += attr.size() + 1;
+
+            // Consume whitespace after =
+            while (start < end && IsSpace(*start)) {
                 start++;
-            if (*start == '"') {
+            }
+
+            if (*start == '"' || *start == '\'') {
+                char quote = *start;
                 start++;
-                attr_start = start;
-                while (start < end && *start != '"')
+                const auto* attrStart = start;
+
+                // Consume string until closing quote
+                while (start < end && *start != quote) {
                     start++;
+                }
+
                 if (start < end) {
-                    result = std::string_view{attr_start, static_cast<size_t>(start - attr_start)};
-                    return start;
+                    return std::string_view{attrStart, static_cast<size_t>(start - attrStart)};
                 }
             }
         }
 
+        // Skip non-matching attribute
         while (start < end && !IsSpace(*start) && *start != '>') {
-            if (*start == '"' && start[-1] == '=') {
+            if ((*start == '"' || *start == '\'') && start[-1] == '=') {
+                char quote = *start;
                 ++start;
-                while (start < end && *start != '"' && start[-1] != '\\') {
+                while (start < end && *start != quote) {
                     ++start;
                 }
                 continue;
@@ -125,7 +143,8 @@ const char* ProcessTagAttributes(const char* start, const char* end, const char*
             ++start;
         }
     }
-    return start;
+
+    return {};
 }
 
 const char* HandleTagAction(DesiredAction action,
@@ -177,11 +196,7 @@ const char* HandleTagAction(DesiredAction action,
                 return AfterEndingOfTag(nameEnd, bufferEnd);
             }
 
-            std::string_view href;
-            const char* attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "href=", href);
-            if (!attrEnd)
-                return nullptr;
-
+            auto href = ProcessTagAttributes(nameStart, bufferEnd, "href"sv);
             if (!href.empty()) {
                 if (state.inAnchor) {
                     links.emplace_back(std::move(currentLink));
@@ -190,7 +205,8 @@ const char* HandleTagAction(DesiredAction action,
                 currentLink = Link{.url = href, .anchorText = {}};
                 state.inAnchor = true;
             }
-            return AfterEndingOfTag(attrEnd, bufferEnd);
+
+            return AfterEndingOfTag(nameStart, bufferEnd);
         }
 
     case DesiredAction::Base:
@@ -198,12 +214,10 @@ const char* HandleTagAction(DesiredAction action,
             if (endTag)
                 return AfterEndingOfTag(nameEnd, bufferEnd);
             if (!state.baseDone) {
-                const char* attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "href=", base);
-                if (!attrEnd)
-                    return nullptr;
-                base = DecodeStringWithRef(http::DecodeURL(base), decodedWords);
+                auto rawBase = ProcessTagAttributes(nameStart, bufferEnd, "href"sv);
+                base = DecodeStringWithRef(http::DecodeURL(rawBase), decodedWords);
                 state.baseDone = true;
-                return AfterEndingOfTag(attrEnd, bufferEnd);
+                return AfterEndingOfTag(nameStart, bufferEnd);
             }
             return AfterEndingOfTag(nameEnd, bufferEnd);
         }
@@ -212,15 +226,12 @@ const char* HandleTagAction(DesiredAction action,
         {
             if (endTag)
                 return AfterEndingOfTag(nameEnd, bufferEnd);
-            std::string_view src;
-            const char* attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "src=", src);
-            if (!attrEnd)
-                return nullptr;
+            std::string_view src = ProcessTagAttributes(nameStart, bufferEnd, "src"sv);
             if (!src.empty()) {
                 src = DecodeStringWithRef(http::DecodeURL(src), decodedWords);
                 links.emplace_back(src);
             }
-            return AfterEndingOfTag(attrEnd, bufferEnd);
+            return AfterEndingOfTag(nameStart, bufferEnd);
         }
 
     case DesiredAction::Meta:
@@ -229,24 +240,18 @@ const char* HandleTagAction(DesiredAction action,
                 return AfterEndingOfTag(nameEnd, bufferEnd);
             }
 
-            std::string_view name;
-            const char* attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "name=", name);
-            if (!attrEnd || name.empty()) {
-                attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "property=", name);
-                if (!attrEnd) {
-                    return nullptr;
-                }
-            }
-            std::string_view content;
-            attrEnd = ProcessTagAttributes(nameStart, bufferEnd, "content=", content);
-            if (!attrEnd) {
-                return nullptr;
+            auto name = ProcessTagAttributes(nameStart, bufferEnd, "name"sv);
+            if (name.empty()) {
+                // Fall back to "property"
+                name = ProcessTagAttributes(nameStart, bufferEnd, "property"sv);
             }
 
+            auto contentRaw = ProcessTagAttributes(nameStart, bufferEnd, "content"sv);
+            auto content = DecodeStringWithRef(contentRaw, decodedWords);
             if (!name.empty() && !content.empty()) {
                 metas[name] = content;
             }
-            return AfterEndingOfTag(attrEnd, bufferEnd);
+            return AfterEndingOfTag(nameStart, bufferEnd);
         }
 
     default:  // OrdinaryText
