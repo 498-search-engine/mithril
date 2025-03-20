@@ -23,7 +23,7 @@ namespace mithril::html::internal {
 // <script>, <style>, and <svg> require discarding the the entire section.
 // <!--, <title>, <a>, <base> and <embed> are special-cased.
 
-enum class DesiredAction { OrdinaryText, Title, Comment, Discard, DiscardSection, Anchor, Base, Embed, Meta };
+enum class DesiredAction { OrdinaryText, Title, Comment, Discard, DiscardSection, Anchor, Base, Embed, Meta, HTML };
 
 // name points to beginning of the possible HTML tag name.
 // nameEnd points to one past last character.
@@ -114,7 +114,9 @@ const HtmlTag TagsRecognized[] = {
     {    "header",        DesiredAction::Discard},
     {    "hgroup",        DesiredAction::Discard},
     {        "hr",        DesiredAction::Discard},
-    {      "html",        DesiredAction::Discard},
+
+    {      "html",           DesiredAction::HTML},
+
     {         "i",        DesiredAction::Discard},
     {    "iframe",        DesiredAction::Discard},
     {       "img",        DesiredAction::Discard},

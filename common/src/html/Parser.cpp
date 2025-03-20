@@ -157,6 +157,7 @@ const char* HandleTagAction(DesiredAction action,
                             std::vector<Link>& links,
                             std::map<std::string_view, std::string_view>& metas,
                             std::string_view& base,
+                            std::string_view& lang,
                             std::vector<core::UniquePtr<std::string>>& decodedWords) {
     const char* end;
 
@@ -254,6 +255,15 @@ const char* HandleTagAction(DesiredAction action,
             return AfterEndingOfTag(nameStart, bufferEnd);
         }
 
+    case DesiredAction::HTML:
+        {
+            if (endTag) {
+                return AfterEndingOfTag(nameEnd, bufferEnd);
+            }
+            lang = ProcessTagAttributes(nameStart, bufferEnd, "lang"sv);
+            return AfterEndingOfTag(nameStart, bufferEnd);
+        }
+
     default:  // OrdinaryText
         return nameEnd;
     }
@@ -269,6 +279,7 @@ void ParseDocument(std::string_view doc, ParsedDocument& parsed) {
     auto& links = parsed.links;
     auto& metas = parsed.metas;
     auto& base = parsed.base;
+    auto& lang = parsed.lang;
     auto& decodedWords = parsed.decodedWords;
 
     words.clear();
@@ -276,6 +287,7 @@ void ParseDocument(std::string_view doc, ParsedDocument& parsed) {
     links.clear();
     metas.clear();
     base = std::string_view{};
+    lang = std::string_view{};
     decodedWords.clear();
 
     ParserState state;
@@ -377,8 +389,18 @@ void ParseDocument(std::string_view doc, ParsedDocument& parsed) {
             collectCurrentWord();
 
             // Now process the tag
-            buffer = HandleTagAction(
-                action, endTag, nameStart, nameEnd, bufferEnd, state, currentLink, links, metas, base, decodedWords);
+            buffer = HandleTagAction(action,
+                                     endTag,
+                                     nameStart,
+                                     nameEnd,
+                                     bufferEnd,
+                                     state,
+                                     currentLink,
+                                     links,
+                                     metas,
+                                     base,
+                                     lang,
+                                     decodedWords);
             if (!buffer)
                 return;
 

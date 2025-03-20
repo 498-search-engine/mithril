@@ -3,6 +3,7 @@
 #include "Clock.h"
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
+#include "Globals.h"
 #include "State.h"
 #include "StringTrie.h"
 #include "ThreadSync.h"
@@ -35,6 +36,8 @@
 
 namespace mithril {
 
+using namespace std::string_view_literals;
+
 namespace {
 
 void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& doc) {
@@ -63,8 +66,6 @@ std::string NumberedEntity(std::string_view entity, size_t num, int pad) {
 }
 
 std::vector<std::string_view> GetDescription(const html::ParsedDocument& doc) {
-    using namespace std::string_view_literals;
-
     auto descIt = doc.metas.find("description"sv);
     if (descIt == doc.metas.end()) {
         return {};
@@ -126,6 +127,18 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
         // Not worth indexing
         spdlog::info("discarding {} due to empty title/words", req.Url().url);
         return;
+    }
+
+    if (!parsedDoc_.lang.empty()) {
+        // Check if valid language
+        auto anyMatch = std::any_of(
+            AllowedLanguages.begin(), AllowedLanguages.end(), [htmlLang = parsedDoc_.lang](std::string_view lang) {
+                return http::ContentLanguageMatches(htmlLang, lang);
+            });
+        if (!anyMatch) {
+            spdlog::info("discarding {} due to lang {}", req.Url().url, parsedDoc_.lang);
+            return;
+        }
     }
 
     auto followURLs = GetFollowURLs(parsedDoc_, req.Url());
@@ -222,7 +235,6 @@ void Worker::ProcessDocument(const http::Request& req, http::Response& res) {
 }
 
 std::pair<data::docid_t, std::string> Worker::NextDocument() {
-    using namespace std::string_view_literals;
     data::docid_t docID = state_.nextDocumentID.fetch_add(1);
     auto chunk = docID / DocumentChunkSize;
 

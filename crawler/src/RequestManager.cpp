@@ -2,6 +2,7 @@
 
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
+#include "Globals.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "http/Request.h"
@@ -50,15 +51,14 @@ void RequestManager::Run(ThreadSync& sync) {
             for (const auto& url : urls) {
                 if (auto parsed = http::ParseURL(url)) {
                     SPDLOG_DEBUG("starting crawl request: {}", url);
-                    requestExecutor_.Add(
-                        http::Request::GET(std::move(*parsed),
-                                           http::RequestOptions{
-                                               .timeout = 30, // seconds
-                                               .maxResponseSize = 2 * 1024 * 1024, // 2 MB
-                                               .allowedMimeType = {"text/html"}, // HTML
-                                               .allowedContentLanguage = {"en", "en-*", "en_*"}, // English
-                                               .enableCompression = true,
-                    }));
+                    requestExecutor_.Add(http::Request::GET(std::move(*parsed),
+                                                            http::RequestOptions{
+                                                                .timeout = static_cast<int>(requestTimeout_),
+                                                                .maxResponseSize = MaxResponseSize,
+                                                                .allowedMimeType = AllowedMimeTypes,
+                                                                .allowedContentLanguage = AllowedLanguages,
+                                                                .enableCompression = true,
+                                                            }));
                 } else {
                     spdlog::info("frontier failed to parse url {}", url);
                 }

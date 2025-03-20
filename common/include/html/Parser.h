@@ -85,6 +85,7 @@ struct ParsedDocument {
     std::vector<Link> links;
     std::map<std::string_view, std::string_view> metas;
     std::string_view base;
+    std::string_view lang;
 
     std::vector<core::UniquePtr<std::string>> decodedWords;
 };

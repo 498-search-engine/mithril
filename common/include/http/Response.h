@@ -67,6 +67,11 @@ private:
     bool decoded_;
 };
 
+
+bool ContentTypeMatches(std::string_view val, std::string_view mimeType);
+
+bool ContentLanguageMatches(std::string_view val, std::string_view lang);
+
 }  // namespace mithril::http
 
 
