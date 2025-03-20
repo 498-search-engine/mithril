@@ -111,10 +111,15 @@ int main(int argc, char* argv[]) {
         size_t processed = 0;
         auto start_time = std::chrono::steady_clock::now();
 
-        for (const auto& entry : std::filesystem::directory_iterator(input_dir)) {
+        // in the future for xM docs and multiple chunks i could also opt this more to build index per chunk, so one more layer of merging ig
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(input_dir)) {
             if (shutdown_requested) {
                 spdlog::warn("\nShutdown requested. Cleaning up...");
                 break;
+            }
+
+            if (!entry.is_regular_file()) {
+                continue; // skip chunk dir
             }
 
             try {
