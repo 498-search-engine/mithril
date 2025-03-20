@@ -102,4 +102,6 @@ std::string ReadFile(const char* filepath);
 
 std::vector<std::string_view> GetLines(std::string_view data);
 
+std::vector<std::string_view> GetCommaSeparatedList(std::string_view s);
+
 #endif

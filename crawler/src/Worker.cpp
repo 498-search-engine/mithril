@@ -74,6 +74,31 @@ std::vector<std::string_view> GetDescription(const html::ParsedDocument& doc) {
     return SplitStringOn(descIt->second, [](unsigned char c) { return std::isspace(c); });
 }
 
+struct RobotsMeta {
+    bool NoIndex{false};
+    bool NoFollow{false};
+};
+
+RobotsMeta GetRobotsMeta(const html::ParsedDocument& doc) {
+    auto res = RobotsMeta{};
+
+    auto robotsIt = doc.metas.find("robots"sv);
+    if (robotsIt == doc.metas.end()) {
+        return res;
+    }
+
+    auto rules = GetCommaSeparatedList(robotsIt->second);
+    for (auto rule : rules) {
+        if (rule == "noindex"sv) {
+            res.NoIndex = true;
+        } else if (rule == "nofollow"sv) {
+            res.NoFollow = true;
+        }
+    }
+
+    return res;
+}
+
 }  // namespace
 
 Worker::Worker(LiveState& state,
@@ -139,6 +164,15 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
             spdlog::info("discarding {} due to lang {}", req.Url().url, parsedDoc_.lang);
             return;
         }
+    }
+
+    // Check if <meta name="robots"> tag exists with rules
+    auto robotsMeta = GetRobotsMeta(parsedDoc_);
+    if (robotsMeta.NoIndex) {
+        indexDocument = false;
+    }
+    if (robotsMeta.NoFollow) {
+        followLinks = false;
     }
 
     auto followURLs = GetFollowURLs(parsedDoc_, req.Url());

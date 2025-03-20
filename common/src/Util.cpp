@@ -76,3 +76,16 @@ std::string ReadFile(const char* filepath) {
 std::vector<std::string_view> GetLines(std::string_view data) {
     return SplitString(data, '\n');
 }
+
+std::vector<std::string_view> GetCommaSeparatedList(std::string_view s) {
+    auto parts = SplitString(s, ',');
+    for (auto& part : parts) {
+        while (!part.empty() && std::isspace(part.front())) {
+            part.remove_prefix(1);
+        }
+        while (!part.empty() && std::isspace(part.back())) {
+            part.remove_suffix(1);
+        }
+    }
+    return parts;
+}
