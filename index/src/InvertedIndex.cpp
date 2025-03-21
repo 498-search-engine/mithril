@@ -119,11 +119,15 @@ void IndexBuilder::process_document(const Document& doc) {
     }
 
     auto task = [this, doc]() {
+        const size_t estimated_unique_terms = doc.words.size() / 4;  // ~25% unique term ratio
         std::unordered_map<std::string, uint32_t> term_freqs;
+        term_freqs.reserve(estimated_unique_terms);
         std::unordered_map<std::string, std::vector<uint32_t>> term_positions;
+        term_positions.reserve(estimated_unique_terms);
 
         // Global position counter across all fields
         uint32_t position = 0;
+        size_t total_term_count = 0;  // For calculating frequency ratios
 
         // Process URL - tokenize and normalize
         std::string url_copy = doc.url;
@@ -143,6 +147,7 @@ void IndexBuilder::process_document(const Document& doc) {
             if (!normalized.empty()) {
                 term_freqs[normalized]++;
                 term_positions[normalized].push_back(position++);
+                total_term_count++;
             }
         }
 
@@ -152,6 +157,7 @@ void IndexBuilder::process_document(const Document& doc) {
             if (!normalized.empty()) {
                 term_freqs[normalized]++;
                 term_positions[normalized].push_back(position++);
+                total_term_count++;
             }
         }
 
@@ -161,6 +167,7 @@ void IndexBuilder::process_document(const Document& doc) {
             if (!normalized.empty()) {
                 term_freqs[normalized]++;
                 term_positions[normalized].push_back(position++);
+                total_term_count++;
             }
         }
 
@@ -171,9 +178,22 @@ void IndexBuilder::process_document(const Document& doc) {
             documents_.push_back(doc);
         }
 
-        // Write positions to position index
-        for (const auto& [term, positions] : term_positions) {
-            PositionIndex::addPositions(output_dir_, term, doc.id, positions);
+        // Prepare batch for position index with selective indexing
+        std::vector<std::pair<std::string, std::vector<uint32_t>>> position_batch;
+        position_batch.reserve(term_positions.size() / 2);  // maybe ~50% of terms will qualify
+
+        for (const auto& [term, freq] : term_freqs) {
+            if (PositionIndex::shouldStorePositions(term, freq, total_term_count)) {
+                auto it = term_positions.find(term);
+                if (it != term_positions.end()) {
+                    position_batch.emplace_back(term, std::move(it->second));
+                }
+            }
+        }
+
+        // Write positions to position index in a single batch
+        if (!position_batch.empty()) {
+            PositionIndex::addPositionsBatch(output_dir_, doc.id, position_batch);
         }
 
         // Add terms to the main inverted index with freqs
@@ -368,13 +388,16 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
         if (is_final_output) {
             // Use VByte encoding for doc_id deltas and frequencies (final format)
             uint32_t last_doc_id = 0;
+            std::vector<uint32_t> doc_id_deltas;
+            std::vector<uint32_t> freqs;
+
             for (const auto& posting : merged_postings) {
-                // Encode doc_id delta
-                VByteCodec::encode(posting.doc_id - last_doc_id, out);
-                // Encode frequency
-                VByteCodec::encode(posting.freq, out);
+                doc_id_deltas.push_back(posting.doc_id - last_doc_id);
+                freqs.push_back(posting.freq);
                 last_doc_id = posting.doc_id;
             }
+            VByteCodec::encodeBatch(doc_id_deltas, out);
+            VByteCodec::encodeBatch(freqs, out);
         } else {
             // Use raw Posting structs for intermediate blocks
             out.write(reinterpret_cast<const char*>(merged_postings.data()), postings_size * sizeof(Posting));

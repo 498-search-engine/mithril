@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - split documents into chunk directories (#70)
 - more document pruning and better configurability (#73)
 - parse <meta> tags in document (#75)
+- index perf improvements after adding postn index, doubled throughput (#76)
 
 ### Fixed
 - Fix copying body data from buffer (#24)

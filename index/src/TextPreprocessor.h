@@ -19,9 +19,9 @@ enum class FieldType {
 
 class StopwordFilter {
 private:
-    static std::unordered_set<std::string> stopwords_;
-    static bool initialized_;
-    static bool enabled_;
+    inline static std::unordered_set<std::string> stopwords_;
+    inline static bool initialized_ = false;
+    inline static bool enabled_ = true;
 
 public:
     static void initialize() {
@@ -81,11 +81,6 @@ public:
         stopwords_.erase(word);
     }
 };
-
-// init static members
-std::unordered_set<std::string> StopwordFilter::stopwords_;
-bool StopwordFilter::initialized_ = false;
-bool StopwordFilter::enabled_ = true;
 
 class TokenNormalizer {
 public:

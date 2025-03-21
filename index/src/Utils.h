@@ -73,6 +73,34 @@ public:
             return 4;
         return 5;
     }
+
+    static void encodeBatch(const std::vector<uint32_t>& deltas, std::ostream& out) {
+        const size_t BATCH_SIZE = 1024;
+        char buffer[BATCH_SIZE];
+        char* ptr = buffer;
+        size_t remaining = BATCH_SIZE;
+
+        for (uint32_t delta : deltas) {
+            // Check if we need to flush the buffer
+            if (remaining < 5) {  // Max 5 bytes per VByte
+                out.write(buffer, BATCH_SIZE - remaining);
+                ptr = buffer;
+                remaining = BATCH_SIZE;
+            }
+
+            // Encode delta into buffer
+            size_t before = remaining;
+            encode_to_memory(delta, ptr, remaining);
+            if (!out.good()) {
+                throw std::runtime_error("Failed to write VByte batch");
+            }
+        }
+
+        // Write any remaining data
+        if (remaining < BATCH_SIZE) {
+            out.write(buffer, BATCH_SIZE - remaining);
+        }
+    }
 };
 
 
