@@ -13,7 +13,8 @@ enum class FieldType {
     BODY = 0,
     TITLE = 1,
     URL = 2,
-    ANCHOR = 3
+    ANCHOR = 3,
+    DESC = 4
     // Can be extended with HEADING, BOLD, etc.
 };
 
@@ -125,6 +126,8 @@ private:
             return "@" + token;
         case FieldType::ANCHOR:
             return "$" + token;
+        case FieldType::DESC:
+            return "%" + token;
         case FieldType::BODY:
         default:
             return token;
