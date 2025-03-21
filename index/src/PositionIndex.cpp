@@ -84,39 +84,18 @@ void PositionIndex::addPositionsBatch(
 }
 
 bool PositionIndex::shouldStorePositions(const std::string& term, uint32_t freq, size_t total_terms) {
-    if (StopwordFilter::isStopword(term))
-        return false;
-
-    // Skip top common terms based on the index debug
-    static const std::unordered_set<std::string> common_terms = {"privacy",
-                                                                 "new",
-                                                                 "terms",
-                                                                 "contact",
-                                                                 "help",
-                                                                 "use",
-                                                                 "us",
-                                                                 "search",
-                                                                 "get",
-                                                                 "policy",
-                                                                 "content",
-                                                                 "out",
-                                                                 "have",
-                                                                 "see"};
-
-    if (common_terms.find(term) != common_terms.end())
-        return false;
-
-    if (total_terms > 0) {
-        // Always store positions for title terms regardless of freq
-        if (term.size() > 1 && term[0] == '#')
-            return true;
-
-        // For body terms, use a sliding scale based on doc length
-        double frequency_ratio = static_cast<double>(freq) / total_terms;
-        if (frequency_ratio > 0.05 && freq > 50)
-            return false;
+    // Always store positions for title, description, and proper nouns
+    if (term.size() > 1 && (term[0] == '#' || term[0] == '%' || std::isupper(term[0]))) {
+        return true;
     }
-
+    static const std::unordered_set<std::string> stop_terms = {
+        "the", "a", "an", "of", "in", "for", "on", "to", "with", "by", "at"};
+    if (stop_terms.find(term) != stop_terms.end()) {
+        return false;
+    }
+    if (total_terms > 0 && freq > total_terms / 5) {
+        return false;
+    }
     return true;
 }
 

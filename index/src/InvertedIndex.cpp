@@ -161,6 +161,15 @@ void IndexBuilder::process_document(const Document& doc) {
             }
         }
 
+        // Process description words with DESC field type
+        for (const auto& word : doc.description) {
+            std::string normalized = TokenNormalizer::normalize(word, FieldType::DESC);
+            if (!normalized.empty()) {
+                term_freqs[normalized]++;
+                term_positions[normalized].push_back(position++);
+            }
+        }
+
         // Process body words with default BODY field type
         for (const auto& word : doc.words) {
             std::string normalized = TokenNormalizer::normalize(word, FieldType::BODY);
