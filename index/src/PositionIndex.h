@@ -1,4 +1,3 @@
-// PositionIndex.h
 #ifndef POSITION_INDEX_H
 #define POSITION_INDEX_H
 
@@ -39,8 +38,12 @@ public:
                              const std::string& term,
                              uint32_t doc_id,
                              const std::vector<uint32_t>& positions);
+    static void addPositionsBatch(const std::string& output_dir,
+                                  uint32_t doc_id,
+                                  const std::vector<std::pair<std::string, std::vector<uint32_t>>>& term_positions);
 
     static void finalizeIndex(const std::string& output_dir);
+    static bool shouldStorePositions(const std::string& term, uint32_t freq, size_t total_terms);
 
 private:
     // For querying
@@ -55,7 +58,7 @@ private:
     static std::unordered_map<std::string, std::vector<PositionEntry>> position_buffer_;
     static size_t buffer_size_;
     static int buffer_counter_;
-    static constexpr size_t MAX_BUFFER_SIZE = 64 * 1024 * 1024;  // found higher buff for flush better for overall perf
+    static constexpr size_t MAX_BUFFER_SIZE = 256 * 1024 * 1024;  // found higher buff for flush better for overall perf
 
     static void flushBuffer(const std::string& output_dir);
     static void mergePositionBuffers(const std::string& output_dir);
