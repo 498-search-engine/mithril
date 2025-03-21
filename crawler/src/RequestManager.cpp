@@ -1,14 +1,18 @@
 #include "RequestManager.h"
 
+#include "Config.h"
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "Globals.h"
+#include "StringTrie.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
+#include "Util.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/URL.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <string>
@@ -18,11 +22,15 @@
 
 namespace mithril {
 
-RequestManager::RequestManager(UrlFrontier* frontier, DocumentQueue* docQueue, const CrawlerConfig& config)
+RequestManager::RequestManager(UrlFrontier* frontier,
+                               DocumentQueue* docQueue,
+                               const CrawlerConfig& config,
+                               const StringTrie& blacklistedHosts)
     : targetConcurrentReqs_(config.concurrent_requests),
       requestTimeout_(config.request_timeout),
       middleQueue_(frontier, config),
-      docQueue_(docQueue) {}
+      docQueue_(docQueue),
+      blacklistedHosts_(blacklistedHosts) {}
 
 void RequestManager::Run(ThreadSync& sync) {
     std::vector<std::string> urls;
@@ -50,6 +58,13 @@ void RequestManager::Run(ThreadSync& sync) {
 
             for (const auto& url : urls) {
                 if (auto parsed = http::ParseURL(url)) {
+                    auto hostParts = SplitString(parsed->host, '.');
+                    std::reverse(hostParts.begin(), hostParts.end());
+                    if (blacklistedHosts_.ContainsPrefix(hostParts)) {
+                        SPDLOG_TRACE("url {} is from blacklisted host", url);
+                        continue;
+                    }
+
                     SPDLOG_DEBUG("starting crawl request: {}", url);
                     requestExecutor_.Add(http::Request::GET(std::move(*parsed),
                                                             http::RequestOptions{
