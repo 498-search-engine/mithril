@@ -76,37 +76,6 @@ void PrintSSLConnectError(SSL* ssl, int status) {
     }
 }
 
-bool ContentTypeMatches(std::string_view header, std::string_view mimeType) {
-    auto semicolonPos = header.find(';');
-    std::string_view headerMimeType = header.substr(0, semicolonPos);
-
-    // Trim trailing whitespace
-    while (!headerMimeType.empty() && std::isspace(static_cast<unsigned char>(headerMimeType.back()))) {
-        headerMimeType.remove_suffix(1);
-    }
-
-    return InsensitiveStrEquals(headerMimeType, mimeType);
-}
-
-bool ContentLanguageMatches(std::string_view header, std::string_view lang) {
-    if (lang.empty()) {
-        return true;
-    }
-
-    auto semiPos = header.find(';');
-    if (semiPos != std::string_view::npos) {
-        header = header.substr(0, semiPos);
-    }
-
-    if (lang.back() == '*') {
-        lang.remove_suffix(1);
-        return InsensitiveStartsWith(header, lang);
-    } else {
-        return InsensitiveStrEquals(header, lang);
-    }
-}
-
-
 }  // namespace
 
 std::optional<Connection> Connection::NewFromRequest(const Request& req) {

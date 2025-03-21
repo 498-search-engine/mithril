@@ -10,9 +10,11 @@
 #include "html/Parser.h"
 #include "http/Request.h"
 #include "http/Response.h"
+#include "http/URL.h"
 
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace mithril {
 
@@ -32,7 +34,10 @@ private:
     void ProcessDocument(const http::Request& req, http::Response& res);
     void ProcessHTMLDocument(const http::Request& req, const http::Response& res);
 
+    void SaveDocument(data::DocumentView doc);
+
     std::pair<data::docid_t, std::string> NextDocument();
+    std::vector<std::string> GetFollowURLs(const html::ParsedDocument& doc, const http::URL& url) const;
 
     LiveState& state_;
     DocumentQueue* docQueue_;
