@@ -18,7 +18,8 @@
 
 namespace mithril {
 
-constexpr long RobotsTxtCacheDurationSeconds = 4L * 60L * 60L;  // 4 hours
+constexpr long RobotsTxtCacheDurationSeconds = 4L * 60L * 60L;         // 4 hours
+constexpr long RobotsTxtCacheFailureDurationSeconds = 1L * 60L * 60L;  // 1 hour
 
 namespace internal {
 
@@ -85,13 +86,9 @@ public:
      */
     RobotRules();
 
-    /**
-     * @brief Creates a RobotRules object that either allows or disallows all
-     * paths.
-     *
-     * @param disallowAll Whether to disallow all paths.
-     */
-    RobotRules(bool disallowAll);
+    static RobotRules AllowAll();
+
+    static RobotRules DisallowAll();
 
     /**
      * @brief Creates a RobotRules object from a list of disallowed prefixes and
@@ -121,6 +118,14 @@ public:
     bool Allowed(std::string_view path) const;
 
 private:
+    /**
+     * @brief Creates a RobotRules object that either allows or disallows all
+     * paths.
+     *
+     * @param disallowAll Whether to disallow all paths.
+     */
+    RobotRules(bool disallowAll);
+
     std::unique_ptr<internal::RobotsTrie> trie_;
     bool disallowAll_;
 };
@@ -160,8 +165,9 @@ private:
     struct RobotCacheEntry {
         RobotRules rules;
         long expiresAt{0L};
-        bool valid{false};
     };
+
+    void FillFromQueue();
 
     /**
      * @brief Enqueues a host for robots.txt fetching.
