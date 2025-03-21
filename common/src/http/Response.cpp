@@ -139,4 +139,34 @@ std::optional<ResponseHeader> ParseResponseHeader(std::string_view header) {
     return parsed;
 }
 
+bool ContentTypeMatches(std::string_view val, std::string_view mimeType) {
+    auto semicolonPos = val.find(';');
+    std::string_view headerMimeType = val.substr(0, semicolonPos);
+
+    // Trim trailing whitespace
+    while (!headerMimeType.empty() && std::isspace(static_cast<unsigned char>(headerMimeType.back()))) {
+        headerMimeType.remove_suffix(1);
+    }
+
+    return InsensitiveStrEquals(headerMimeType, mimeType);
+}
+
+bool ContentLanguageMatches(std::string_view val, std::string_view lang) {
+    if (lang.empty()) {
+        return true;
+    }
+
+    auto semiPos = val.find(';');
+    if (semiPos != std::string_view::npos) {
+        val = val.substr(0, semiPos);
+    }
+
+    if (lang.back() == '*') {
+        lang.remove_suffix(1);
+        return InsensitiveStartsWith(val, lang);
+    } else {
+        return InsensitiveStrEquals(val, lang);
+    }
+}
+
 }  // namespace mithril::http
