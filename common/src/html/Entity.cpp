@@ -222,6 +222,12 @@ bool DecodeNumericEntity(std::string_view content, std::string& out) {
         }
     }
 
+    if (codePoint == 0xA0) {
+        // NBSP https://www.codetable.net/hex/A0
+        out.push_back(' ');
+        return true;
+    }
+
     // Encode the code point as UTF-8 and append to the output
     if (codePoint <= 0x7F) {  // ASCII range
         out.push_back(static_cast<char>(codePoint));
