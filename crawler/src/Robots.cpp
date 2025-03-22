@@ -300,6 +300,14 @@ RobotsTrie::MatchResult RobotsTrie::FindBestMatch(const std::vector<std::string_
 
 RobotRules::RobotRules() : RobotRules(true) {}
 
+RobotRules RobotRules::AllowAll() {
+    return RobotRules{false};
+}
+
+RobotRules RobotRules::DisallowAll() {
+    return RobotRules{true};
+}
+
 RobotRules::RobotRules(bool disallowAll) : trie_(nullptr), disallowAll_(disallowAll) {}
 
 RobotRules::RobotRules(const std::vector<std::string>& disallowPrefixes, const std::vector<std::string>& allowPrefixes)
@@ -354,11 +362,7 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
         return nullptr;
     }
 
-    if (it->second.valid) {
-        return &it->second.rules;
-    }
-
-    return nullptr;
+    return &it->second.rules;
 }
 
 void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost) {
@@ -387,13 +391,16 @@ size_t RobotRulesCache::PendingRequests() const {
     return executor_.InFlightRequests() + queuedFetches_.size();
 }
 
-void RobotRulesCache::ProcessPendingRequests() {
+void RobotRulesCache::FillFromQueue() {
     while (!queuedFetches_.empty() && executor_.InFlightRequests() < maxInFlightRequests_) {
         Fetch(queuedFetches_.front());
         queuedFetches_.pop();
     }
-
     InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
+}
+
+void RobotRulesCache::ProcessPendingRequests() {
+    FillFromQueue();
 
     if (executor_.InFlightRequests() == 0) {
         return;
@@ -460,8 +467,7 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
     case http::StatusCode::Forbidden:
     default:
         spdlog::info("got robots.txt status {} for {}", r.res.header.status, canonicalHost.url);
-        it->second.rules = RobotRules{true};
-        it->second.valid = true;
+        it->second.rules = RobotRules::DisallowAll();
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
         break;
 
@@ -480,9 +486,8 @@ void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& fail
         return;
     }
 
-    it->second.rules = RobotRules{};
-    it->second.valid = false;
-    it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+    it->second.rules = RobotRules::DisallowAll();
+    it->second.expiresAt = MonotonicTime() + RobotsTxtCacheFailureDurationSeconds;
 
     completedFetches_.push_back(std::move(canonicalHost));
 }
@@ -495,10 +500,8 @@ void RobotRulesCache::HandleRobotsOK(const http::ResponseHeader& header,
         // Parse the response body
         entry.rules = RobotRules::FromRobotsTxt(std::string_view{res.body.data(), res.body.size()},
                                                 "mithril-crawler"sv);  // TODO: move UA string somewhere else
-        entry.valid = true;
     } else {
-        entry.rules = RobotRules{false};
-        entry.valid = true;
+        entry.rules = RobotRules::AllowAll();
     }
 
     entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
@@ -506,8 +509,7 @@ void RobotRulesCache::HandleRobotsOK(const http::ResponseHeader& header,
 
 void RobotRulesCache::HandleRobotsNotFound(RobotCacheEntry& entry) {
     // 404 Not Found = go for it!
-    entry.rules = RobotRules{false};
-    entry.valid = true;
+    entry.rules = RobotRules::AllowAll();
     entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
 }
 

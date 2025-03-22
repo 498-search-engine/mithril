@@ -11,7 +11,8 @@ namespace mithril::http {
 namespace {
 
 constexpr const char* CRLF = "\r\n";
-constexpr const char* UserAgentHeader = "User-Agent: mithril-crawler/1.0 (mithril498@umich.edu)\r\n";
+constexpr const char* UserAgentHeader =
+    "User-Agent: mithril-crawler/1.0 (mithril498@umich.edu; +https://498-search-engine.github.io/website/)\r\n";
 constexpr const char* AcceptAllHeader = "Accept: */*\r\n";
 constexpr const char* AcceptEncodingIdentityHeader = "Accept-Encoding: identity\r\n";
 constexpr const char* AcceptEncodingGzipHeader = "Accept-Encoding: gzip\r\n";

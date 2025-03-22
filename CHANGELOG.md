@@ -32,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - more document pruning and better configurability (#73)
 - parse <meta> tags in document (#75)
 - index perf improvements after adding postn index, doubled throughput (#76)
+- Add project website to `User-Agent` header of crawler (#78)
+- Add blacklist-after-the-fact capabilities (#78)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
@@ -43,6 +45,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - fix: allow gzip reads of size 0 (#72)
 - remove problematic alloca for const_cast (#74)
 - support desc field in commmon/doc, also test phrase searching (and based on position), make shouldstore pos less restrictive (#77)
+- improve HTML parser handling of elements with attributes and comments (#78)
+- make HTTP response header parsing more robust (#78)
+- fix tracking of active robots requests (#78)
 
 ## [0.1.0] - 2025-02-07
 

@@ -71,7 +71,7 @@ std::vector<std::string_view> GetDescription(const html::ParsedDocument& doc) {
         return {};
     }
 
-    return SplitStringOn(descIt->second, [](unsigned char c) { return std::isspace(c); });
+    return GetWords(descIt->second);
 }
 
 struct RobotsMeta {

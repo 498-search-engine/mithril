@@ -138,22 +138,25 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
                 continue;
             }
 
-            const auto* robots = robotRulesCache_.GetOrFetch(it->first);
+            auto host = it->first;
+            auto urls = std::move(it->second);
+            urlsWaitingForRobotsCount_ -= urls.size();
+            urlsWaitingForRobots_.erase(it);
+
+            const auto* robots = robotRulesCache_.GetOrFetch(host);
             if (robots == nullptr) {
-                // Shouldn't really happen unless some LRU cache funny business
-                // happens
+                // robots.txt page was invalid in some way, don't fetch any
+                // results.
                 continue;
             }
 
             // The cache has fetched and resolved the robots.txt page for this
             // canonical host. Process all queued URLs.
-            for (auto& url : it->second) {
+            for (auto& url : urls) {
                 if (robots->Allowed(url.path)) {
-                    allowedURLs.insert(url.url);
+                    allowedURLs.insert(std::move(url.url));
                 }
             }
-            urlsWaitingForRobotsCount_ -= it->second.size();
-            urlsWaitingForRobots_.erase(it);
         }
 
         WaitingRobotsHosts.Set(urlsWaitingForRobots_.size());
