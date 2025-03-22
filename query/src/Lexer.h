@@ -4,7 +4,6 @@
  * Declaration of a stream of tokens that you can read from.
  *
  * You do not have to modify this file, but you may choose to do so.
-
  */
 
 #ifndef LEXER_H_
@@ -14,7 +13,7 @@
 #include <utility>
 
 
-#include "token.h"
+#include "Token.h"
 
 class Lexer {
 public:
@@ -40,7 +39,7 @@ public:
 private:
     std::string input_;
     size_t position_ = 0;
-    Token peekedToken_;
+    Token peekedToken_ = Token(TokenType::EOFTOKEN, "");
     bool hasPeeked_ = false;
 
     // Core lexing helpers

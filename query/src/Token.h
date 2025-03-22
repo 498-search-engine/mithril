@@ -8,7 +8,7 @@ enum class TokenType {
     OPERATOR,   // AND, OR, NOT, or implicit SPACE
     LPAREN,     // '('
     RPAREN,     // ')'
-    EOF_TOKEN   // end of input
+    EOFTOKEN   // end of input
 };
 
 struct Token {

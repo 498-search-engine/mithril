@@ -1,22 +1,23 @@
-#include "lexer.h"
+#include "Lexer.h"
 #include <cctype>
 #include <stdexcept>
 
 Lexer::Lexer(const std::string& input)
-    : input(input), position(0), hasPeeked(false) {}
+    : input_(input), position_(0), hasPeeked_(false) {}
 
-// Public API
+// * ------- Public API -------
 
 Token Lexer::NextToken() {
-    if (hasPeeked) {
-        hasPeeked = false;
-        return peekedToken;
+
+    if (hasPeeked_) {
+        hasPeeked_ = false;
+        return peekedToken_;
     }
 
     SkipWhitespace();
 
-    if (position >= input.length()) {
-        return Token(TokenType::EOF_TOKEN);
+    if (position_ >= input_.length()) {
+        return Token(TokenType::EOFTOKEN);
     }
 
     char c = PeekChar();
@@ -33,36 +34,36 @@ Token Lexer::NextToken() {
 }
 
 Token Lexer::PeekToken() {
-    if (!hasPeeked) {
-        peekedToken = NextToken();
-        hasPeeked = true;
+    if (!hasPeeked_) {
+        peekedToken_ = NextToken();
+        hasPeeked_ = true;
     }
-    return peekedToken;
+    return peekedToken_;
 }
 
 bool Lexer::EndOfInput() const {
-    return position >= input.length();
+    return position_ >= input_.length();
 }
 
 // Private helpers
 
 void Lexer::SkipWhitespace() {
-    while (position < input.length() && std::isspace(input[position])) {
-        ++position;
+    while (position_ < input_.length() && std::isspace(input_[position_])) {
+        ++position_;
     }
 }
 
 char Lexer::PeekChar() const {
-    return input[position];
+    return input_[position_];
 }
 
 char Lexer::GetChar() {
-    return input[position++];
+    return input_[position_++];
 }
 
 bool Lexer::MatchChar(char expected) {
-    if (position < input.length() && input[position] == expected) {
-        ++position;
+    if (position_ < input_.length() && input_[position_] == expected) {
+        ++position_;
         return true;
     }
     return false;
@@ -87,12 +88,12 @@ bool Lexer::IsFieldKeyword(const std::string& word) const {
 // Lex individual token types
 
 Token Lexer::LexWordOrKeyword() {
-    size_t start = position;
-    while (position < input.length() && IsAlnum(input[position])) {
-        ++position;
+    size_t start = position_;
+    while (position_ < input_.length() && IsAlnum(input_[position_])) {
+        ++position_;
     }
 
-    std::string word = input.substr(start, position - start);
+    std::string word = input_.substr(start, position_ - start);
 
     if (IsOperatorKeyword(word)) {
         return Token(TokenType::OPERATOR, word);
@@ -107,10 +108,10 @@ Token Lexer::LexQuotedPhrase() {
     GetChar();  // Consume the opening quote
 
     std::string phrase;
-    while (position < input.length()) {
-        char c = GetChar();
+    while (position_ < input_.length()) {
+        char const c = GetChar();
         if (c == '"') {
-            return Token(TokenType::PHRASE, phrase);
+            return Token{TokenType::PHRASE, phrase};
         }
         phrase += c;
     }
@@ -119,12 +120,12 @@ Token Lexer::LexQuotedPhrase() {
 }
 
 Token Lexer::LexSymbol() {
-    char c = GetChar();
+    char const c = GetChar();
 
     switch (c) {
-        case ':': return Token(TokenType::COLON, ":");
-        case '(': return Token(TokenType::LPAREN, "(");
-        case ')': return Token(TokenType::RPAREN, ")");
+        case ':': return {TokenType::COLON, ":"};
+        case '(': return {TokenType::LPAREN, "("};
+        case ')': return {TokenType::RPAREN, ")"};
         default:
             throw std::runtime_error(std::string("Unexpected symbol: ") + c);
     }
