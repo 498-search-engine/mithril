@@ -3,11 +3,13 @@
 
 #include "html/Parser.h"
 
+#include "Util.h"
 #include "core/memory.h"
 #include "html/Entity.h"
 #include "html/Tags.h"
 #include "http/URL.h"
 
+#include <cctype>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -35,6 +37,16 @@ const char* NameEndingOfTag(const char* start, const char* end) {
 
 const char* EndingOfTag(const char* start, const char* end) {
     while (start < end && *start != '>') {
+        if (*start == '"' || *start == '\'') {
+            char quote = *start;
+            start++;
+            const auto* attrStart = start;
+
+            // Consume string until closing quote
+            while (start < end && *start != quote) {
+                start++;
+            }
+        }
         start++;
     }
     return start < end ? start : nullptr;
@@ -78,17 +90,25 @@ void CollectWord(std::string_view word,
     if (word.empty())
         return;
 
+    std::vector<std::string_view> wordsInWord;
+    wordsInWord.reserve(1);
+
     if (needsDecode) {
         word = DecodeStringWithRef(word, decodedWords);
+        wordsInWord = GetWords(word);
+    } else {
+        wordsInWord.push_back(word);
     }
 
-    if (state.inAnchor) {
-        currentLink.anchorText.push_back(word);
-    }
-    if (state.inTitle) {
-        titleWords.push_back(word);
-    } else {
-        words.push_back(word);
+    for (auto subWord : wordsInWord) {
+        if (state.inAnchor) {
+            currentLink.anchorText.push_back(subWord);
+        }
+        if (state.inTitle) {
+            titleWords.push_back(subWord);
+        } else {
+            words.push_back(subWord);
+        }
     }
 }
 
