@@ -452,6 +452,7 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
         spdlog::warn("encountered error while decoding body for {}: {}", r.req.Url().url, e.what());
         it->second.rules = RobotRules::DisallowAll();
         it->second.expiresAt = MonotonicTime() + RobotsTxtCacheFailureDurationSeconds;
+        completedFetches_.push_back(std::move(canonicalHost));
         return;
     }
 
