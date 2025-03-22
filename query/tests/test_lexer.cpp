@@ -215,6 +215,98 @@ TEST_F(LexerTest, KeywordCaseSensitivity) {
     }
 }
 
+TEST_F(LexerTest, QuotedPhraseWithInnerQuote) {
+    Lexer lexer("\"hello \\\"world\\\" again\"");
+    Token token = lexer.NextToken();
+    EXPECT_EQ(token.type, TokenType::PHRASE);
+    EXPECT_EQ(token.value, "hello \\\"world\\\" again"); // Or actual unescaped
+}
+
+TEST_F(LexerTest, OperatorSurroundedByInsaneWhitespace) {
+    Lexer lexer("a     AND     b");
+    Token a = lexer.NextToken();
+    Token op = lexer.NextToken();
+    Token b = lexer.NextToken();
+    EXPECT_EQ(a.type, TokenType::WORD);
+    EXPECT_EQ(op.type, TokenType::OPERATOR);
+    EXPECT_EQ(op.value, "AND");
+    EXPECT_EQ(b.type, TokenType::WORD);
+}
+
+TEST_F(LexerTest, WeirdlySpacedQuery) {
+    Lexer lexer(" (  TITLE : \"x\"  OR   TEXT : y ) ");
+    std::vector<TokenType> expected = {
+        TokenType::LPAREN, TokenType::FIELD, TokenType::COLON, TokenType::PHRASE,
+        TokenType::OPERATOR, TokenType::FIELD, TokenType::COLON, TokenType::WORD,
+        TokenType::RPAREN, TokenType::EOFTOKEN
+    };
+    for (auto type : expected) {
+        EXPECT_EQ(lexer.NextToken().type, type);
+    }
+}
+
+TEST_F(LexerTest, MultipleEOFAccessesAreStable) {
+    Lexer lexer("chatbot");
+    lexer.NextToken(); // WORD
+    lexer.NextToken(); // EOF
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+    }
+}
+
+TEST_F(LexerTest, InvalidSymbolsAreRejected) {
+    Lexer lexer("hello @world");
+    Token word = lexer.NextToken();
+    EXPECT_EQ(word.type, TokenType::WORD);
+    EXPECT_THROW(lexer.NextToken(), std::runtime_error);
+}
+
+TEST_F(LexerTest, QuotedPhraseWithLineBreakFails) {
+    Lexer lexer("\"hello\nworld\"");
+    EXPECT_THROW(lexer.NextToken(), std::runtime_error);
+}
+
+TEST_F(LexerTest, PeekAtEOFStaysEOF) {
+    Lexer lexer("word");
+    lexer.NextToken(); // consume word
+    for (int i = 0; i < 3; ++i) {
+        Token peeked = lexer.PeekToken();
+        EXPECT_EQ(peeked.type, TokenType::EOFTOKEN);
+    }
+}
+
+TEST_F(LexerTest, FieldColonMisuse) {
+    Lexer lexer("TITLE::something");
+    Token field = lexer.NextToken();
+    Token colon = lexer.NextToken();
+    EXPECT_EQ(field.type, TokenType::FIELD);
+    EXPECT_EQ(colon.type, TokenType::COLON);
+    EXPECT_THROW(lexer.NextToken(), std::runtime_error);
+}
+
+TEST_F(LexerTest, TokensWithoutSpace) {
+    Lexer lexer("TITLE:\"foo\"ANDbar");
+    EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::COLON);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::PHRASE);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::WORD); // ANDbar is not "AND"
+}
+
+TEST_F(LexerTest, StressTestManyTokens) {
+    std::string input;
+    for (int i = 0; i < 1000; ++i) {
+        input += "word ";
+    }
+    Lexer lexer(input);
+    for (int i = 0; i < 1000; ++i) {
+        Token t = lexer.NextToken();
+        EXPECT_EQ(t.type, TokenType::WORD);
+        EXPECT_EQ(t.value, "word");
+    }
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
