@@ -1,5 +1,40 @@
+<!-- Second Pass -->
 
-Potential query language 
+# Simpler Query Language
+Based on Bleve
+
+## Basic Grammar
+
+query := phrase
+
+phrase := term [ operator phrase ]
+
+term := field_expr | simple_term | quoted_term | grouped_expr
+
+field_expr := field ":" (simple_term | quoted_term)
+
+field := "TITLE" | "TEXT"   // Enum of searchable fields
+
+simple_term := <string of alphanumeric characters>
+
+quoted_term := "\"" <string> "\""   // Exact phrase matching
+
+grouped_expr := "(" phrase ")"   // For logical grouping
+
+operator := "AND" | "OR" | "NOT"   // Default is AND if omitted
+
+## Examples
+
+- `database`                      // Search for "database" in all fields
+- `TITLE:database`                // Search for "database" in title field only
+- `"database systems"`            // Exact phrase match in all fields
+- `TITLE:"database systems"`      // Exact phrase match in title field only
+- `database AND systems`          // Both terms must appear
+- `database OR systems`           // Either term can appear
+- `database NOT mysql`            // "database" must appear, "mysql" must not
+- `(database OR systems) AND sql` // Logical grouping with AND/OR
+
+# Potential query language (advanced first pass)
 
 query         ::= clause (WS clause)* ;
 
