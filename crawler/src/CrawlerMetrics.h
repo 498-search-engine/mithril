@@ -8,6 +8,12 @@ namespace mithril {
 
 using namespace metrics;
 
+inline auto TotalDocumentCorpusSizeMetric = Metric{
+    "crawler_document_corpus_size",
+    MetricTypeGauge,
+    "Number of documents in the document corpus",
+};
+
 inline auto DocumentsProcessedMetric = Metric{
     "crawler_documents_processed",
     MetricTypeCounter,
@@ -99,6 +105,7 @@ inline auto FrontierFreshURLs = Metric{
 };
 
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {
+    server.Register(&TotalDocumentCorpusSizeMetric);
     server.Register(&DocumentsProcessedMetric);
     server.Register(&DocumentProcessDurationMetric);
     server.Register(&DocumentSizeBytesMetric);

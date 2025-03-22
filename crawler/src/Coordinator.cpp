@@ -231,6 +231,9 @@ void Coordinator::SnapshotThreadEntry(size_t n) {
             return;
         }
 
+        auto corpusSize = state_->nextDocumentID.load();
+        TotalDocumentCorpusSizeMetric.Set(static_cast<size_t>(corpusSize));
+
         auto now = MonotonicTime();
         if (now - start >= config_.snapshot_period_seconds) {
             DoSnapshot(n);
