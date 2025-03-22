@@ -23,39 +23,40 @@ public:
     /**
      * Returns the next token in the stream.
      * If at end of input, returns TokenType::EOF_TOKEN.
+     * Consumes it as well 
      */
-    Token NextToken();
+    auto NextToken() -> Token;
 
     /**
      * Returns the next token without consuming it.
      */
-    Token PeekToken();
+    auto PeekToken() -> Token;
 
     /**
      * Checks if the input has been fully consumed.
      */
-    bool EndOfInput() const;
+    [[nodiscard]] auto EndOfInput() const -> bool;
 
 private:
-    std::string input;
-    size_t position = 0;
-    Token peekedToken;
-    bool hasPeeked = false;
+    std::string input_;
+    size_t position_ = 0;
+    Token peekedToken_;
+    bool hasPeeked_ = false;
 
     // Core lexing helpers
     void SkipWhitespace();
-    char PeekChar() const;
-    char GetChar();
-    bool MatchChar(char expected);
-    bool IsAlpha(char c) const;
-    bool IsAlnum(char c) const;
-    bool IsOperatorKeyword(const std::string& word) const;
-    bool IsFieldKeyword(const std::string& word) const;
+    [[nodiscard]] auto PeekChar() const -> char;
+    auto GetChar() -> char;
+    auto MatchChar(char expected) -> bool;
+    [[nodiscard]] auto IsAlpha(char c) const -> bool;
+    [[nodiscard]] auto IsAlnum(char c) const -> bool;
+    [[nodiscard]] auto IsOperatorKeyword(const std::string& word) const -> bool;
+    [[nodiscard]] auto IsFieldKeyword(const std::string& word) const -> bool;
 
     // Token lexing functions
-    Token LexWordOrKeyword();      // Handles WORD, OPERATOR, FIELD
-    Token LexQuotedPhrase();       // Handles PHRASE
-    Token LexSymbol();             // Handles COLON, LPAREN, RPAREN
+    auto LexWordOrKeyword() -> Token;      // Handles WORD, OPERATOR, FIELD
+    auto LexQuotedPhrase() -> Token;       // Handles PHRASE
+    auto LexSymbol() -> Token;             // Handles COLON, LPAREN, RPAREN
 };
 
 #endif // LEXER_H_
@@ -138,4 +139,4 @@ private:
 //     SimpleTerm* ParseSimpleTerm();
 // };
 
-#endif /* TOKENSTREAM_H_ */
+// #endif /* TOKENSTREAM_H_ */
