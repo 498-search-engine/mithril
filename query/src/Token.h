@@ -1,3 +1,5 @@
+#include <string>
+
 enum class TokenType {
     WORD,       // simple_term: alphanumeric word
     PHRASE,     // quoted_term: quoted phrase
@@ -6,7 +8,7 @@ enum class TokenType {
     OPERATOR,   // AND, OR, NOT, or implicit SPACE
     LPAREN,     // '('
     RPAREN,     // ')'
-    EofToken   // end of input
+    EOF_TOKEN   // end of input
 };
 
 struct Token {
