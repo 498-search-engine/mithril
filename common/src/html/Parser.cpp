@@ -30,6 +30,10 @@ bool IsSpace(char ch) {
 
 const char* NameEndingOfTag(const char* start, const char* end) {
     while (start < end && !IsSpace(*start) && *start != '>') {
+        // Detect comment start in case like <!--asdf-->
+        if (end - start >= 3 && start[0] == '!' && start[1] == '-' && start[2] == '-') {
+            return start + 3;
+        }
         start++;
     }
     return start;
