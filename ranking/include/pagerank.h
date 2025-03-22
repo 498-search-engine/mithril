@@ -1,18 +1,22 @@
 #ifndef PAGERANK_H
 #define PAGERANK_H
 
+#include <vector>
+#include "core/csr.h"
+#include "core/config.h"
+
 constexpr double ErrorAllowed = 0.001;
 
 class PageRank {
     public:
-        PageRank(float *matrix, int rows, int columns);
+        PageRank(core::CSRMatrix &matrix_, int N);
     
-        void GetPageRanks();
+        std::vector<double>& GetPageRanks() { return results_; };
     
     private:
-        float *matrix_;
-        int num_rows_;
-        int num_columns_;
+        core::Config configuration_ = core::Config("pagerank.conf");
+        core::CSRMatrix &matrix_;
+        std::vector<double> results_;
 };
 
 #endif
