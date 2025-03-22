@@ -51,6 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - fix tracking of active robots requests (#78)
 - correctly mark robots req as done after decode error (#79, #81)
 - ensure valid status code range (#84)
+- small header and cmake version fix to compile and get work on gcp vm (#86)
 
 ## [0.1.0] - 2025-02-07
 
