@@ -49,7 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - improve HTML parser handling of elements with attributes and comments (#78)
 - make HTTP response header parsing more robust (#78)
 - fix tracking of active robots requests (#78)
-- correctly mark robots req as done after decode error (#79)
+- correctly mark robots req as done after decode error (#79, #81)
 
 ## [0.1.0] - 2025-02-07
 
