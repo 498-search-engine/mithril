@@ -5,7 +5,7 @@ Based on Bleve
 
 ## Basic Grammar
 
-query := phrase
+
 
 phrase := term [ operator phrase ]
 
@@ -21,7 +21,23 @@ quoted_term := "\"" <string> "\""   // Exact phrase matching
 
 grouped_expr := "(" phrase ")"   // For logical grouping
 
-operator := "AND" | "OR" | "NOT"   // Default is AND if omitted
+operator := "SPACE" | "AND" | "OR" | "NOT"     // Space is the default
+
+
+operators and fields are searchable if they do not fit our grammar
+
+
+
+Wildcards (like * for prefix matching)
+Range queries (for numeric or date fields)
+Proximity operators (NEAR, WITHIN n words)
+Boosting specific terms with ^ or similar notation
+
+
+
+--------------------------------
+
+
 
 ## Examples
 
