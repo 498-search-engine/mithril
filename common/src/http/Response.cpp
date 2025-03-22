@@ -91,12 +91,15 @@ std::optional<ResponseHeader> ParseResponseHeader(std::string_view header) {
     if (!IsDigitSafe(header[9]) || !IsDigitSafe(header[10]) || !IsDigitSafe(header[11])) {
         return std::nullopt;
     }
-
     uint16_t status = ((header[9] - '0') * 100) + ((header[10] - '0') * 10) + (header[11] - '0');
+    if (status > 999 || status < 100) {
+        return std::nullopt;
+    }
+
     parsed.status = static_cast<StatusCode>(status);
 
     // Parse headers
-    size_t pos = header.find("\r\n");
+    size_t pos = header.find("\r\n"sv);
     if (pos == std::string::npos) {
         return std::nullopt;
     }
