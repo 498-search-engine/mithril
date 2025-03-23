@@ -183,18 +183,27 @@ void RobotsTrie::Insert(const std::string& pattern, NodeType type) {
 
     // Split path into segments on / delimiter
     auto segments = SplitPath(pattern);
+    if (segments.size() > 50) {
+        // Too long, don't bother
+        return;
+    }
 
-    for (const auto& segment : segments) {
-        if (segment.size() > 1 && segment.find('*') != std::string_view::npos) {
-            // Segment contains a '*' but has other stuff -- we can't handle
-            // that with our trie implementation. Discard the rule.
-            return;
+    for (size_t i = 0; i < segments.size(); ++i) {
+        auto segment = segments[i];
+        if (segment.size() > 1) {
+            auto starPos = segment.find('*');
+            if (starPos != std::string_view::npos && starPos != segment.size() - 1 && i != segment.size() - 1) {
+                // Segment contains a '*' but not just the star, or at the end -- we
+                // can't handle that with our trie implementation. Discard the rule.
+                return;
+            }
         }
     }
 
     Node* current = &root_;
 
-    for (const auto& segment : segments) {
+    for (size_t i = 0; i < segments.size(); ++i) {
+        auto segment = segments[i];
         if (segment.empty()) {
             if (!current->emptyMatch) {
                 current->emptyMatch = std::make_unique<Node>();
@@ -206,6 +215,13 @@ void RobotsTrie::Insert(const std::string& pattern, NodeType type) {
             }
             current = current->wildcardMatch.get();
         } else {
+            bool isTrailingWildcard = false;
+            if (i == segments.size() - 1 && segment.back() == '*') {
+                // Trailing wildcard
+                segment.remove_suffix(1);
+                isTrailingWildcard = true;
+            }
+
             // Find or insert segment in sorted vector
             auto it = std::lower_bound(current->fixedSegments.begin(),
                                        current->fixedSegments.end(),
@@ -216,6 +232,10 @@ void RobotsTrie::Insert(const std::string& pattern, NodeType type) {
                 it = current->fixedSegments.insert(it, {std::string{segment}, Node{}});
             }
             current = &it->second;
+
+            if (isTrailingWildcard) {
+                current->trailingWildcard = true;
+            }
         }
     }
 
@@ -280,12 +300,25 @@ void RobotsTrie::FindBestMatchRecursive(const std::vector<std::string_view>& seg
         }
     }
 
-    // Try wildcard match
+    // Segment wildcard
     if (node->wildcardMatch) {
         FindBestMatchRecursive(segments, index + 1, node->wildcardMatch.get(), best);
     }
+
+    // Empty match, i.e. trailing /
     if (node->emptyMatch) {
         FindBestMatchRecursive(segments, index + 1, node->emptyMatch.get(), best);
+    }
+
+    // Trailing wildcard
+    if (node->trailingWildcard) {
+        MatchResult current{
+            .type = node->type,
+            .length = node->patternLength,
+        };
+        if (current > best) {
+            best = current;
+        }
     }
 }
 
