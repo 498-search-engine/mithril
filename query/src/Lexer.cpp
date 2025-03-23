@@ -1,4 +1,5 @@
 #include "Lexer.h"
+#include "QueryConfig.h"
 #include <cctype>
 #include <stdexcept>
 
@@ -78,11 +79,11 @@ bool Lexer::IsAlnum(char c) const {
 }
 
 bool Lexer::IsOperatorKeyword(const std::string& word) const {
-    return word == "AND" || word == "OR" || word == "NOT";
+    return query::QueryConfig::GetValidOperators().contains(word);
 }
 
 bool Lexer::IsFieldKeyword(const std::string& word) const {
-    return word == "TITLE" || word == "TEXT";
+    return query::QueryConfig::GetValidFields().contains(word);
 }
 
 // Lex individual token types
