@@ -8,6 +8,9 @@ namespace query {
 
 class QueryConfig {
 public:
+
+    inline static const std::string IndexPath{"index_output"};
+
     static const std::unordered_set<std::string>& GetValidFields() {
         static const std::unordered_set<std::string> fields = {
             "TITLE",

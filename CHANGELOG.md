@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - more document pruning and better configurability (#73)
 - parse <meta> tags in document (#75)
 - index perf improvements after adding postn index, doubled throughput (#76)
+- query module with support for term queries and performance measurement
+  - implemented `Query` and `TermQuery` classes for basic term searching
+  - added `query_driver` utility for testing and benchmarking term queries
+  - integrated performance timing and formatted output for query evaluation
 
 ### Fixed
 - Fix copying body data from buffer (#24)

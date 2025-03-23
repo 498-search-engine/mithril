@@ -1,3 +1,6 @@
+#ifndef TOKEN_H_
+#define TOKEN_H_
+
 #include <string>
 
 enum class TokenType {
@@ -18,3 +21,5 @@ struct Token {
     Token(TokenType t, std::string v = "")
         : type(t), value(std::move(v)) {}
 };
+
+#endif // TOKEN_H_
