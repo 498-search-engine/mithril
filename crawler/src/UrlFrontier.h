@@ -7,6 +7,7 @@
 #include "core/cv.h"
 #include "core/locks.h"
 #include "core/mutex.h"
+#include "core/optional.h"
 #include "http/URL.h"
 #include "ranking/CrawlerRanker.h"
 
@@ -69,6 +70,16 @@ public:
      * @brief Resets the timeout progress for all active robots requests.
      */
     void TouchRobotRequestTimeouts();
+
+    /**
+     * @brief Look up the Crawl-Delay directive for a host. Obtains the
+     * specified value, a default if the host does not specify a default, and
+     * core::nullopt if the lookup is pending.
+     *
+     * @param host Host to look up
+     * @param defaultDelay Default delay if host does not specify
+     */
+    core::Optional<unsigned long> LookUpCrawlDelay(const http::CanonicalHost& host, unsigned long defaultDelay);
 
     /**
      * @brief Gets at least one URL from the frontier, up to max

@@ -1,6 +1,7 @@
 #ifndef CRAWLER_ROBOTS_H
 #define CRAWLER_ROBOTS_H
 
+#include "core/optional.h"
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
 #include "http/URL.h"
@@ -70,6 +71,7 @@ struct RobotLine {
 };
 
 struct RobotDirectives {
+    core::Optional<unsigned long> crawlDelay;
     std::vector<std::string> disallows;
     std::vector<std::string> allows;
 };
@@ -97,8 +99,11 @@ public:
      *
      * @param disallowPrefixes Disallowed prefixes to filter by.
      * @param allowPrefixes Allowed prefixes to filter by.
+     * @param crawlDelay Crawl delay for host, if specified.
      */
-    RobotRules(const std::vector<std::string>& disallowPrefixes, const std::vector<std::string>& allowPrefixes);
+    RobotRules(const std::vector<std::string>& disallowPrefixes,
+               const std::vector<std::string>& allowPrefixes,
+               core::Optional<unsigned long> crawlDelay);
 
     /**
      * @brief Creates a RobotRules object from the contents of a robots.txt file.
@@ -118,6 +123,11 @@ public:
      */
     bool Allowed(std::string_view path) const;
 
+    /**
+     * @brief Gets the Crawl-Delay, if specified.
+     */
+    const core::Optional<unsigned long>& CrawlDelay() const;
+
 private:
     /**
      * @brief Creates a RobotRules object that either allows or disallows all
@@ -129,6 +139,7 @@ private:
 
     std::unique_ptr<internal::RobotsTrie> trie_;
     bool disallowAll_;
+    core::Optional<unsigned long> crawlDelay_;
 };
 
 

@@ -3,6 +3,7 @@
 #include "Clock.h"
 #include "CrawlerMetrics.h"
 #include "Util.h"
+#include "core/optional.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
@@ -151,6 +152,12 @@ RobotDirectives ParseRobotsTxt(std::string_view file, std::string_view userAgent
             d.disallows.emplace_back(line->value);
         } else if (InsensitiveStrEquals(line->directive, "allow"sv)) {
             d.allows.emplace_back(line->value);
+        } else if (InsensitiveStrEquals(line->directive, "crawl-delay"sv)) {
+            try {
+                d.crawlDelay = std::stoul(std::string{line->value});
+            } catch (const std::invalid_argument&) {  // NOLINT(bugprone-empty-catch)
+            } catch (const std::out_of_range&) {      // NOLINT(bugprone-empty-catch)
+            }
         }
     }
 
@@ -343,8 +350,10 @@ RobotRules RobotRules::DisallowAll() {
 
 RobotRules::RobotRules(bool disallowAll) : trie_(nullptr), disallowAll_(disallowAll) {}
 
-RobotRules::RobotRules(const std::vector<std::string>& disallowPrefixes, const std::vector<std::string>& allowPrefixes)
-    : trie_(nullptr), disallowAll_(false) {
+RobotRules::RobotRules(const std::vector<std::string>& disallowPrefixes,
+                       const std::vector<std::string>& allowPrefixes,
+                       core::Optional<unsigned long> crawlDelay)
+    : trie_(nullptr), disallowAll_(false), crawlDelay_(crawlDelay) {
     if (allowPrefixes.size() == 0 && disallowPrefixes.size() == 1) {
         if (disallowPrefixes.front().empty() || disallowPrefixes.front() == "/"sv) {
             // Common "Disallow everything" case
@@ -358,7 +367,7 @@ RobotRules::RobotRules(const std::vector<std::string>& disallowPrefixes, const s
 
 RobotRules RobotRules::FromRobotsTxt(std::string_view file, std::string_view userAgent) {
     auto directives = internal::ParseRobotsTxt(file, userAgent);
-    return RobotRules{directives.disallows, directives.allows};
+    return RobotRules{directives.disallows, directives.allows, directives.crawlDelay};
 }
 
 bool RobotRules::Allowed(std::string_view path) const {
@@ -371,6 +380,10 @@ bool RobotRules::Allowed(std::string_view path) const {
     }
 
     return trie_->IsAllowed(path);
+}
+
+const core::Optional<unsigned long>& RobotRules::CrawlDelay() const {
+    return crawlDelay_;
 }
 
 RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests) : maxInFlightRequests_(maxInFlightRequests) {}

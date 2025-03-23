@@ -48,6 +48,7 @@ TEST(Robots, ParseRobotsTxt) {
     // Catch-all user agent
     {
         auto txt = "User-agent: *\n"
+                   "Crawl-Delay: 30\n"
                    "Disallow: /profile/message/\n"
                    "Disallow: /meta/*/download/  # Disallow download links\n"
                    "Allow: /profile/about-me/\n"sv;
@@ -58,6 +59,8 @@ TEST(Robots, ParseRobotsTxt) {
         EXPECT_EQ(d.disallows[1], "/meta/*/download/"sv);
         ASSERT_EQ(d.allows.size(), 1);
         EXPECT_EQ(d.allows[0], "/profile/about-me/"sv);
+        ASSERT_TRUE(d.crawlDelay.HasValue());
+        EXPECT_EQ(*d.crawlDelay, 30);
     }
 
     // Multiple user agents, one match
@@ -76,6 +79,7 @@ TEST(Robots, ParseRobotsTxt) {
         EXPECT_EQ(d.disallows[1], "/meta/*/download/"sv);
         ASSERT_EQ(d.allows.size(), 1);
         EXPECT_EQ(d.allows[0], "/profile/about-me/"sv);
+        EXPECT_FALSE(d.crawlDelay.HasValue());
     }
 
     // Multiple user agents, multiple matchs
@@ -330,12 +334,15 @@ TEST(Robots, EndToEnd) {
     {
         auto txt = "User-agent: *\n"
                    "Disallow: /private/\n"
-                   "Allow: /private/public/\n"sv;
+                   "Allow: /private/public/\n"
+                   "Crawl-Delay: 30\n"sv;
 
         auto rules = RobotRules::FromRobotsTxt(txt, "testbot"sv);
         EXPECT_FALSE(rules.Allowed("/private/profile"sv));
         EXPECT_TRUE(rules.Allowed("/private/public/docs"sv));
         EXPECT_TRUE(rules.Allowed("/public/stuff"sv));
+        ASSERT_TRUE(rules.CrawlDelay().HasValue());
+        EXPECT_EQ(*rules.CrawlDelay(), 30);
     }
 
     // Multiple user-agents with different rules
@@ -350,10 +357,12 @@ TEST(Robots, EndToEnd) {
         auto defaultRules = RobotRules::FromRobotsTxt(txt, "randombot"sv);
         EXPECT_FALSE(defaultRules.Allowed("/downloads/anything"sv));
         EXPECT_FALSE(defaultRules.Allowed("/downloads/public/file.txt"sv));
+        EXPECT_FALSE(defaultRules.CrawlDelay().HasValue());
 
         auto specificRules = RobotRules::FromRobotsTxt(txt, "goodbot"sv);
         EXPECT_TRUE(specificRules.Allowed("/downloads/public/file.txt"sv));
         EXPECT_FALSE(specificRules.Allowed("/downloads/private/secret.txt"sv));
+        EXPECT_FALSE(specificRules.CrawlDelay().HasValue());
     }
 
     // Comments and whitespace handling

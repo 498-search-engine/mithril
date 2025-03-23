@@ -4,6 +4,7 @@
 #include "Robots.h"
 #include "ThreadSync.h"
 #include "core/locks.h"
+#include "core/optional.h"
 #include "http/URL.h"
 
 #include <algorithm>
@@ -353,6 +354,16 @@ void UrlFrontier::DumpPendingURLs(std::vector<std::string>& urls) {
 void UrlFrontier::TouchRobotRequestTimeouts() {
     core::LockGuard robotsLock(robotsCacheMu_);
     robotRulesCache_.TouchRobotRequestTimeouts();
+}
+
+core::Optional<unsigned long> UrlFrontier::LookUpCrawlDelay(const http::CanonicalHost& host,
+                                                            unsigned long defaultDelay) {
+    core::LockGuard lock(robotsCacheMu_);
+    const auto* res = robotRulesCache_.GetOrFetch(host);
+    if (res == nullptr) {
+        return core::nullopt;
+    }
+    return res->CrawlDelay().ValueOr(defaultDelay);
 }
 
 }  // namespace mithril
