@@ -175,7 +175,10 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
         followLinks = false;
     }
 
-    auto followURLs = GetFollowURLs(parsedDoc_, req.Url());
+    auto followURLs = std::vector<std::string>{};
+    if (followLinks) {
+        followURLs = GetFollowURLs(parsedDoc_, req.Url());
+    }
 
     if (indexDocument) {
         // Extract description from <meta name="description"> tag if present
@@ -187,6 +190,7 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
             .title = parsedDoc_.titleWords,
             .description = description,
             .words = parsedDoc_.words,
+            .forwardLinks = followURLs,
         });
 
         DocumentSizeBytesMetric.Observe(res.body.size());
