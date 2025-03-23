@@ -7,17 +7,12 @@
 
 #include <csignal>
 #include <exception>
+#include <iostream>
 #include <string>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 
 int main(int argc, char* argv[]) {
-#if !defined(NDEBUG)
-    spdlog::set_level(spdlog::level::trace);
-#else
-    spdlog::set_level(spdlog::level::info);
-#endif
-
     signal(SIGPIPE, SIG_IGN);
 
     mithril::http::InitializeSSL();
@@ -25,6 +20,12 @@ int main(int argc, char* argv[]) {
 
     try {
         auto config = mithril::LoadConfigFromFile(argc > 1 ? argv[1] : "crawler.conf");
+        auto logLevel = spdlog::level::from_str(config.log_level);
+        spdlog::set_level(logLevel);
+        if (logLevel == spdlog::level::off) {
+            std::cout << "logging off" << std::endl;
+        }
+
         mithril::Coordinator c(config);
         c.Run();
     } catch (const std::exception& e) {

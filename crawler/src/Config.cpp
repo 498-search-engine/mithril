@@ -48,7 +48,9 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
         auto key = Trim(line.substr(0, eqPos));
         auto value = Trim(line.substr(eqPos + 1));
 
-        if (key == "workers"sv) {
+        if (key == "log_level"sv) {
+            config.log_level = value;
+        } else if (key == "workers"sv) {
             config.num_workers = std::stoul(std::string(value));
             if (config.num_workers == 0) {
                 throw std::runtime_error("workers must be > 0");
