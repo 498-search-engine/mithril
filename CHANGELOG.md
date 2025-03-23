@@ -54,6 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - correctly mark robots req as done after decode error (#79, #81)
 - ensure valid status code range (#84)
 - small header and cmake version fix to compile and get work on gcp vm (#86)
+- gcp vm build, only use doc metadata in saving doc map to reduce mem use, ty @dsage (#90)
 
 ## [0.1.0] - 2025-02-07
 
