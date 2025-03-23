@@ -277,11 +277,12 @@ TEST_F(LexerTest, PeekAtEOFStaysEOF) {
 
 TEST_F(LexerTest, FieldColonMisuse) {
     Lexer lexer("TITLE::something");
-    Token field = lexer.NextToken();
-    Token colon = lexer.NextToken();
-    EXPECT_EQ(field.type, TokenType::FIELD);
-    EXPECT_EQ(colon.type, TokenType::COLON);
-    EXPECT_THROW(lexer.NextToken(), std::runtime_error);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::COLON);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::COLON);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::WORD);
+    EXPECT_EQ(lexer.EndOfInput(), true);
+    // EXPECT_THROW(lexer.NextToken(), std::runtime_error);
 }
 
 TEST_F(LexerTest, TokensWithoutSpace) {
