@@ -35,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add project website to `User-Agent` header of crawler (#78)
 - Add blacklist-after-the-fact capabilities (#78)
 - expose metric with number of documents in corpus (#80)
+- support trailing wildcards in robots.txt (#87)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
