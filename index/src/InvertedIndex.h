@@ -32,7 +32,7 @@ public:
 
 private:
     // doc
-    std::vector<data::Document> documents_;
+    // std::vector<data::Document> documents_;
     std::vector<DocumentMetadata> document_metadata_;
     std::unordered_map<std::string, uint32_t> url_to_id_;
 

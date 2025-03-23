@@ -652,7 +652,7 @@ void IndexBuilder::finalize() {
     spdlog::info("Starting block merge with {} blocks...", block_count_);
     merge_blocks_tiered();
 
-    spdlog::info("Saving document map ({} documents)...", documents_.size());
+    spdlog::info("Saving document map ({} documents)...", document_metadata_.size());
     save_document_map();
 
     spdlog::info("Finalizing position index...");
