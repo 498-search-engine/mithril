@@ -55,13 +55,17 @@ int main(int argc, char* argv[]) {
     spdlog::set_level(spdlog::level::info);
     
     // Check command line arguments
-    if (argc != 2) {
-        spdlog::error("Usage: {} <term>", argv[0]);
-        spdlog::info("Example: {} computer", argv[0]);
+    if (argc != 3) {
+        spdlog::error("Usage: {} <index_path> <term>", argv[0]);
+        spdlog::info("Example: {} ./my_index computer", argv[0]);
         return 1;
     }
 
-    const std::string term = argv[1];
+    // Set the index path directly
+    query::QueryConfig::IndexPath = std::string(argv[1]);
+    const std::string term = argv[2];
+    
+    spdlog::info("Using index at: '{}'", query::QueryConfig::IndexPath);
     spdlog::info("Searching for term: '{}'", term);
     
     try {
