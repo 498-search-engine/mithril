@@ -34,6 +34,17 @@ target_link_libraries(lexer_driver PRIVATE
     query
 )
 
+
+# Add query driver executable
+add_executable(query_driver
+    tests/query_driver.cpp
+)
+target_link_libraries(query_driver PRIVATE
+    query
+    index
+)
+
+
 # Register the test
 add_test(NAME LexerTest COMMAND test_lexer)
 

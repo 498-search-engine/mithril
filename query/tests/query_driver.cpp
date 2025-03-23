@@ -1,0 +1,89 @@
+#include "../src/Query.h"
+#include "../src/Token.h"
+#include "../src/QueryConfig.h"
+
+#include <chrono>
+#include <filesystem>
+#include <iomanip>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <spdlog/spdlog.h>
+
+namespace {
+
+void print_results(const std::vector<uint32_t>& docIDs, const std::string& term, size_t max_to_show = 10) {
+    spdlog::info("Found {} documents containing the term '{}'", docIDs.size(), term);
+    
+    const size_t num_to_show = std::min(docIDs.size(), max_to_show);
+    
+    if (num_to_show > 0) {
+        spdlog::info("Top {} document IDs:", num_to_show);
+        for (size_t i = 0; i < num_to_show; ++i) {
+            spdlog::info("{:2}. Document ID: {}", i + 1, docIDs[i]);
+        }
+        
+        if (docIDs.size() > max_to_show) {
+            spdlog::info("... and {} more documents", docIDs.size() - max_to_show);
+        }
+    } else {
+        spdlog::info("No documents found containing the term '{}'", term);
+    }
+}
+
+void print_timing(const std::string& operation, const std::chrono::steady_clock::time_point& start_time) {
+    auto end_time = std::chrono::steady_clock::now();
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    double elapsed_sec = elapsed_ms / 1000.0;
+    
+    // Print a separator line for visibility
+    std::string separator(60, '=');
+    
+    // Use spdlog's built-in formatting for a more visible timing output
+    spdlog::info("");
+    spdlog::info(separator);
+    spdlog::info("⏱️  PERFORMANCE: {} completed in {:.3f} seconds", operation, elapsed_sec);
+    spdlog::info(separator);
+    spdlog::info("");
+}
+
+} // namespace
+
+int main(int argc, char* argv[]) {
+    // Configure logging
+    spdlog::set_pattern("[%H:%M:%S.%e] [%^%l%$] %v");
+    spdlog::set_level(spdlog::level::info);
+    
+    // Check command line arguments
+    if (argc != 2) {
+        spdlog::error("Usage: {} <term>", argv[0]);
+        spdlog::info("Example: {} computer", argv[0]);
+        return 1;
+    }
+
+    const std::string term = argv[1];
+    spdlog::info("Searching for term: '{}'", term);
+    
+    try {
+        // Create token and query
+        Token token(TokenType::WORD, term);
+        
+        // Measure query evaluation time
+        auto query_start = std::chrono::steady_clock::now();
+        
+        // Create and evaluate query
+        TermQuery query(token);
+        std::vector<uint32_t> docIDs = query.Evaluate();
+        
+        // Print timing information
+        print_timing("Query evaluation", query_start);
+        
+        // Display results
+        print_results(docIDs, term);
+        
+        return 0;
+    } catch (const std::exception& e) {
+        spdlog::error("Error: {}", e.what());
+        return 1;
+    }
+}
