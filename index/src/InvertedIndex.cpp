@@ -118,6 +118,30 @@ void IndexBuilder::process_document(const Document& doc) {
         future.wait();
     }
 
+    bool debug_doc = (doc.url.find("https://nytlicensing.com") != std::string::npos);
+    if (debug_doc) {
+        std::cout << "\n=== DEBUG DOC: " << doc.id << " ===\n";
+        std::cout << "URL: " << doc.url << "\n";
+        
+        // Count occurrences of "pakistan" in raw document
+        int raw_count = 0;
+        for (const auto& word : doc.title) {
+            if (word == "pakistan" || word == "Pakistan") {
+                raw_count++;
+                std::cout << "TITLE: " << word << "\n";
+            }
+        }
+        
+        for (const auto& word : doc.words) {
+            if (word == "pakistan" || word == "Pakistan") {
+                raw_count++;
+                std::cout << "CONTENT: " << word << " at position " << &word - &doc.words[0] << "\n";
+            }
+        }
+        
+        std::cout << "Raw occurrences of 'pakistan': " << raw_count << "\n";
+    }
+
     auto task = [this, doc]() {
         const size_t estimated_unique_terms = doc.words.size() / 4;  // ~25% unique term ratio
         std::unordered_map<std::string, uint32_t> term_freqs;
@@ -344,14 +368,43 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
     while (!pq.empty()) {
         std::string current_term = pq.top()->current_term;
         std::vector<Posting> merged_postings;
+        
+        bool debug_term = (current_term == "pakistan" || current_term == "india");
+        if (debug_term) {
+            std::cout << "\n==== MERGING TERM: '" << current_term << "' ====\n";
+        }
 
         // Merge all postings for the current term
         while (!pq.empty() && pq.top()->current_term == current_term) {
             BlockReaderPtr reader = std::move(const_cast<BlockReaderPtr&>(pq.top()));
             pq.pop();
+            
+            if (debug_term) {
+                std::cout << "READING FROM BLOCK: " << reader->getFilePath() << "\n";
+                std::cout << "  Found " << reader->current_postings.size() << " postings\n";
+            }
 
             // Simply add the postings
             for (auto& posting : reader->current_postings) {
+                if (debug_term) {
+                    std::cout << "  Adding posting: Doc " << posting.doc_id << ", Freq " << posting.freq << "\n";
+                    
+                    // Check if this doc_id already exists in merged_postings
+                    bool duplicate = false;
+                    for (const auto& existing : merged_postings) {
+                        if (existing.doc_id == posting.doc_id) {
+                            duplicate = true;
+                            std::cout << "  WARNING: Duplicate doc_id " << posting.doc_id 
+                                     << " (existing freq: " << existing.freq 
+                                     << ", new freq: " << posting.freq << ")\n";
+                            break;
+                        }
+                    }
+                    if (!duplicate) {
+                        std::cout << "  New document\n";
+                    }
+                }
+                
                 merged_postings.push_back(posting);
             }
 
@@ -365,10 +418,51 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
             }
         }
 
-        // Sort merged postings by doc_id
+        // Sort merged postings by doc_id and CONSOLIDATE duplicates
         std::sort(merged_postings.begin(), merged_postings.end(), [](const Posting& a, const Posting& b) {
             return a.doc_id < b.doc_id;
         });
+        
+        // BUG FIX: Deduplicate postings by merging frequencies for same doc_id
+        if (debug_term) {
+            std::cout << "AFTER SORTING, BEFORE DEDUPLICATION: " << merged_postings.size() << " postings\n";
+        }
+        
+        // Create a deduplicated vector of postings
+        std::vector<Posting> deduplicated_postings;
+        for (size_t i = 0; i < merged_postings.size(); ) {
+            uint32_t current_doc_id = merged_postings[i].doc_id;
+            uint32_t total_freq = 0;
+            
+            // Accumulate frequencies for this doc_id
+            size_t j = i;
+            while (j < merged_postings.size() && merged_postings[j].doc_id == current_doc_id) {
+                total_freq += merged_postings[j].freq;
+                j++;
+            }
+            
+            if (debug_term) {
+                if (j - i > 1) {
+                    std::cout << "  DEDUPLICATING Doc " << current_doc_id << ": Found " 
+                             << (j - i) << " instances with total freq " << total_freq << "\n";
+                }
+            }
+            
+            // Add the consolidated posting
+            deduplicated_postings.push_back({current_doc_id, total_freq});
+            i = j;
+        }
+        
+        // Replace with deduplicated postings
+        merged_postings = std::move(deduplicated_postings);
+        
+        if (debug_term) {
+            std::cout << "AFTER DEDUPLICATION: " << merged_postings.size() << " postings\n";
+            
+            for (const auto& posting : merged_postings) {
+                std::cout << "  Final: Doc " << posting.doc_id << ", Freq " << posting.freq << "\n";
+            }
+        }
 
         // Write term string
         uint32_t term_len = current_term.size();
@@ -394,20 +488,34 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
             out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(SyncPoint));
         }
 
-        if (is_final_output) {
-            // Use VByte encoding for doc_id deltas and frequencies (final format)
-            uint32_t last_doc_id = 0;
-            std::vector<uint32_t> doc_id_deltas;
-            std::vector<uint32_t> freqs;
+    if (is_final_output) {
+        // Debug the final encoding for special terms
+        if (debug_term) {
+            std::cout << "WRITING TO FINAL INDEX: " << merged_postings.size() << " postings\n";
+        }
+        
+        // Use VByte encoding for doc_id deltas and frequencies (final format)
+        uint32_t last_doc_id = 0;
+        std::vector<uint32_t> doc_id_deltas;
+        std::vector<uint32_t> freqs;
 
-            for (const auto& posting : merged_postings) {
-                doc_id_deltas.push_back(posting.doc_id - last_doc_id);
-                freqs.push_back(posting.freq);
-                last_doc_id = posting.doc_id;
+        for (const auto& posting : merged_postings) {
+            // FIXED: Calculate delta correctly 
+            uint32_t delta = posting.doc_id - last_doc_id;
+            doc_id_deltas.push_back(delta);
+            freqs.push_back(posting.freq);
+            
+            if (debug_term) {
+                std::cout << "  Encoding: Doc " << posting.doc_id << ", Delta " 
+                        << delta << ", Freq " << posting.freq << "\n";
             }
-            VByteCodec::encodeBatch(doc_id_deltas, out);
-            VByteCodec::encodeBatch(freqs, out);
-        } else {
+            
+            // Update last_doc_id AFTER calculating delta
+            last_doc_id = posting.doc_id;
+        }
+        VByteCodec::encodeBatch(doc_id_deltas, out);
+        VByteCodec::encodeBatch(freqs, out);
+    } else {
             // Use raw Posting structs for intermediate blocks
             out.write(reinterpret_cast<const char*>(merged_postings.data()), postings_size * sizeof(Posting));
         }

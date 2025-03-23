@@ -44,7 +44,15 @@ bool TermReader::findTermWithDict(const std::string& term, const TermDictionary&
         return false;
     }
 
-    // calc abs file position (skip past term count)
+    // Debug for specific terms
+    bool debug_term = (term == "pakistan" || term == "india");
+    if (debug_term) {
+        std::cout << "\n==== READING TERM '" << term << "' FROM INDEX ====\n";
+        std::cout << "Dictionary offset: " << entry_opt->index_offset << "\n";
+        std::cout << "Dictionary postings count: " << entry_opt->postings_count << "\n";
+    }
+
+    // Calculate absolute file position (skip past term count)
     std::streampos term_start_pos = sizeof(uint32_t);  // Skip term count
     std::streampos absolute_pos = term_start_pos + static_cast<std::streampos>(entry_opt->index_offset);
 
@@ -65,6 +73,10 @@ bool TermReader::findTermWithDict(const std::string& term, const TermDictionary&
     // Read postings size
     uint32_t postings_size;
     index_file_.read(reinterpret_cast<char*>(&postings_size), sizeof(postings_size));
+    
+    if (debug_term) {
+        std::cout << "Postings size read from index: " << postings_size << "\n";
+    }
 
     // Read sync points size
     uint32_t sync_points_size;
@@ -73,21 +85,60 @@ bool TermReader::findTermWithDict(const std::string& term, const TermDictionary&
     // Skip sync points
     index_file_.seekg(sync_points_size * sizeof(SyncPoint), std::ios::cur);
 
-    // Read postings
+    // MODIFIED READING APPROACH: Read all deltas first, then all frequencies
     postings_.clear();
     postings_.reserve(postings_size);
+    
+    // First read all doc ID deltas and calculate actual doc IDs
+    std::vector<uint32_t> doc_ids(postings_size);
     uint32_t last_doc_id = 0;
+    
+    if (debug_term) {
+        std::cout << "Reading doc ID deltas:\n";
+    }
+    
     for (uint32_t j = 0; j < postings_size; j++) {
         uint32_t doc_id_delta = decodeVByte(index_file_);
-        uint32_t freq = decodeVByte(index_file_);
         uint32_t doc_id = last_doc_id + doc_id_delta;
+        doc_ids[j] = doc_id;
         last_doc_id = doc_id;
-        postings_.emplace_back(doc_id, freq);
+        
+        if (debug_term) {
+            std::cout << "  Delta " << j << ": " << doc_id_delta << " -> Doc ID: " << doc_id << "\n";
+        }
+    }
+    
+    // Then read all frequencies
+    std::vector<uint32_t> freqs(postings_size);
+    
+    if (debug_term) {
+        std::cout << "Reading frequencies:\n";
+    }
+    
+    for (uint32_t j = 0; j < postings_size; j++) {
+        freqs[j] = decodeVByte(index_file_);
+        
+        if (debug_term) {
+            std::cout << "  Freq " << j << ": " << freqs[j] << "\n";
+        }
+    }
+    
+    // Combine doc IDs and frequencies into postings
+    for (uint32_t j = 0; j < postings_size; j++) {
+        postings_.emplace_back(doc_ids[j], freqs[j]);
     }
 
     // Set initial state
     current_posting_index_ = 0;
-    std::cout << "Successfully loaded term '" << term << "' using dictionary lookup" << std::endl;
+    
+    if (debug_term) {
+        std::cout << "Final postings loaded: " << postings_.size() << "\n";
+        for (const auto& p : postings_) {
+            std::cout << "  Doc " << p.first << ", Freq " << p.second << "\n";
+        }
+        std::cout << "============================================\n";
+    }
+    
     return true;
 }
 
