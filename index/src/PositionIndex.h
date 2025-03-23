@@ -52,13 +52,12 @@ private:
     mutable std::ifstream data_file_;
     bool loadPosDict();
 
-
     // Thread-safe position buffer
     static std::mutex buffer_mutex_;
     static std::unordered_map<std::string, std::vector<PositionEntry>> position_buffer_;
     static size_t buffer_size_;
     static int buffer_counter_;
-    static constexpr size_t MAX_BUFFER_SIZE = 256 * 1024 * 1024;  // found higher buff for flush better for overall perf
+    static constexpr size_t MAX_BUFFER_SIZE = 256 * 1024 * 1024;
 
     static void flushBuffer(const std::string& output_dir);
     static void mergePositionBuffers(const std::string& output_dir);
