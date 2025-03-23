@@ -12,6 +12,10 @@ namespace mithril {
 struct CrawlerConfig {
     std::string log_level = "info";
 
+    std::string docs_directory;
+    std::string state_directory;
+    std::string snapshot_directory;
+
     size_t num_workers = 2;
     size_t concurrent_requests = 10;
     unsigned long request_timeout = 10;  // seconds
@@ -19,7 +23,6 @@ struct CrawlerConfig {
     std::vector<std::string> seed_urls;
     std::set<std::string> blacklist_hosts;
 
-    std::string data_directory = "data";
 
     long default_crawl_delay_ms = 200;  // milliseconds
     size_t middle_queue_queue_count = 100;

@@ -40,8 +40,16 @@ constexpr size_t NumWorkers = 2;
 constexpr size_t ConcurrentRequests = 10;
 
 Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
-    if (!DirectoryExists(config.data_directory.c_str())) {
-        spdlog::error("configured data_directory does not exist: {}", config.data_directory);
+    if (!DirectoryExists(config.docs_directory.c_str())) {
+        spdlog::error("configured docs_directory does not exist: {}", config.docs_directory);
+        exit(1);
+    }
+    if (!DirectoryExists(config.state_directory.c_str())) {
+        spdlog::error("configured state_directory does not exist: {}", config.state_directory);
+        exit(1);
+    }
+    if (!DirectoryExists(config.snapshot_directory.c_str())) {
+        spdlog::error("configured snapshot_directory does not exist: {}", config.snapshot_directory);
         exit(1);
     }
 
@@ -58,16 +66,10 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
         data::SerializeValue(true, lockFile);
     }
 
-    frontierDirectory_ = config.data_directory + "/frontier";
+    frontierDirectory_ = config.state_directory + "/frontier";
     if (!DirectoryExists(frontierDirectory_.c_str())) {
         // Create frontier directory
         mkdir(frontierDirectory_.c_str(), 0755);
-    }
-
-    docsDirectory_ = config.data_directory + "/docs";
-    if (!DirectoryExists(docsDirectory_.c_str())) {
-        // Create docs directory
-        mkdir(docsDirectory_.c_str(), 0755);
     }
 
     for (const auto& host : config_.blacklist_hosts) {
@@ -114,7 +116,7 @@ void Coordinator::Run() {
 
     for (size_t i = 0; i < config_.num_workers; ++i) {
         workerThreads.emplace_back([&] {
-            Worker w(*state_, docQueue_.Get(), frontier_.Get(), docsDirectory_, blacklistedHostsTrie_);
+            Worker w(*state_, docQueue_.Get(), frontier_.Get(), config_.docs_directory, blacklistedHostsTrie_);
             w.Run();
         });
         ++threadCount;
@@ -168,11 +170,11 @@ void Coordinator::Run() {
 }
 
 std::string Coordinator::LockPath() const {
-    return config_.data_directory + "/crawler_lock";
+    return config_.state_directory + "/crawler_lock";
 }
 
 std::string Coordinator::StatePath() const {
-    return config_.data_directory + "/state.dat";
+    return config_.state_directory + "/state.dat";
 }
 
 void Coordinator::DumpState(const std::string& file) {
@@ -247,9 +249,9 @@ void Coordinator::DoSnapshot(size_t n) {
     state_->threadSync.StartPause(static_cast<int>(n));
     spdlog::info("taking snapshot of crawler state");
 
-    auto snapshotDir = config_.data_directory + "/snapshot";
-    auto snapshotTempDir = config_.data_directory + "/snapshot.tmp";
-    auto snapshotOldDir = config_.data_directory + "/snapshot.old";
+    auto snapshotDir = config_.snapshot_directory + "/crawler_snapshot";
+    auto snapshotTempDir = config_.snapshot_directory + "/crawler_snapshot.tmp";
+    auto snapshotOldDir = config_.snapshot_directory + "/crawler_snapshot.old";
 
     if (DirectoryExists(snapshotTempDir.c_str())) {
         RmRf(snapshotTempDir.c_str());
@@ -298,10 +300,6 @@ void Coordinator::DoSnapshot(size_t n) {
 
     spdlog::info("resuming crawler");
     state_->threadSync.EndPause();
-}
-
-std::string Coordinator::StateSnapshotPath() const {
-    return config_.data_directory + "/state.dat";
 }
 
 }  // namespace mithril

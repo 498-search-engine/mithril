@@ -50,6 +50,21 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
 
         if (key == "log_level"sv) {
             config.log_level = value;
+        } else if (key == "docs_directory"sv) {
+            if (!value.empty() && value.back() == '/') {
+                value.pop_back();
+            }
+            config.docs_directory = value;
+        } else if (key == "state_directory"sv) {
+            if (!value.empty() && value.back() == '/') {
+                value.pop_back();
+            }
+            config.state_directory = value;
+        } else if (key == "snapshot_directory"sv) {
+            if (!value.empty() && value.back() == '/') {
+                value.pop_back();
+            }
+            config.snapshot_directory = value;
         } else if (key == "workers"sv) {
             config.num_workers = std::stoul(std::string(value));
             if (config.num_workers == 0) {
@@ -70,8 +85,6 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
             }
         } else if (key == "request_timeout"sv) {
             config.request_timeout = std::stoul(std::string(value));
-        } else if (key == "data_directory"sv) {
-            config.data_directory = value;
         } else if (key == "default_crawl_delay_ms"sv) {
             config.default_crawl_delay_ms = std::stol(std::string(value));
         } else if (key == "middle_queue.queue_count"sv) {
@@ -109,6 +122,16 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
                 config.blacklist_hosts.insert(std::string{line});
             }
         }
+    }
+
+    if (config.docs_directory.empty()) {
+        throw std::runtime_error("No docs_directory configured");
+    }
+    if (config.state_directory.empty()) {
+        throw std::runtime_error("No state_directory configured");
+    }
+    if (config.snapshot_directory.empty()) {
+        throw std::runtime_error("No snapshot_directory configured");
     }
 
     if (config.seed_urls.empty()) {
