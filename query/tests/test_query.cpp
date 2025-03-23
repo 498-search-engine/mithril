@@ -1,0 +1,123 @@
+#include "../src/Query.h"
+#include <gtest/gtest.h>
+#include <string>
+#include <random>
+#include <sstream>
+
+// Test fixture for Query tests
+class QueryTest : public ::testing::Test {
+protected:
+    // Original index path to restore after tests
+    std::string original_index_path;
+    std::string test_index_path;
+    
+    void SetUp() override {
+        // Store original index path
+        original_index_path = query::QueryConfig::IndexPath;
+        
+        // Create a random index path for testing
+        std::random_device rd;
+        std::stringstream ss;
+        ss << "index_random_" << rd();
+        test_index_path = ss.str();
+        
+        // Update QueryConfig to use our test index path
+        const_cast<std::string&>(query::QueryConfig::IndexPath) = test_index_path;
+    }
+    
+    void TearDown() override {
+        // Restore original index path
+        const_cast<std::string&>(query::QueryConfig::IndexPath) = original_index_path;
+    }
+    
+    // Helper to create a Token with the given value
+    Token CreateToken(const std::string& value, TokenType type = TokenType::WORD) {
+        Token token(type, value);
+        return token;
+    }
+};
+
+// Test that TermQuery can be constructed and evaluated
+TEST_F(QueryTest, TermQueryConstruction) {
+    // Create a TermQuery
+    TermQuery query(CreateToken("example"));
+    
+    // We expect an empty result since the index path is random
+    auto results = query.Evaluate();
+    
+    // Verify that evaluating a query with a non-existent index returns empty results
+    EXPECT_TRUE(results.empty());
+}
+
+// Test that basic Query methods work
+TEST_F(QueryTest, BaseQueryMethods) {
+    // The base Query virtual destructor should be callable
+    Query* query = new TermQuery(CreateToken("test"));
+    delete query;
+    
+    // Base Query's Evaluate should return empty vector
+    Query base_query;
+    auto results = base_query.Evaluate();
+    EXPECT_TRUE(results.empty());
+}
+
+// Test with different token types
+TEST_F(QueryTest, DifferentTokenTypes) {
+    // Test with WORD token
+    TermQuery word_query(CreateToken("wordtoken", TokenType::WORD));
+    auto word_results = word_query.Evaluate();
+    EXPECT_TRUE(word_results.empty());
+    
+    // Test with PHRASE token
+    TermQuery phrase_query(CreateToken("phrase token", TokenType::PHRASE));
+    auto phrase_results = phrase_query.Evaluate();
+    EXPECT_TRUE(phrase_results.empty());
+}
+
+// Test with empty token value
+TEST_F(QueryTest, EmptyTokenValue) {
+    TermQuery empty_query(CreateToken(""));
+    auto results = empty_query.Evaluate();
+    EXPECT_TRUE(results.empty());
+}
+
+// Test that QueryConfig path is properly updated
+TEST_F(QueryTest, QueryConfigPathUpdated) {
+    // Verify that QueryConfig is using our test index path
+    EXPECT_EQ(query::QueryConfig::IndexPath, test_index_path);
+}
+
+// Test with different random paths
+TEST_F(QueryTest, MultipleRandomPaths) {
+    // Test with first random path
+    const_cast<std::string&>(query::QueryConfig::IndexPath) = "random_path_1";
+    TermQuery query1(CreateToken("test"));
+    auto results1 = query1.Evaluate();
+    EXPECT_TRUE(results1.empty());
+    
+    // Test with second random path
+    const_cast<std::string&>(query::QueryConfig::IndexPath) = "random_path_2";
+    TermQuery query2(CreateToken("test"));
+    auto results2 = query2.Evaluate();
+    EXPECT_TRUE(results2.empty());
+}
+
+// Test with special characters in token
+TEST_F(QueryTest, SpecialCharactersInToken) {
+    TermQuery query(CreateToken("special!@#$%^&*()"));
+    auto results = query.Evaluate();
+    EXPECT_TRUE(results.empty());
+}
+
+// Test with very long token
+TEST_F(QueryTest, VeryLongToken) {
+    std::string long_token(1000, 'a'); // 1000 'a' characters
+    TermQuery query(CreateToken(long_token));
+    auto results = query.Evaluate();
+    EXPECT_TRUE(results.empty());
+}
+
+int main(int argc, char **argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}

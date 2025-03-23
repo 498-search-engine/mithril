@@ -26,6 +26,19 @@ target_link_libraries(test_lexer PRIVATE
     GTest::gtest_main
 )
 
+# Add test executable
+add_executable(test_query
+    tests/test_query.cpp
+)
+target_link_libraries(test_query PRIVATE
+    query
+    GTest::gtest
+    GTest::gtest_main
+    index
+)
+
+
+
 # Add lexer driver executable
 add_executable(lexer_driver
     tests/lexer_driver.cpp

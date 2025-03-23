@@ -24,7 +24,7 @@ public:
     [[nodiscard]] virtual auto Evaluate() const -> std::vector<uint32_t>{return {}; } 
 };
 
-class TermQuery : protected Query {
+class TermQuery : public Query {
 public:
     TermQuery(Token token) : token_(std::move(token)) {}
 
