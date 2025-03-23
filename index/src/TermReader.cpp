@@ -76,13 +76,26 @@ bool TermReader::findTermWithDict(const std::string& term, const TermDictionary&
     // Read postings
     postings_.clear();
     postings_.reserve(postings_size);
+
+    // First read all doc ID deltas and calculate actual doc IDs
+    std::vector<uint32_t> doc_ids(postings_size);
     uint32_t last_doc_id = 0;
     for (uint32_t j = 0; j < postings_size; j++) {
         uint32_t doc_id_delta = decodeVByte(index_file_);
-        uint32_t freq = decodeVByte(index_file_);
         uint32_t doc_id = last_doc_id + doc_id_delta;
+        doc_ids[j] = doc_id;
         last_doc_id = doc_id;
-        postings_.emplace_back(doc_id, freq);
+    }
+
+    // Then read all frequencies
+    std::vector<uint32_t> freqs(postings_size);
+    for (uint32_t j = 0; j < postings_size; j++) {
+        freqs[j] = decodeVByte(index_file_);
+    }
+
+    // Combine doc IDs and frequencies into postings
+    for (uint32_t j = 0; j < postings_size; j++) {
+        postings_.emplace_back(doc_ids[j], freqs[j]);
     }
 
     // Set initial state
