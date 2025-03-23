@@ -356,9 +356,13 @@ void UrlFrontier::TouchRobotRequestTimeouts() {
     robotRulesCache_.TouchRobotRequestTimeouts();
 }
 
-core::Optional<unsigned long> UrlFrontier::LookUpCrawlDelay(const http::CanonicalHost& host,
-                                                            unsigned long defaultDelay) {
-    core::LockGuard lock(robotsCacheMu_);
+core::Optional<unsigned long> UrlFrontier::LookUpCrawlDelayNonblocking(const http::CanonicalHost& host,
+                                                                       unsigned long defaultDelay) {
+    core::LockGuard lock(robotsCacheMu_, core::DeferLock);
+    if (!lock.TryLock()) {
+        return core::nullopt;
+    }
+
     const auto* res = robotRulesCache_.GetOrFetch(host);
     if (res == nullptr) {
         return core::nullopt;
