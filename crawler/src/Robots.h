@@ -38,6 +38,7 @@ private:
         std::vector<std::pair<std::string, Node>> fixedSegments;
         std::unique_ptr<Node> wildcardMatch;  // corresponds to a *
         std::unique_ptr<Node> emptyMatch;     // corresponds to a / with nothing before it
+        bool trailingWildcard{false};
         NodeType type{NodeType::NonTerminal};
         uint16_t patternLength{0};
     };

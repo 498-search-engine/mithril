@@ -295,6 +295,17 @@ TEST(Robots, Wildcards) {
         EXPECT_TRUE(trie.IsAllowed("/valid/stuff"sv));
         EXPECT_TRUE(trie.IsAllowed("/something_invalid"sv));  // Invalid rule discarded
     }
+
+    {
+        auto trie = internal::RobotsTrie({"/Special:*"}, {"/Special:ExplicitlyAllowed"});
+        EXPECT_TRUE(trie.IsAllowed("/path"));
+        EXPECT_TRUE(trie.IsAllowed("/Special"));
+        EXPECT_FALSE(trie.IsAllowed("/Special:"));
+        EXPECT_FALSE(trie.IsAllowed("/Special:asdf"));
+        EXPECT_FALSE(trie.IsAllowed("/Special:asdf/123"));
+        EXPECT_FALSE(trie.IsAllowed("/Special:asdf/123/"));
+        EXPECT_TRUE(trie.IsAllowed("/Special:ExplicitlyAllowed"));
+    }
 }
 
 TEST(Robots, EdgeCases) {
@@ -369,7 +380,8 @@ TEST(Robots, EndToEnd) {
                    "Disallow: /api/*/private/\n"
                    "Allow: /api/v1/private/docs/\n"
                    "Disallow: /users/*/settings/\n"
-                   "Allow: /users/*/settings/public/\n"sv;
+                   "Allow: /users/*/settings/public/\n"
+                   "Disallow: /Special:*\n"sv;
 
         auto rules = RobotRules::FromRobotsTxt(txt, "crawler"sv);
         EXPECT_FALSE(rules.Allowed("/api/v1/private/config"sv));
@@ -377,6 +389,7 @@ TEST(Robots, EndToEnd) {
         EXPECT_TRUE(rules.Allowed("/api/v1/private/docs/guide"sv));
         EXPECT_FALSE(rules.Allowed("/users/john/settings/email"sv));
         EXPECT_TRUE(rules.Allowed("/users/john/settings/public/profile"sv));
+        EXPECT_FALSE(rules.Allowed("/Special:Editors"sv));
     }
 
     // Edge cases and invalid patterns
