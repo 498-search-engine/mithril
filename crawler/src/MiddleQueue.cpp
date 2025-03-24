@@ -147,6 +147,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 
     MiddleQueueActiveQueueCount.Set(ActiveQueueCount());
     MiddleQueueTotalQueuedURLs.Set(totalQueuedURLs_);
+    MiddleQueueTotalHosts.Set(hosts_.size());
 }
 
 size_t MiddleQueue::ActiveQueueCount() const {

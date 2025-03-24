@@ -86,6 +86,12 @@ inline auto MiddleQueueTotalQueuedURLs = Metric{
     "Number of queued URLs across all queues in the middle queue",
 };
 
+inline auto MiddleQueueTotalHosts = Metric{
+    "crawler_middle_queue_total_hosts",
+    MetricTypeGauge,
+    "Number of tracked hosts in the middle queue",
+};
+
 inline auto FrontierSize = Metric{
     "crawler_frontier_size",
     MetricTypeGauge,
@@ -118,6 +124,7 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&DocumentQueueSizeMetric);
     server.Register(&MiddleQueueActiveQueueCount);
     server.Register(&MiddleQueueTotalQueuedURLs);
+    server.Register(&MiddleQueueTotalHosts);
     server.Register(&FrontierSize);
     server.Register(&FrontierQueueSize);
     server.Register(&FrontierFreshURLs);
