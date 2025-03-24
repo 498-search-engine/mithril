@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 
 namespace mithril::ranking {
@@ -42,7 +43,7 @@ struct CrawlerRankingsStruct {
     bool isHttps;
 };
 
-uint32_t GetUrlRank(const std::string& url);
+uint32_t GetUrlRank(std::string_view url);
 
 const std::unordered_set<std::string> WhitelistTld = {
     "com",  // Commercial (most trusted and widely used)
@@ -151,7 +152,8 @@ const std::unordered_set<std::string> WhitelistDomain = {
 /*
  * Gets all relevant ranking info in one pass of the URL string.
  */
-static void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker);
+void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker);
+
 }  // namespace mithril::ranking
 
 #endif
