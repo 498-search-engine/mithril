@@ -32,6 +32,7 @@ struct CrawlerConfig {
     double middle_queue_utilization_target = 0.25;
 
     size_t concurrent_robots_requests = 100;
+    size_t robots_cache_size = 50000;
 
     uint16_t metrics_port = 9000;
     unsigned long snapshot_period_seconds = 30L * 60L;

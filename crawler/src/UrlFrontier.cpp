@@ -37,9 +37,9 @@ constexpr unsigned int URLHighScoreQueuePercent = 75;
 
 }  //  namespace
 
-UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests)
+UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests, size_t robotsCacheSize)
     : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
-      robotRulesCache_(concurrentRobotsRequests) {}
+      robotRulesCache_(concurrentRobotsRequests, robotsCacheSize) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);

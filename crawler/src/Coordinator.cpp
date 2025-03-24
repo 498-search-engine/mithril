@@ -82,7 +82,8 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     state_ = core::UniquePtr<LiveState>(new LiveState{});
 
     docQueue_ = core::UniquePtr<DocumentQueue>(new DocumentQueue{state_->threadSync});
-    frontier_ = core::UniquePtr<UrlFrontier>(new UrlFrontier{frontierDirectory_, config.concurrent_robots_requests});
+    frontier_ = core::UniquePtr<UrlFrontier>(
+        new UrlFrontier{frontierDirectory_, config.concurrent_robots_requests, config.robots_cache_size});
     requestManager_ = core::UniquePtr<RequestManager>(
         new RequestManager{frontier_.Get(), docQueue_.Get(), config, blacklistedHostsTrie_});
 

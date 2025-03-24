@@ -99,6 +99,8 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
             config.middle_queue_utilization_target = std::stod(std::string(value));
         } else if (key == "concurrent_robots_requests"sv) {
             config.concurrent_robots_requests = std::stoul(std::string(value));
+        } else if (key == "robots_cache_size"sv) {
+            config.robots_cache_size = std::stoul(value);
         } else if (key == "metrics_port"sv) {
             config.metrics_port = static_cast<uint16_t>(std::stoul(std::string(value)));
         } else if (key == "snapshot_period_seconds"sv) {
