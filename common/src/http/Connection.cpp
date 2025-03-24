@@ -238,6 +238,7 @@ void Connection::Close() {
 
 Response Connection::GetResponse() {
     assert(state_ == State::Complete);
+    assert(!headers_.empty());
 
     // Close socket and shutdown connection
     state_ = State::Closed;
@@ -454,10 +455,11 @@ void Connection::Process(bool gotEof) {
 
     if (gotEof) {
         if (!IsError()) {
-            if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
+            if (state_ == State::Sending || state_ == State::ReadingHeaders ||
+                (state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
                 (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
                 state_ = State::UnexpectedEOFError;
-                spdlog::warn("connection: closed before receiving complete response from {}:{}", url_.host, url_.port);
+                SPDLOG_DEBUG("connection: closed before receiving complete response from {}:{}", url_.host, url_.port);
             } else {
                 state_ = State::Complete;
             }
