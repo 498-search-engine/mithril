@@ -65,6 +65,8 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
                 value.pop_back();
             }
             config.snapshot_directory = value;
+        } else if (key == "dns_cache_size"sv) {
+            config.dns_cache_size = std::stoul(value);
         } else if (key == "workers"sv) {
             config.num_workers = std::stoul(std::string(value));
             if (config.num_workers == 0) {

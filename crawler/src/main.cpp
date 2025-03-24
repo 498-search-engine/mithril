@@ -15,17 +15,24 @@
 int main(int argc, char* argv[]) {
     signal(SIGPIPE, SIG_IGN);
 
-    mithril::http::InitializeSSL();
-    mithril::http::ApplicationResolver = core::UniquePtr<mithril::http::Resolver>(new mithril::http::AsyncResolver{});
-
+    mithril::CrawlerConfig config;
     try {
-        auto config = mithril::LoadConfigFromFile(argc > 1 ? argv[1] : "crawler.conf");
+        config = mithril::LoadConfigFromFile(argc > 1 ? argv[1] : "crawler.conf");
         auto logLevel = spdlog::level::from_str(config.log_level);
         spdlog::set_level(logLevel);
         if (logLevel == spdlog::level::off) {
             std::cout << "logging off" << std::endl;
         }
+    } catch (const std::exception& e) {
+        spdlog::error("failed to load config: {}", e.what());
+        return 1;
+    }
 
+    mithril::http::InitializeSSL();
+    mithril::http::ApplicationResolver =
+        core::UniquePtr<mithril::http::Resolver>(new mithril::http::AsyncResolver{config.dns_cache_size});
+
+    try {
         mithril::Coordinator c(config);
         c.Run();
     } catch (const std::exception& e) {
