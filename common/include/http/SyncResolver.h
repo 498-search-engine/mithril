@@ -14,8 +14,6 @@ public:
     SyncResolver() = default;
 
     bool Resolve(const std::string& host, const std::string& port, Resolver::ResolutionResult& result) override;
-
-    // TODO cache
 };
 
 }  // namespace mithril::http

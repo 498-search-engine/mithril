@@ -7,6 +7,7 @@
 #include "http/Response.h"
 #include "http/SSL.h"
 #include "http/URL.h"
+#include "spdlog/common.h"
 
 #include <algorithm>
 #include <cassert>
@@ -42,21 +43,21 @@ constexpr size_t BufferSize = 8192;
 constexpr auto HeaderDelimiter = "\r\n\r\n"sv;
 constexpr auto CRLF = "\r\n"sv;
 
-void PrintSSLError(SSL* ssl, int status, const char* operation) {
+void PrintSSLError(SSL* ssl, int status, const char* operation, spdlog::level::level_enum level) {
     int sslErr = SSL_get_error(ssl, status);
-    spdlog::warn("connection: {} failed with error code {}", operation, sslErr);
+    spdlog::log(level, "connection: {} failed with error code {}", operation, sslErr);
 
     // Print the entire error queue
     unsigned long err;
     while ((err = ERR_get_error()) != 0) {
         char errBuf[256];
         ERR_error_string_n(err, errBuf, sizeof(errBuf));
-        spdlog::warn("ssl error: {}", errBuf);
+        spdlog::log(level, "ssl error: {}", errBuf);
     }
 }
 
 void PrintSSLConnectError(SSL* ssl, int status) {
-    PrintSSLError(ssl, status, "SSL_connect");
+    PrintSSLError(ssl, status, "SSL_connect", spdlog::level::warn);
 
     // Print verification errors if any
     long verifyResult = SSL_get_verify_result(ssl);
@@ -188,35 +189,38 @@ void Connection::InitializeSSL() {
 
     ssl_ = SSL_new(ctx);
     if (ssl_ == nullptr) {
-        // TODO: error handling strategy
-        throw std::runtime_error("Failed to create SSL object");
+        spdlog::error("failed to create SSL object");
+        state_ = State::ConnectError;
+        return;
     }
 
     int status = SSL_set_fd(ssl_, fd_);
     if (status != 1) {
-        PrintSSLError(ssl_, status, "SSL_set_fd");
+        PrintSSLError(ssl_, status, "SSL_set_fd", spdlog::level::err);
         SSL_free(ssl_);
         ssl_ = nullptr;
-        // TODO: error handling strategy
-        throw std::runtime_error("Failed to set SSL file descriptor");
+        state_ = State::ConnectError;
+        return;
     }
 
     // Set Server Name Indication (SNI)
     status = SSL_set_tlsext_host_name(ssl_, url_.host.c_str());
     if (status != 1) {
-        PrintSSLError(ssl_, status, "SSL_set_tlsext_host_name");
+        PrintSSLError(ssl_, status, "SSL_set_tlsext_host_name", spdlog::level::err);
         SSL_free(ssl_);
         ssl_ = nullptr;
-        throw std::runtime_error("Failed to set SNI hostname");
+        state_ = State::ConnectError;
+        return;
     }
 
     // Set DNS hostname to verify
     status = SSL_set1_host(ssl_, url_.host.c_str());
     if (status != 1) {
-        PrintSSLError(ssl_, status, "SSL_set1_host");
+        PrintSSLError(ssl_, status, "SSL_set1_host", spdlog::level::err);
         SSL_free(ssl_);
         ssl_ = nullptr;
-        throw std::runtime_error("Failed to set certificate verification hostname");
+        state_ = State::ConnectError;
+        return;
     }
 }
 
@@ -294,7 +298,9 @@ bool Connection::WriteToSocketSSL() {
             } else if (err == SSL_ERROR_ZERO_RETURN || err == SSL_ERROR_SYSCALL) {
                 return true;
             } else {
-                PrintSSLError(ssl_, bytesSent, "SSL_write");
+#if not defined(NDEBUG)
+                PrintSSLError(ssl_, bytesSent, "SSL_write", spdlog::level::warn);
+#endif
                 state_ = State::SocketError;
                 Close();
                 return false;
@@ -325,8 +331,7 @@ bool Connection::ReadFromSocketRaw() {
                 // No more data available right now
                 return false;
             }
-            // TODO: error logging
-            spdlog::error("connection: read from socket: {}", strerror(errno));
+            spdlog::warn("connection: read from socket: {}", strerror(errno));
             state_ = State::SocketError;
             Close();
             return false;
@@ -355,7 +360,9 @@ bool Connection::ReadFromSocketSSL() {
             } else if (err == SSL_ERROR_ZERO_RETURN || err == SSL_ERROR_SYSCALL) {
                 return true;
             } else {
-                PrintSSLError(ssl_, bytesRead, "SSL_read");
+#if not defined(NDEBUG)
+                PrintSSLError(ssl_, bytesRead, "SSL_read", spdlog::level::warn);
+#endif
                 state_ = err == SSL_ERROR_SSL ? State::UnexpectedEOFError : State::SocketError;
                 Close();
                 return false;
@@ -418,9 +425,11 @@ void Connection::Connect() {
                 // Establishing SSL connection in progress
                 return;
             }
-
             // Actual SSL error occurred
+
+#if not defined(NDEBUG)
             PrintSSLConnectError(ssl_, status);
+#endif
             state_ = State::ConnectError;
             Close();
             return;
