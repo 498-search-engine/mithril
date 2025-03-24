@@ -113,7 +113,6 @@ void RequestManager::TouchRequestTimeouts() {
 
 void RequestManager::DispatchFailedRequest(http::FailedRequest failed) {
     spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, http::StringOfRequestError(failed.error));
-    // TODO: pass off to whatever
 }
 
 void RequestManager::RestoreQueuedURLs(std::vector<std::string>& urls) {

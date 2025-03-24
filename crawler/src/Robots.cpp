@@ -514,8 +514,6 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
         entry.rules = RobotRules::DisallowAll();
         entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
         break;
-
-        // TODO: cut-outs for 429, 5xx, etc.
     }
 
     completedFetches_.push_back(std::move(canonicalHost));
