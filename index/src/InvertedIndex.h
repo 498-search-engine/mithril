@@ -13,6 +13,12 @@ namespace mithril {
 using Document = data::Document;
 using docid_t = data::docid_t;
 
+struct DocumentMetadata {
+    data::docid_t id;
+    std::string url;
+    std::vector<std::string> title;
+};
+
 class IndexBuilder {
 public:
     explicit IndexBuilder(const std::string& output_dir,
@@ -26,7 +32,8 @@ public:
 
 private:
     // doc
-    std::vector<data::Document> documents_;
+    // std::vector<data::Document> documents_;
+    std::vector<DocumentMetadata> document_metadata_;
     std::unordered_map<std::string, uint32_t> url_to_id_;
 
     // Current block

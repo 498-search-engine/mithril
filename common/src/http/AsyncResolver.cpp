@@ -41,10 +41,10 @@ int GetNProcs() {
 
 namespace mithril::http {
 
-AsyncResolver::AsyncResolver() : AsyncResolver(std::clamp(GetNProcs() * 2, 4, 16)) {}
+AsyncResolver::AsyncResolver(size_t cacheSize) : AsyncResolver(cacheSize, std::clamp(GetNProcs() * 2, 4, 16)) {}
 
-AsyncResolver::AsyncResolver(size_t workers) {
-    spdlog::info("pooled async resolver starting with {} workers", workers);
+AsyncResolver::AsyncResolver(size_t cacheSize, size_t workers) : results_(cacheSize) {
+    spdlog::debug("pooled async resolver starting with {} workers", workers);
     workers_.reserve(workers);
     for (size_t i = 0; i < workers; ++i) {
         workers_.emplace_back([this, i] { this->WorkerThreadEntry(); });
@@ -67,20 +67,20 @@ AsyncResolver::~AsyncResolver() {
 bool AsyncResolver::Resolve(const std::string& host, const std::string& port, Resolver::ResolutionResult& result) {
     core::LockGuard lock(resultsMu_);
     auto key = host + ':' + port;
-    auto it = results_.find(key);
-    if (it == results_.end()) {
+    auto* res = results_.Find(key);
+    if (res == nullptr) {
         results_[key] = std::nullopt;
         lock.Unlock();
         StartResolve(host, port, key);
         return false;
     }
 
-    if (!it->second.has_value()) {
+    if (!res->second.has_value()) {
         // Still waiting for resolution
         return false;
     }
 
-    result = *it->second;
+    result = *res->second;
     return true;
 }
 
@@ -120,6 +120,8 @@ void AsyncResolver::ResolveSync(const ResolveRequest& req) {
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
+
+    SPDLOG_TRACE("resolving {}:{}", req.host, req.port);
 
     int status = getaddrinfo(req.host.c_str(), req.port.c_str(), &hints, &address);
     if (status != 0) {

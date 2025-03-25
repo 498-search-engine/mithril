@@ -84,6 +84,7 @@ const HtmlTag TagsRecognized[] = {
     {      "data",        DesiredAction::Discard},
     {  "datalist",        DesiredAction::Discard},
     {        "dd",        DesiredAction::Discard},
+    {      "defs", DesiredAction::DiscardSection},
     {       "del",        DesiredAction::Discard},
     {   "details",        DesiredAction::Discard},
     {       "dfn",        DesiredAction::Discard},
@@ -183,6 +184,7 @@ const HtmlTag TagsRecognized[] = {
     {       "sup",        DesiredAction::Discard},
 
     {       "svg", DesiredAction::DiscardSection},
+    {    "symbol", DesiredAction::DiscardSection},
 
     {     "table",        DesiredAction::Discard},
     {     "tbody",        DesiredAction::Discard},

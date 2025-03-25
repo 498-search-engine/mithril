@@ -6,11 +6,14 @@
 #include "http/Request.h"
 #include "http/Response.h"
 #include "http/URL.h"
+#include "spdlog/spdlog.h"
 
 #include <cassert>
+#include <cerrno>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <unistd.h>
 #include <unordered_map>
@@ -37,13 +40,13 @@ RequestExecutor::RequestExecutor()
 {
 #if defined(USE_EPOLL)
     if (epoll_ == -1) {
-        perror("RequestExecutor epoll_create1");
+        spdlog::critical("epoll_create1 failed: {}", strerror(errno));
         exit(1);
     }
     events_.reserve(10);  // Initial event buffer size
 #elif defined(USE_KQUEUE)
     if (kq_ == -1) {
-        perror("RequestExecutor kqueue");
+        spdlog::critical("kqueue failed: {}", strerror(errno));
         exit(1);
     }
     events_.reserve(10);  // Initial event buffer size
@@ -102,7 +105,7 @@ void RequestExecutor::SetupActiveConnection(ReqConn reqConn) {
 
     int status = epoll_ctl(epoll_, EPOLL_CTL_ADD, fd, &ev);
     if (status == -1) {
-        perror("RequestExecutor epoll_ctl");
+        spdlog::critical("failed to add epoll_event to epoll: {}", strerror(errno));
         exit(1);
     }
 #elif defined(USE_KQUEUE)
@@ -116,8 +119,7 @@ void RequestExecutor::SetupActiveConnection(ReqConn reqConn) {
     // Add kevent to kqueue
     int status = kevent(kq_, &ev, 1, nullptr, 0, nullptr);
     if (status == -1) {
-        // TODO: error handling strategy
-        perror("RequestExecutor kevent");
+        spdlog::critical("failed to add kevent to kqueue: {}", strerror(errno));
         exit(1);
     }
 #endif
@@ -133,10 +135,9 @@ void RequestExecutor::ProcessConnections() {
 
     size_t nRemoved = 0;
 #if defined(USE_EPOLL)
-    // TODO: untested, unchecked epoll code written by 4o
     int nev = epoll_wait(epoll_, events_.data(), events_.size(), SocketWaitTimeoutMs);
     if (nev == -1) {
-        perror("RequestExecutor epoll_wait");
+        spdlog::critical("epoll_wait failed: {}", strerror(errno));
         exit(1);
     }
 
@@ -164,7 +165,7 @@ void RequestExecutor::ProcessConnections() {
                     ev.events = EPOLLOUT | EPOLLONESHOT;
                     int status = epoll_ctl(epoll_, EPOLL_CTL_MOD, fd, &ev);
                     if (status == -1) {
-                        perror("RequestExecutor epoll_ctl");  // TODO: error handling strategy
+                        spdlog::critical("epoll_ctl failed: {}", strerror(errno));
                         exit(1);
                     }
                 } else if (writingBefore && connIt->second.conn.IsReading()) {
@@ -175,7 +176,7 @@ void RequestExecutor::ProcessConnections() {
                     ev.events = EPOLLIN;
                     int status = epoll_ctl(epoll_, EPOLL_CTL_MOD, fd, &ev);
                     if (status == -1) {
-                        perror("RequestExecutor epoll_ctl");  // TODO: error handling strategy
+                        spdlog::critical("epoll_ctl failed: {}", strerror(errno));
                         exit(1);
                     }
                 }

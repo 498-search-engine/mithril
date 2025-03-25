@@ -4,6 +4,7 @@
 #include "Robots.h"
 #include "ThreadSync.h"
 #include "core/locks.h"
+#include "core/optional.h"
 #include "http/URL.h"
 
 #include <algorithm>
@@ -36,9 +37,9 @@ constexpr unsigned int URLHighScoreQueuePercent = 75;
 
 }  //  namespace
 
-UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests)
+UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests, size_t robotsCacheSize)
     : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
-      robotRulesCache_(concurrentRobotsRequests) {}
+      robotRulesCache_(concurrentRobotsRequests, robotsCacheSize) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);
@@ -138,22 +139,25 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
                 continue;
             }
 
-            const auto* robots = robotRulesCache_.GetOrFetch(it->first);
+            auto host = it->first;
+            auto urls = std::move(it->second);
+            urlsWaitingForRobotsCount_ -= urls.size();
+            urlsWaitingForRobots_.erase(it);
+
+            const auto* robots = robotRulesCache_.GetOrFetch(host);
             if (robots == nullptr) {
-                // Shouldn't really happen unless some LRU cache funny business
-                // happens
+                // robots.txt page was invalid in some way, don't fetch any
+                // results.
                 continue;
             }
 
             // The cache has fetched and resolved the robots.txt page for this
             // canonical host. Process all queued URLs.
-            for (auto& url : it->second) {
+            for (auto& url : urls) {
                 if (robots->Allowed(url.path)) {
-                    allowedURLs.insert(url.url);
+                    allowedURLs.insert(std::move(url.url));
                 }
             }
-            urlsWaitingForRobotsCount_ -= it->second.size();
-            urlsWaitingForRobots_.erase(it);
         }
 
         WaitingRobotsHosts.Set(urlsWaitingForRobots_.size());
@@ -350,6 +354,20 @@ void UrlFrontier::DumpPendingURLs(std::vector<std::string>& urls) {
 void UrlFrontier::TouchRobotRequestTimeouts() {
     core::LockGuard robotsLock(robotsCacheMu_);
     robotRulesCache_.TouchRobotRequestTimeouts();
+}
+
+core::Optional<unsigned long> UrlFrontier::LookUpCrawlDelayNonblocking(const http::CanonicalHost& host,
+                                                                       unsigned long defaultDelay) {
+    core::LockGuard lock(robotsCacheMu_, core::DeferLock);
+    if (!lock.TryLock()) {
+        return core::nullopt;
+    }
+
+    const auto* res = robotRulesCache_.GetOrFetch(host);
+    if (res == nullptr) {
+        return core::nullopt;
+    }
+    return res->CrawlDelay().ValueOr(defaultDelay);
 }
 
 }  // namespace mithril

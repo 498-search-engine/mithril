@@ -32,6 +32,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - more document pruning and better configurability (#73)
 - parse <meta> tags in document (#75)
 - index perf improvements after adding postn index, doubled throughput (#76)
+- Add project website to `User-Agent` header of crawler (#78)
+- Add blacklist-after-the-fact capabilities (#78)
+- expose metric with number of documents in corpus (#80)
+- support trailing wildcards in robots.txt (#87)
+- respect crawl-delay directive (#88)
+- use lru caches in crawler (#92)
+- support Crawler-delay directive (#92)
 - query module with support for term queries and performance measurement
   - implemented `Query` and `TermQuery` classes for basic term searching
   - added `query_driver` utility for testing and benchmarking term queries
@@ -47,6 +54,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - fix: allow gzip reads of size 0 (#72)
 - remove problematic alloca for const_cast (#74)
 - support desc field in commmon/doc, also test phrase searching (and based on position), make shouldstore pos less restrictive (#77)
+- improve HTML parser handling of elements with attributes and comments (#78)
+- make HTTP response header parsing more robust (#78)
+- fix tracking of active robots requests (#78)
+- correctly mark robots req as done after decode error (#79, #81)
+- ensure valid status code range (#84)
+- small header and cmake version fix to compile and get work on gcp vm (#86)
+- gcp vm build, only use doc metadata in saving doc map to reduce mem use, ty @dsage (#90)
+- fix: termReader freq, positions decoding as index encoded now  (#91)
+- fix connection eof empty headers bug (#92)
 
 ## [0.1.0] - 2025-02-07
 

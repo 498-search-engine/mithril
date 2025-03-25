@@ -3,6 +3,7 @@
 #include "Clock.h"
 #include "CrawlerMetrics.h"
 #include "Util.h"
+#include "core/optional.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
@@ -151,6 +152,12 @@ RobotDirectives ParseRobotsTxt(std::string_view file, std::string_view userAgent
             d.disallows.emplace_back(line->value);
         } else if (InsensitiveStrEquals(line->directive, "allow"sv)) {
             d.allows.emplace_back(line->value);
+        } else if (InsensitiveStrEquals(line->directive, "crawl-delay"sv)) {
+            try {
+                d.crawlDelay = std::stoul(std::string{line->value});
+            } catch (const std::invalid_argument&) {  // NOLINT(bugprone-empty-catch)
+            } catch (const std::out_of_range&) {      // NOLINT(bugprone-empty-catch)
+            }
         }
     }
 
@@ -183,18 +190,27 @@ void RobotsTrie::Insert(const std::string& pattern, NodeType type) {
 
     // Split path into segments on / delimiter
     auto segments = SplitPath(pattern);
+    if (segments.size() > 50) {
+        // Too long, don't bother
+        return;
+    }
 
-    for (const auto& segment : segments) {
-        if (segment.size() > 1 && segment.find('*') != std::string_view::npos) {
-            // Segment contains a '*' but has other stuff -- we can't handle
-            // that with our trie implementation. Discard the rule.
-            return;
+    for (size_t i = 0; i < segments.size(); ++i) {
+        auto segment = segments[i];
+        if (segment.size() > 1) {
+            auto starPos = segment.find('*');
+            if (starPos != std::string_view::npos && starPos != segment.size() - 1 && i != segment.size() - 1) {
+                // Segment contains a '*' but not just the star, or at the end -- we
+                // can't handle that with our trie implementation. Discard the rule.
+                return;
+            }
         }
     }
 
     Node* current = &root_;
 
-    for (const auto& segment : segments) {
+    for (size_t i = 0; i < segments.size(); ++i) {
+        auto segment = segments[i];
         if (segment.empty()) {
             if (!current->emptyMatch) {
                 current->emptyMatch = std::make_unique<Node>();
@@ -206,6 +222,13 @@ void RobotsTrie::Insert(const std::string& pattern, NodeType type) {
             }
             current = current->wildcardMatch.get();
         } else {
+            bool isTrailingWildcard = false;
+            if (i == segments.size() - 1 && segment.back() == '*') {
+                // Trailing wildcard
+                segment.remove_suffix(1);
+                isTrailingWildcard = true;
+            }
+
             // Find or insert segment in sorted vector
             auto it = std::lower_bound(current->fixedSegments.begin(),
                                        current->fixedSegments.end(),
@@ -216,6 +239,10 @@ void RobotsTrie::Insert(const std::string& pattern, NodeType type) {
                 it = current->fixedSegments.insert(it, {std::string{segment}, Node{}});
             }
             current = &it->second;
+
+            if (isTrailingWildcard) {
+                current->trailingWildcard = true;
+            }
         }
     }
 
@@ -280,12 +307,25 @@ void RobotsTrie::FindBestMatchRecursive(const std::vector<std::string_view>& seg
         }
     }
 
-    // Try wildcard match
+    // Segment wildcard
     if (node->wildcardMatch) {
         FindBestMatchRecursive(segments, index + 1, node->wildcardMatch.get(), best);
     }
+
+    // Empty match, i.e. trailing /
     if (node->emptyMatch) {
         FindBestMatchRecursive(segments, index + 1, node->emptyMatch.get(), best);
+    }
+
+    // Trailing wildcard
+    if (node->trailingWildcard) {
+        MatchResult current{
+            .type = node->type,
+            .length = node->patternLength,
+        };
+        if (current > best) {
+            best = current;
+        }
     }
 }
 
@@ -300,10 +340,20 @@ RobotsTrie::MatchResult RobotsTrie::FindBestMatch(const std::vector<std::string_
 
 RobotRules::RobotRules() : RobotRules(true) {}
 
+RobotRules RobotRules::AllowAll() {
+    return RobotRules{false};
+}
+
+RobotRules RobotRules::DisallowAll() {
+    return RobotRules{true};
+}
+
 RobotRules::RobotRules(bool disallowAll) : trie_(nullptr), disallowAll_(disallowAll) {}
 
-RobotRules::RobotRules(const std::vector<std::string>& disallowPrefixes, const std::vector<std::string>& allowPrefixes)
-    : trie_(nullptr), disallowAll_(false) {
+RobotRules::RobotRules(const std::vector<std::string>& disallowPrefixes,
+                       const std::vector<std::string>& allowPrefixes,
+                       core::Optional<unsigned long> crawlDelay)
+    : trie_(nullptr), disallowAll_(false), crawlDelay_(crawlDelay) {
     if (allowPrefixes.size() == 0 && disallowPrefixes.size() == 1) {
         if (disallowPrefixes.front().empty() || disallowPrefixes.front() == "/"sv) {
             // Common "Disallow everything" case
@@ -317,7 +367,7 @@ RobotRules::RobotRules(const std::vector<std::string>& disallowPrefixes, const s
 
 RobotRules RobotRules::FromRobotsTxt(std::string_view file, std::string_view userAgent) {
     auto directives = internal::ParseRobotsTxt(file, userAgent);
-    return RobotRules{directives.disallows, directives.allows};
+    return RobotRules{directives.disallows, directives.allows, directives.crawlDelay};
 }
 
 bool RobotRules::Allowed(std::string_view path) const {
@@ -332,33 +382,34 @@ bool RobotRules::Allowed(std::string_view path) const {
     return trie_->IsAllowed(path);
 }
 
-RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests) : maxInFlightRequests_(maxInFlightRequests) {}
+const core::Optional<unsigned long>& RobotRules::CrawlDelay() const {
+    return crawlDelay_;
+}
+
+RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests, size_t cacheSize)
+    : maxInFlightRequests_(maxInFlightRequests), cache_(cacheSize) {}
 
 const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
-    auto it = cache_.find(canonicalHost.url);
-    if (it == cache_.end()) {
-        cache_.try_emplace(canonicalHost.url);
+    auto* entry = cache_.Find(canonicalHost.url);
+    if (entry == nullptr) {
+        cache_.Insert({canonicalHost.url, RobotCacheEntry{}});
         QueueFetch(canonicalHost);
         return nullptr;
     }
 
-    if (it->second.expiresAt == 0) {
+    if (entry->second.expiresAt == 0) {
         // Already fetching
         return nullptr;
     }
 
     auto now = MonotonicTime();
-    if (now >= it->second.expiresAt) {
-        it->second.expiresAt = 0;  // Mark as already fetching
+    if (now >= entry->second.expiresAt) {
+        entry->second.expiresAt = 0;  // Mark as already fetching
         QueueFetch(canonicalHost);
         return nullptr;
     }
 
-    if (it->second.valid) {
-        return &it->second.rules;
-    }
-
-    return nullptr;
+    return &entry->second.rules;
 }
 
 void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost) {
@@ -387,13 +438,16 @@ size_t RobotRulesCache::PendingRequests() const {
     return executor_.InFlightRequests() + queuedFetches_.size();
 }
 
-void RobotRulesCache::ProcessPendingRequests() {
+void RobotRulesCache::FillFromQueue() {
     while (!queuedFetches_.empty() && executor_.InFlightRequests() < maxInFlightRequests_) {
         Fetch(queuedFetches_.front());
         queuedFetches_.pop();
     }
-
     InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
+}
+
+void RobotRulesCache::ProcessPendingRequests() {
+    FillFromQueue();
 
     if (executor_.InFlightRequests() == 0) {
         return;
@@ -430,29 +484,26 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
     auto canonicalHost = CanonicalizeHost(r.req.Url());
     SPDLOG_TRACE("successful robots.txt request: {}", canonicalHost.host);
 
-    // TODO: when this is an LRU cache, could it be possible we don't find it?
-    // Would it matter?
-    auto it = cache_.find(canonicalHost.url);
-    if (it == cache_.end()) {
-        return;
-    }
-
+    auto& entry = cache_[canonicalHost.url];
     try {
         // Decode the body if it is encoded.
         r.res.DecodeBody();
     } catch (const std::runtime_error& e) {
         // Something went wrong while decoding
         spdlog::warn("encountered error while decoding body for {}: {}", r.req.Url().url, e.what());
+        entry.rules = RobotRules::DisallowAll();
+        entry.expiresAt = MonotonicTime() + RobotsTxtCacheFailureDurationSeconds;
+        completedFetches_.push_back(std::move(canonicalHost));
         return;
     }
 
     switch (r.res.header.status) {
     case http::StatusCode::OK:
-        HandleRobotsOK(r.res.header, r.res, it->second);
+        HandleRobotsOK(r.res.header, r.res, entry);
         break;
 
     case http::StatusCode::NotFound:
-        HandleRobotsNotFound(it->second);
+        HandleRobotsNotFound(entry);
         break;
 
     case http::StatusCode::BadRequest:
@@ -460,12 +511,9 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
     case http::StatusCode::Forbidden:
     default:
         spdlog::info("got robots.txt status {} for {}", r.res.header.status, canonicalHost.url);
-        it->second.rules = RobotRules{true};
-        it->second.valid = true;
-        it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+        entry.rules = RobotRules::DisallowAll();
+        entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
         break;
-
-        // TODO: cut-outs for 429, 5xx, etc.
     }
 
     completedFetches_.push_back(std::move(canonicalHost));
@@ -475,14 +523,10 @@ void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& fail
     auto canonicalHost = CanonicalizeHost(failed.req.Url());
     SPDLOG_TRACE("failed robots.txt request: {} {}", canonicalHost.host, http::StringOfRequestError(failed.error));
 
-    auto it = cache_.find(canonicalHost.url);
-    if (it == cache_.end()) {
-        return;
-    }
-
-    it->second.rules = RobotRules{};
-    it->second.valid = false;
-    it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+    cache_[canonicalHost.url] = RobotCacheEntry{
+        .rules = RobotRules::DisallowAll(),
+        .expiresAt = MonotonicTime() + RobotsTxtCacheFailureDurationSeconds,
+    };
 
     completedFetches_.push_back(std::move(canonicalHost));
 }
@@ -495,10 +539,8 @@ void RobotRulesCache::HandleRobotsOK(const http::ResponseHeader& header,
         // Parse the response body
         entry.rules = RobotRules::FromRobotsTxt(std::string_view{res.body.data(), res.body.size()},
                                                 "mithril-crawler"sv);  // TODO: move UA string somewhere else
-        entry.valid = true;
     } else {
-        entry.rules = RobotRules{false};
-        entry.valid = true;
+        entry.rules = RobotRules::AllowAll();
     }
 
     entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
@@ -506,8 +548,7 @@ void RobotRulesCache::HandleRobotsOK(const http::ResponseHeader& header,
 
 void RobotRulesCache::HandleRobotsNotFound(RobotCacheEntry& entry) {
     // 404 Not Found = go for it!
-    entry.rules = RobotRules{false};
-    entry.valid = true;
+    entry.rules = RobotRules::AllowAll();
     entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
 }
 

@@ -2,21 +2,24 @@
 #define COMMON_HTTP_ASYNCRESOLVER_H
 
 #include "core/cv.h"
+#include "core/lru_cache.h"
 #include "core/mutex.h"
 #include "core/thread.h"
 #include "http/Resolver.h"
 
+#include <cstddef>
+#include <optional>
 #include <queue>
 #include <string>
-#include <unordered_map>
+#include <vector>
 
 namespace mithril::http {
 
 class AsyncResolver : public Resolver {
 
 public:
-    AsyncResolver();
-    AsyncResolver(size_t workers);
+    AsyncResolver(size_t cacheSize);
+    AsyncResolver(size_t workers, size_t cacheSize);
     ~AsyncResolver();
 
     bool Resolve(const std::string& host, const std::string& port, Resolver::ResolutionResult& result) override;
@@ -40,7 +43,7 @@ private:
 
     bool shutdown_{false};
 
-    std::unordered_map<std::string, std::optional<Resolver::ResolutionResult>> results_;  // TODO: use LRU cache?
+    core::LRUCache<std::string, std::optional<Resolver::ResolutionResult>> results_;
     std::queue<ResolveRequest> activeRequests_;
 };
 

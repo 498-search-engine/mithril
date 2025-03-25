@@ -1,9 +1,7 @@
 #include "http/Response.h"
 
 #include "Util.h"
-#include "core/array.h"
 #include "data/Gzip.h"
-#include "data/Reader.h"
 #include "spdlog/spdlog.h"
 
 #include <cassert>
@@ -40,6 +38,10 @@ void PopulateHeaderFields(ResponseHeader& h) {
             h.TransferEncoding = &header;
         }
     }
+}
+
+bool IsDigitSafe(int c) {
+    return c >= 0 && c <= 127 && std::isdigit(c);
 }
 
 }  // namespace
@@ -86,15 +88,18 @@ std::optional<ResponseHeader> ParseResponseHeader(std::string_view header) {
     }
 
     // Parse status code
-    if (!std::isdigit(header[9]) || !std::isdigit(header[10]) || !std::isdigit(header[11])) {
+    if (!IsDigitSafe(header[9]) || !IsDigitSafe(header[10]) || !IsDigitSafe(header[11])) {
+        return std::nullopt;
+    }
+    uint16_t status = ((header[9] - '0') * 100) + ((header[10] - '0') * 10) + (header[11] - '0');
+    if (status > 999 || status < 100) {
         return std::nullopt;
     }
 
-    uint16_t status = (header[9] - '0') * 100 + (header[10] - '0') * 10 + (header[11] - '0');
     parsed.status = static_cast<StatusCode>(status);
 
     // Parse headers
-    size_t pos = header.find("\r\n");
+    size_t pos = header.find("\r\n"sv);
     if (pos == std::string::npos) {
         return std::nullopt;
     }

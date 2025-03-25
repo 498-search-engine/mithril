@@ -89,3 +89,22 @@ std::vector<std::string_view> GetCommaSeparatedList(std::string_view s) {
     }
     return parts;
 }
+
+std::vector<std::string_view> GetWords(std::string_view s) {
+    auto parts = SplitStringOn(s, [](unsigned char c) { return std::isspace(c); });
+
+    for (auto& part : parts) {
+        while (!part.empty() && std::isspace(part.front())) {
+            part.remove_prefix(1);
+        }
+        while (!part.empty() && std::isspace(part.back())) {
+            part.remove_suffix(1);
+        }
+    }
+
+    std::vector<std::string_view> res;
+    res.reserve(parts.size());
+    std::copy_if(parts.begin(), parts.end(), std::back_inserter(res), [](std::string_view s) { return !s.empty(); });
+
+    return res;
+}

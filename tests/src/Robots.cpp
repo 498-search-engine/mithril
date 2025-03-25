@@ -48,6 +48,7 @@ TEST(Robots, ParseRobotsTxt) {
     // Catch-all user agent
     {
         auto txt = "User-agent: *\n"
+                   "Crawl-Delay: 30\n"
                    "Disallow: /profile/message/\n"
                    "Disallow: /meta/*/download/  # Disallow download links\n"
                    "Allow: /profile/about-me/\n"sv;
@@ -58,6 +59,8 @@ TEST(Robots, ParseRobotsTxt) {
         EXPECT_EQ(d.disallows[1], "/meta/*/download/"sv);
         ASSERT_EQ(d.allows.size(), 1);
         EXPECT_EQ(d.allows[0], "/profile/about-me/"sv);
+        ASSERT_TRUE(d.crawlDelay.HasValue());
+        EXPECT_EQ(*d.crawlDelay, 30);
     }
 
     // Multiple user agents, one match
@@ -76,6 +79,7 @@ TEST(Robots, ParseRobotsTxt) {
         EXPECT_EQ(d.disallows[1], "/meta/*/download/"sv);
         ASSERT_EQ(d.allows.size(), 1);
         EXPECT_EQ(d.allows[0], "/profile/about-me/"sv);
+        EXPECT_FALSE(d.crawlDelay.HasValue());
     }
 
     // Multiple user agents, multiple matchs
@@ -295,6 +299,17 @@ TEST(Robots, Wildcards) {
         EXPECT_TRUE(trie.IsAllowed("/valid/stuff"sv));
         EXPECT_TRUE(trie.IsAllowed("/something_invalid"sv));  // Invalid rule discarded
     }
+
+    {
+        auto trie = internal::RobotsTrie({"/Special:*"}, {"/Special:ExplicitlyAllowed"});
+        EXPECT_TRUE(trie.IsAllowed("/path"));
+        EXPECT_TRUE(trie.IsAllowed("/Special"));
+        EXPECT_FALSE(trie.IsAllowed("/Special:"));
+        EXPECT_FALSE(trie.IsAllowed("/Special:asdf"));
+        EXPECT_FALSE(trie.IsAllowed("/Special:asdf/123"));
+        EXPECT_FALSE(trie.IsAllowed("/Special:asdf/123/"));
+        EXPECT_TRUE(trie.IsAllowed("/Special:ExplicitlyAllowed"));
+    }
 }
 
 TEST(Robots, EdgeCases) {
@@ -319,12 +334,15 @@ TEST(Robots, EndToEnd) {
     {
         auto txt = "User-agent: *\n"
                    "Disallow: /private/\n"
-                   "Allow: /private/public/\n"sv;
+                   "Allow: /private/public/\n"
+                   "Crawl-Delay: 30\n"sv;
 
         auto rules = RobotRules::FromRobotsTxt(txt, "testbot"sv);
         EXPECT_FALSE(rules.Allowed("/private/profile"sv));
         EXPECT_TRUE(rules.Allowed("/private/public/docs"sv));
         EXPECT_TRUE(rules.Allowed("/public/stuff"sv));
+        ASSERT_TRUE(rules.CrawlDelay().HasValue());
+        EXPECT_EQ(*rules.CrawlDelay(), 30);
     }
 
     // Multiple user-agents with different rules
@@ -339,10 +357,12 @@ TEST(Robots, EndToEnd) {
         auto defaultRules = RobotRules::FromRobotsTxt(txt, "randombot"sv);
         EXPECT_FALSE(defaultRules.Allowed("/downloads/anything"sv));
         EXPECT_FALSE(defaultRules.Allowed("/downloads/public/file.txt"sv));
+        EXPECT_FALSE(defaultRules.CrawlDelay().HasValue());
 
         auto specificRules = RobotRules::FromRobotsTxt(txt, "goodbot"sv);
         EXPECT_TRUE(specificRules.Allowed("/downloads/public/file.txt"sv));
         EXPECT_FALSE(specificRules.Allowed("/downloads/private/secret.txt"sv));
+        EXPECT_FALSE(specificRules.CrawlDelay().HasValue());
     }
 
     // Comments and whitespace handling
@@ -369,7 +389,8 @@ TEST(Robots, EndToEnd) {
                    "Disallow: /api/*/private/\n"
                    "Allow: /api/v1/private/docs/\n"
                    "Disallow: /users/*/settings/\n"
-                   "Allow: /users/*/settings/public/\n"sv;
+                   "Allow: /users/*/settings/public/\n"
+                   "Disallow: /Special:*\n"sv;
 
         auto rules = RobotRules::FromRobotsTxt(txt, "crawler"sv);
         EXPECT_FALSE(rules.Allowed("/api/v1/private/config"sv));
@@ -377,6 +398,7 @@ TEST(Robots, EndToEnd) {
         EXPECT_TRUE(rules.Allowed("/api/v1/private/docs/guide"sv));
         EXPECT_FALSE(rules.Allowed("/users/john/settings/email"sv));
         EXPECT_TRUE(rules.Allowed("/users/john/settings/public/profile"sv));
+        EXPECT_FALSE(rules.Allowed("/Special:Editors"sv));
     }
 
     // Edge cases and invalid patterns

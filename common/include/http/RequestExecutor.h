@@ -78,7 +78,7 @@ constexpr std::string_view StringOfRequestError(RequestError e) {
     case RequestError::ResponseWrongLanguage:
         return "ResponseWrongLanguage"sv;
     default:
-        return "Unkown"sv;
+        return "Unknown"sv;
     }
 }
 

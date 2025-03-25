@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "DocumentQueue.h"
 #include "MiddleQueue.h"
+#include "StringTrie.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "http/RequestExecutor.h"
@@ -16,7 +17,10 @@ namespace mithril {
 
 class RequestManager {
 public:
-    RequestManager(UrlFrontier* frontier, DocumentQueue* docQueue, const CrawlerConfig& config);
+    RequestManager(UrlFrontier* frontier,
+                   DocumentQueue* docQueue,
+                   const CrawlerConfig& config,
+                   const StringTrie& blacklistedHosts);
 
     void Run(ThreadSync& sync);
     void TouchRequestTimeouts();
@@ -25,13 +29,14 @@ public:
     void DumpQueuedURLs(std::vector<std::string>& out);
 
 private:
-    void DispatchFailedRequest(http::FailedRequest failed);
+    void DispatchFailedRequest(const http::FailedRequest& failed);
 
     size_t targetConcurrentReqs_;
     unsigned long requestTimeout_;
 
     MiddleQueue middleQueue_;
     DocumentQueue* docQueue_;
+    const StringTrie& blacklistedHosts_;
 
     http::RequestExecutor requestExecutor_;
 };

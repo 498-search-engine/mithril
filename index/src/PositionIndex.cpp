@@ -474,9 +474,15 @@ std::vector<uint32_t> PositionIndex::getPositions(const std::string& term, uint3
                 std::vector<uint32_t> positions;
                 positions.reserve(pos_count);
 
-                uint32_t prev_pos = 0;
+                // Read all deltas first (thats how we stored them)
+                std::vector<uint32_t> deltas(pos_count);
                 for (uint32_t j = 0; j < pos_count && data_file_.good(); j++) {
-                    uint32_t delta = VByteCodec::decode(data_file_);
+                    deltas[j] = VByteCodec::decode(data_file_);
+                }
+
+                // Then reconstruct positions
+                uint32_t prev_pos = 0;
+                for (uint32_t delta : deltas) {
                     prev_pos += delta;
                     positions.push_back(prev_pos);
                 }
