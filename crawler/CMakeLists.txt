@@ -1,7 +1,5 @@
 find_package(OpenSSL REQUIRED)
 
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/docs)
-
 add_library(crawler STATIC
     src/Coordinator.cpp
     src/DocumentQueue.cpp

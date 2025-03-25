@@ -58,9 +58,9 @@ bool CopyFile(const char* src, const char* dst) {
     // macOS/BSD implementation using fcopyfile
     // Use copyfile directly with path arguments and COPYFILE_CLONE flag
     // which better preserves sparseness and other file attributes
-    result = copyfile(src, dst, NULL, COPYFILE_ALL | COPYFILE_CLONE) == 0;
+    result = copyfile(src, dst, nullptr, COPYFILE_ALL | COPYFILE_CLONE) == 0;
     if (!result) {
-        perror("copyfile");
+        spdlog::error("copyfile failed: {}", strerror(errno));
     }
 
 #elif defined(HAS_SENDFILE)

@@ -10,6 +10,7 @@
 #include "core/memory.h"
 #include "metrics/MetricsServer.h"
 
+#include <cstddef>
 #include <string>
 
 namespace mithril {
@@ -25,7 +26,6 @@ private:
 
     std::string LockPath() const;
     std::string StatePath() const;
-    std::string StateSnapshotPath() const;
 
     void DumpState(const std::string& file);
     void RecoverState(const std::string& file);
@@ -34,7 +34,6 @@ private:
     StringTrie blacklistedHostsTrie_;
 
     std::string frontierDirectory_;
-    std::string docsDirectory_;
 
     core::UniquePtr<LiveState> state_;
 

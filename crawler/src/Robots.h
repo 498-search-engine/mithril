@@ -1,6 +1,7 @@
 #ifndef CRAWLER_ROBOTS_H
 #define CRAWLER_ROBOTS_H
 
+#include "core/lru_cache.h"
 #include "core/optional.h"
 #include "http/RequestExecutor.h"
 #include "http/Response.h"
@@ -13,7 +14,6 @@
 #include <queue>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -145,7 +145,7 @@ private:
 
 class RobotRulesCache {
 public:
-    RobotRulesCache(size_t maxInFlightRequests);
+    RobotRulesCache(size_t maxInFlightRequests, size_t cacheSize);
 
     /**
      * @brief Gets the ruleset associated with the canonical host, or queues up
@@ -203,8 +203,7 @@ private:
 
     size_t maxInFlightRequests_;
 
-    // TODO: Use an LRU cache
-    std::unordered_map<std::string, RobotCacheEntry> cache_;
+    core::LRUCache<std::string, RobotCacheEntry> cache_;
     std::queue<http::CanonicalHost> queuedFetches_;
     http::RequestExecutor executor_;
 

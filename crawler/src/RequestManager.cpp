@@ -97,8 +97,8 @@ void RequestManager::Run(ThreadSync& sync) {
         // Process requests that failed
         auto& failed = requestExecutor_.FailedRequests();
         if (!failed.empty()) {
-            for (auto& f : failed) {
-                DispatchFailedRequest(std::move(f));
+            for (const auto& f : failed) {
+                DispatchFailedRequest(f);
             }
             failed.clear();
         }
@@ -111,9 +111,15 @@ void RequestManager::TouchRequestTimeouts() {
     requestExecutor_.TouchRequestTimeouts();
 }
 
-void RequestManager::DispatchFailedRequest(http::FailedRequest failed) {
-    spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, http::StringOfRequestError(failed.error));
-    // TODO: pass off to whatever
+void RequestManager::DispatchFailedRequest(const http::FailedRequest& failed) {
+    auto s = std::string{http::StringOfRequestError(failed.error)};
+    spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, s);
+
+    CrawlRequestErrorsMetric
+        .WithLabels({
+            {"error", s}
+    })
+        .Inc();
 }
 
 void RequestManager::RestoreQueuedURLs(std::vector<std::string>& urls) {

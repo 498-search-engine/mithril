@@ -111,14 +111,14 @@ std::string IndexBuilder::StringVecToString(const std::vector<std::string>& vec)
     return result;
 }
 
-void IndexBuilder::process_document(const Document& doc) {
+void IndexBuilder::process_document(Document doc) {
     // Check if we need to flush the current block
     if (should_flush(doc)) {
         auto future = flush_block();
         future.wait();
     }
 
-    auto task = [this, doc]() {
+    auto task = [this, doc = std::move(doc)]() {
         const size_t estimated_unique_terms = doc.words.size() / 4;  // ~25% unique term ratio
         std::unordered_map<std::string, uint32_t> term_freqs;
         term_freqs.reserve(estimated_unique_terms);
@@ -184,7 +184,7 @@ void IndexBuilder::process_document(const Document& doc) {
         {
             std::unique_lock<std::mutex> lock(document_mutex_);
             url_to_id_[doc.url] = doc.id;
-            documents_.push_back(doc);
+            document_metadata_.push_back({doc.id, doc.url, doc.title});
         }
 
         // Prepare batch for position index with selective indexing
@@ -245,7 +245,7 @@ void IndexBuilder::add_document(const std::string& doc_path) {
         }
     }
 
-    process_document(doc);
+    process_document(std::move(doc));
 }
 
 std::future<void> IndexBuilder::flush_block() {
@@ -468,19 +468,20 @@ void IndexBuilder::merge_blocks_tiered() {
 void IndexBuilder::save_document_map() {
     std::ofstream out(output_dir_ + "/document_map.data", std::ios::binary);
 
-    uint32_t num_docs = documents_.size();
+    uint32_t num_docs = document_metadata_.size();
     out.write(reinterpret_cast<const char*>(&num_docs), sizeof(num_docs));
 
-    for (const auto& doc : documents_) {
-        uint32_t url_len = doc.url.size();
-        out.write(reinterpret_cast<const char*>(&doc.id), sizeof(doc.id));
+    for (const auto& meta : document_metadata_) {
+        out.write(reinterpret_cast<const char*>(&meta.id), sizeof(meta.id));
+
+        uint32_t url_len = meta.url.size();
         out.write(reinterpret_cast<const char*>(&url_len), sizeof(url_len));
-        out.write(doc.url.c_str(), url_len);
+        out.write(meta.url.c_str(), url_len);
 
         std::string joined_title;
-        for (size_t i = 0; i < doc.title.size(); ++i) {
-            joined_title += doc.title[i];
-            if (i < doc.title.size() - 1)
+        for (size_t i = 0; i < meta.title.size(); ++i) {
+            joined_title += meta.title[i];
+            if (i < meta.title.size() - 1)
                 joined_title += " ";
         }
 
@@ -651,7 +652,7 @@ void IndexBuilder::finalize() {
     spdlog::info("Starting block merge with {} blocks...", block_count_);
     merge_blocks_tiered();
 
-    spdlog::info("Saving document map ({} documents)...", documents_.size());
+    spdlog::info("Saving document map ({} documents)...", document_metadata_.size());
     save_document_map();
 
     spdlog::info("Finalizing position index...");
