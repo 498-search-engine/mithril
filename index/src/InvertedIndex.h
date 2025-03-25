@@ -58,7 +58,7 @@ private:
 
     void save_document_map();
     std::string block_path(int block_num) const;
-    void process_document(const Document& doc);
+    void process_document(Document doc);
     void create_term_dictionary();
 
     // helpers

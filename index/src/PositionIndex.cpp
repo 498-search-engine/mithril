@@ -84,19 +84,35 @@ void PositionIndex::addPositionsBatch(
 }
 
 bool PositionIndex::shouldStorePositions(const std::string& term, uint32_t freq, size_t total_terms) {
-    // Always store positions for title, description, and proper nouns
-    if (term.size() > 1 && (term[0] == '#' || term[0] == '%' || std::isupper(term[0]))) {
-        return true;
+    // 1. Field-based filtering
+    if (!term.empty()) {
+        const char prefix = term[0];
+        if (prefix == '#' || prefix == '%' || std::isupper(prefix)) {
+            return true;  // Title/description/proper nouns
+        }
+
+        if (prefix == '@') {
+            // Skip protocol-only URLs but keep paths
+            return (term.find('/') != std::string::npos);
+        }
     }
-    static const std::unordered_set<std::string> stop_terms = {
-        "the", "a", "an", "of", "in", "for", "on", "to", "with", "by", "at"};
-    if (stop_terms.find(term) != stop_terms.end()) {
+
+    // 2. Stopword filtering (should extend)
+    static constexpr std::array stop_terms = {
+        "the", "a", "an", "of", "in", "for", "on", "to", "with", "by", "at", "and", "or", "us", "have", "has"};
+    if (std::find(stop_terms.begin(), stop_terms.end(), term) != stop_terms.end()) {
         return false;
     }
-    if (total_terms > 0 && freq > total_terms / 5) {
+
+    // 3. freq-based filtering
+    const bool is_common_term = freq > 3000;
+    const bool is_doc_ubiquitous = (total_terms > 0) && (freq > total_terms / 8);
+    if (is_common_term || is_doc_ubiquitous) {
         return false;
     }
-    return true;
+
+    // 4. Minimum usefulness threshold
+    return (freq >= 3);
 }
 
 void PositionIndex::flushBuffer(const std::string& output_dir) {
