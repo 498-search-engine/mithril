@@ -37,6 +37,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - expose metric with number of documents in corpus (#80)
 - support trailing wildcards in robots.txt (#87)
 - respect crawl-delay directive (#88)
+- use lru caches in crawler (#92)
+- support Crawler-delay directive (#92)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
@@ -54,6 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - correctly mark robots req as done after decode error (#79, #81)
 - ensure valid status code range (#84)
 - small header and cmake version fix to compile and get work on gcp vm (#86)
+- fix connection eof empty headers bug (#92)
 
 ## [0.1.0] - 2025-02-07
 
