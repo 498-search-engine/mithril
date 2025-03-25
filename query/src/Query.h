@@ -3,23 +3,15 @@
 #ifndef QUERY_H_
 #define QUERY_H_
 
+#include <_types/_uint32_t.h>
 #include <vector>
 #include <utility>
 #include <string>
 #include "Token.h"
 #include "../../index/src/TermReader.h"
-#include "../../index/src/DocumentMapReader.h"
 #include "QueryConfig.h"
-
-struct DocInfo {
-    uint32_t doc_id;
-    uint32_t frequency;
-    std::string url;
-    std::vector<std::string> title;
-    std::vector<uint32_t> positions;
-
-    DocInfo(uint32_t id, uint32_t freq) : doc_id(id), frequency(freq) {}
-};
+#include "intersect.h"
+#include <unordered_map>
 
 
 // TODO: Determine if we should limit the number of documents we read
@@ -29,39 +21,28 @@ const int MAX_DOCUMENTS = 1e5;
 class Query {
 public:
     virtual ~Query() {}
-    [[nodiscard]] virtual std::vector<DocInfo> Evaluate() const { return {}; }
+    [[nodiscard]] virtual std::vector<uint32_t> Evaluate() const { return {}; }
+
+    // [[nodiscard]] virtual mithril::IndexStreamReader GetISR() const { return {}; }
+
 };
 
 class TermQuery : public Query {
 public:
     TermQuery(Token token) : token_(std::move(token)) {}
 
-    std::vector<DocInfo> Evaluate() const override {
-        mithril::TermReader term(query::QueryConfig::IndexPath, token_.value);
-        mithril::DocumentMapReader doc_reader(query::QueryConfig::IndexPath);
+    Token getToken() { return token_; }
 
-        std::vector<DocInfo> results;
+    std::vector<uint32_t> Evaluate() const override {
+        mithril::TermReader term(query::QueryConfig::IndexPath, token_.value);
+        // mithril::DocumentMapReader doc_reader(query::QueryConfig::IndexPath);
+
+        std::vector<uint32_t> results;
         results.reserve(MAX_DOCUMENTS);
 
         while (term.hasNext()) {
-            uint32_t doc_id = term.currentDocID();
-            uint32_t freq = term.currentFrequency();
-            
-            DocInfo doc(doc_id, freq);
-            
-            // Get document metadata
-            auto doc_opt = doc_reader.getDocument(doc_id);
-            if (doc_opt) {
-                doc.url = doc_opt->url;
-                doc.title = doc_opt->title;
-            }
-            
-            // Get positions if available
-            if (term.hasPositions()) {
-                doc.positions = term.currentPositions();
-            }
-            
-            results.push_back(std::move(doc));
+            const uint32_t docId = term.currentDocID();
+            results.emplace_back(docId);
             term.moveNext();
         }
 
@@ -72,6 +53,138 @@ private:
     Token token_;
     static constexpr int MAX_DOCUMENTS = 100000;
 };
+
+
+
+class AndQuerySimd : public Query {
+    // Combines results where ALL terms must match
+    Query* left_; 
+    Query* right_; 
+
+public: 
+    AndQuerySimd(Query* left, Query* right) : left_(left), right_(right) {
+        if (!left && !right){
+            std::cerr << "Need a left and right query\n";
+            exit(1);
+        }
+    }
+
+    std::vector<uint32_t> Evaluate() const override {
+        std::vector<uint32_t> left_docs = left_->Evaluate();
+        std::vector<uint32_t> right_docs = right_->Evaluate();
+        auto intersected_ids = intersect_gallop_vec(left_docs, right_docs);
+        return intersected_ids;
+    }
+};
+
+// ... existing code ...
+
+class AndQuery : public Query {
+    // Combines results where ALL terms must match
+    Query* left_; 
+    Query* right_; 
+
+public: 
+    AndQuery(Query* left, Query* right) : left_(left), right_(right) {
+        if (!left && !right){
+            std::cerr << "Need a left and right query\n";
+            exit(1);
+        }
+    }
+
+    std::vector<uint32_t> Evaluate() const override {
+        // Get the left and right ISRs
+        mithril::TermReader left_isr = getISR(left_);
+        mithril::TermReader right_isr = getISR(right_);
+        
+        std::vector<uint32_t> results;
+        results.reserve(MAX_DOCUMENTS);
+        
+        // Continue while both iterators have documents
+        while (left_isr.hasNext() && right_isr.hasNext()) {
+            uint32_t left_doc_id = left_isr.currentDocID();
+            uint32_t right_doc_id = right_isr.currentDocID();
+            
+            if (left_doc_id == right_doc_id) {
+                // Match found, add to results
+                results.push_back(left_doc_id);
+                // Advance both readers
+                left_isr.moveNext();
+                right_isr.moveNext();
+            } else if (left_doc_id < right_doc_id) {
+                // Left is behind, advance it
+                left_isr.moveNext();
+            } else {
+                // Right is behind, advance it
+                right_isr.moveNext();
+            }
+            
+            // Stop if we've collected enough documents
+            if (results.size() >= MAX_DOCUMENTS) {
+                break;
+            }
+        }
+        
+        return results;
+    }
+
+private:
+    // Helper method to get an ISR from a query
+    mithril::TermReader getISR(Query* query) const {
+        // This is a simplification - in a real implementation,
+        // you'd want to add methods to get the proper ISRs from each query type
+        // For now, we're assuming all queries can be converted to a term reader
+        if (auto* term_query = dynamic_cast<TermQuery*>(query)) {
+            return mithril::TermReader(query::QueryConfig::IndexPath, 
+                                     term_query->getToken().value);
+        }
+        
+        // Handle error case
+        std::cerr << "Unable to convert query to ISR\n";
+        return mithril::TermReader(query::QueryConfig::IndexPath, "");
+    }
+};
+
+
+
+// class OrQuery : public Query {
+//     // Combines results where ALL terms must match
+//     Query* left_; 
+//     Query* right_; 
+
+// public: 
+//     OrQuery(Query* left, Query* right) : left_(left), right_(right) {
+//         if (!left && !right){
+//             std::cerr << "Need a left and right query\n";
+//             exit(1);
+//         }
+//     }
+
+//     std::vector<uint32_t> Evaluate() const override {
+//         std::vector<uint32_t> left_docs = left_->Evaluate();
+//         std::vector<uint32_t> right_docs = right_->Evaluate();
+//         auto intersected_ids = (left_docs, right_docs);
+//         return intersected_ids;
+//     }
+// };
+
+
+// class OrQuery : public Query {
+//     // Combines results where ANY terms can match
+// };
+
+// class NotQuery : public Query {
+//     // Excludes documents matching the negated term
+// };
+
+// class FieldQuery : public Query {
+//     // Restricts search to specific fields (TITLE, TEXT)
+// };
+
+// class PhraseQuery : public Query {
+//     // For exact phrase matching with quotes
+//     // Will need to use position information
+// };
 
 #endif // QUERY_H_
 
