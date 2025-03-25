@@ -3,6 +3,14 @@
 #include <algorithm>
 #include <iostream>
 
+#if defined(__x86_64__) || defined(_M_X64)
+    // Intel Mac (x86_64)
+    #include <immintrin.h> // For SSE/AVX intrinsics
+#elif defined(__arm64__) || defined(__aarch64__)
+    // Apple Silicon (ARM)
+    #include <arm_neon.h>
+#endif
+
 vector<u32> intersect_zipper_vec(const vector<u32>& a, const vector<u32>& b) {
     vector<u32> output;
     output.reserve(std::min(a.size(), b.size()));
@@ -78,7 +86,7 @@ size_t intersect_gallop(const u32* a, const u32* b, u32* c, size_t a_size, size_
 // then use std::lower_bound to locate the first element not less than value.
 static inline const uint32_t* gallop(const uint32_t* begin, const uint32_t* end, uint32_t value) {
     size_t step = 1;
-    // If the first element is already not less than value, we don’t need to gallop.
+    // If the first element is already not less than value, we don't need to gallop.
     if (begin == end || *begin >= value) {
         return begin;
     }
@@ -139,6 +147,113 @@ size_t intersect_gallop_opt2(const uint32_t* a, const uint32_t* b, uint32_t* c, 
     return c - c_start;
 }
 
-size_t intersect_simd_sse(u32* a, u32* b, u32* c, size_t a_size, size_t b_size) {
-    return 0;
+size_t intersect_simd_sse(const u32* a, const u32* b, u32* c, size_t a_size, size_t b_size) {
+    // Empty arrays check
+    if (a_size == 0 || b_size == 0) {
+        return 0;
+    }
+    
+    // Always process the smaller list in the outer loop
+    if (a_size > b_size) {
+        return intersect_simd_sse(b, a, c, b_size, a_size);
+    }
+    
+    auto c_start = c;
+    const u32* a_end = a + a_size;
+    const u32* b_end = b + b_size;
+    
+#if defined(__x86_64__) || defined(_M_X64)
+    // Intel x86_64 implementation using SSE
+    while (a + 4 <= a_end && b < b_end) {
+        // Load 4 values from array a
+        __m128i v_a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(a));
+        
+        // Find smallest and largest value in the current SIMD block
+        u32 min_a = _mm_extract_epi32(v_a, 0);
+        u32 max_a = min_a;
+        for (int i = 1; i < 4; i++) {
+            u32 val = _mm_extract_epi32(v_a, i);
+            min_a = std::min(min_a, val);
+            max_a = std::max(max_a, val);
+        }
+        
+        // Find range in array b that could contain matches
+        const u32* b_start = std::lower_bound(b, b_end, min_a);
+        const u32* b_stop = std::upper_bound(b_start, b_end, max_a);
+        
+        // If no possible matches in b, skip this block
+        if (b_start == b_stop) {
+            a += 4;
+            continue;
+        }
+        
+        // Check each value in array b against all values in SIMD register
+        for (const u32* b_ptr = b_start; b_ptr < b_stop; ++b_ptr) {
+            __m128i v_b = _mm_set1_epi32(*b_ptr); // Broadcast b value to all lanes
+            __m128i cmp = _mm_cmpeq_epi32(v_a, v_b); // Compare all 4 values in parallel
+            int mask = _mm_movemask_epi8(cmp); // Get mask of matches
+            
+            if (mask != 0) { // If any match found
+                *c++ = *b_ptr; // Add match to results
+            }
+        }
+        
+        a += 4; // Move to next SIMD block in a
+        b = b_stop; // Continue from where we stopped in b
+    }
+#elif defined(__arm64__) || defined(__aarch64__)
+    // Apple Silicon (ARM) implementation using NEON
+    while (a + 4 <= a_end && b < b_end) {
+        // Load 4 values from array a
+        uint32x4_t v_a = vld1q_u32(a);
+        
+        // Find smallest and largest value in current SIMD block
+        u32 a_val0 = vgetq_lane_u32(v_a, 0);
+        u32 a_val1 = vgetq_lane_u32(v_a, 1); 
+        u32 a_val2 = vgetq_lane_u32(v_a, 2);
+        u32 a_val3 = vgetq_lane_u32(v_a, 3);
+        
+        u32 min_a = std::min(std::min(a_val0, a_val1), std::min(a_val2, a_val3));
+        u32 max_a = std::max(std::max(a_val0, a_val1), std::max(a_val2, a_val3));
+        
+        // Find range in array b that could contain matches
+        const u32* b_start = std::lower_bound(b, b_end, min_a);
+        const u32* b_stop = std::upper_bound(b_start, b_end, max_a);
+        
+        // If no possible matches in b, skip this block
+        if (b_start == b_stop) {
+            a += 4;
+            continue;
+        }
+        
+        // Check each value in array b against all values in SIMD register
+        for (const u32* b_ptr = b_start; b_ptr < b_stop; ++b_ptr) {
+            uint32x4_t v_b = vdupq_n_u32(*b_ptr); // Broadcast b value to all lanes
+            uint32x4_t cmp = vceqq_u32(v_a, v_b); // Compare all 4 values in parallel
+            
+            // Check each lane for a match
+            if (vgetq_lane_u32(cmp, 0) || vgetq_lane_u32(cmp, 1) || 
+                vgetq_lane_u32(cmp, 2) || vgetq_lane_u32(cmp, 3)) {
+                *c++ = *b_ptr; // Add match to results
+            }
+        }
+        
+        a += 4; // Move to next SIMD block in a
+        b = b_stop; // Continue from where we stopped in b
+    }
+#endif
+
+    // Process remaining elements with scalar code
+    while (a < a_end && b < b_end) {
+        if (*a == *b) {
+            *c++ = *a++;
+            ++b;
+        } else if (*a < *b) {
+            ++a;
+        } else {
+            ++b;
+        }
+    }
+    
+    return c - c_start;
 }

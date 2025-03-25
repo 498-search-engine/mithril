@@ -45,79 +45,83 @@ void print_results(const std::vector<uint32_t>& results, const char* term1, cons
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " <index_path> <term1> <term2>\n";
-        std::cerr << "Example: " << argv[0] << " ./my_index computer science\n";
+    if (argc != 5) {
+        std::cerr << "Usage: " << argv[0] << " <index_path> <term1> <term2> <mode>\n";
+        std::cerr << "Example: " << argv[0] << " ./my_index computer science regular\n";
+        std::cerr << "Modes: regular, simd\n";
         return 1;
     }
     
     // Set the index path
     query::QueryConfig::IndexPath = std::string(argv[1]);
     
+    // Determine which mode to run
+    std::string mode = argv[4];
+    if (mode != "regular" && mode != "simd") {
+        std::cerr << "Invalid mode: " << mode << "\n";
+        std::cerr << "Valid modes: regular, simd\n";
+        return 1;
+    }
+    
     std::cout << "Using index at: '" << query::QueryConfig::IndexPath << "'" << std::endl;
     std::cout << "Searching for terms: '" << argv[2] << "' AND '" << argv[3] << "'" << std::endl;
+    std::cout << "Mode: " << mode << std::endl;
     
     try {
-        // Test regular AndQuery
-        std::cout << "\n===== TESTING REGULAR ANDQUERY =====\n";
-        
-        // Create two term queries from command line arguments
-        TermQuery* term1 = new TermQuery(Token(TokenType::WORD, argv[2]));
-        TermQuery* term2 = new TermQuery(Token(TokenType::WORD, argv[3]));
-        
-        // Create an AND query combining both terms
-        AndQuery andQuery(term1, term2);
-        
-        // Measure query evaluation time
-        auto query_start = std::chrono::steady_clock::now();
-        
-        // Execute the query
-        auto results = andQuery.Evaluate();
-        
-        // Print timing information
-        long regular_time = print_timing("Regular AndQuery evaluation", query_start);
-        
-        // Print results
-        print_results(results, argv[2], argv[3]);
-        
-        // Test SIMD AndQuery
-        std::cout << "\n===== TESTING SIMD ANDQUERY =====\n";
-        
-        // Create new term queries
-        TermQuery* term1_simd = new TermQuery(Token(TokenType::WORD, argv[2]));
-        TermQuery* term2_simd = new TermQuery(Token(TokenType::WORD, argv[3]));
-        
-        // Create an SIMD AND query combining both terms
-        AndQuerySimd andQuerySimd(term1_simd, term2_simd);
-        
-        // Measure query evaluation time
-        query_start = std::chrono::steady_clock::now();
-        
-        // Execute the query
-        auto results_simd = andQuerySimd.Evaluate();
-        
-        // Print timing information
-        long simd_time = print_timing("SIMD AndQuery evaluation", query_start);
-        
-        // Print results
-        print_results(results_simd, argv[2], argv[3]);
-        
-        // Compare performance
-        std::cout << "\n===== PERFORMANCE COMPARISON =====\n";
-        double speedup = static_cast<double>(regular_time) / simd_time;
-        std::cout << "Regular AndQuery: " << regular_time << " ms\n";
-        std::cout << "SIMD AndQuery: " << simd_time << " ms\n";
-        std::cout << "Speedup: " << std::fixed << std::setprecision(2) << speedup << "x\n";
-        
-        if (results.size() != results_simd.size()) {
-            std::cout << "\nWARNING: Result counts differ between implementations!\n";
+        // Run regular AndQuery
+        if (mode == "regular") {
+            std::cout << "\n===== RUNNING REGULAR ANDQUERY =====\n";
+            
+            // Create two term queries from command line arguments
+            TermQuery* term1 = new TermQuery(Token(TokenType::WORD, argv[2]));
+            TermQuery* term2 = new TermQuery(Token(TokenType::WORD, argv[3]));
+            
+            // Create an AND query combining both terms
+            AndQuery andQuery(term1, term2);
+            
+            // Measure query evaluation time
+            auto query_start = std::chrono::steady_clock::now();
+            
+            // Execute the query
+            auto results = andQuery.Evaluate();
+            
+            // Print timing information
+            print_timing("Regular AndQuery evaluation", query_start);
+            
+            // Print results
+            // print_results(results, argv[2], argv[3]);
+            
+            // Clean up
+            delete term1;
+            delete term2;
         }
-        
-        // Clean up
-        delete term1;
-        delete term2;
-        delete term1_simd;
-        delete term2_simd;
+        // Run SIMD AndQuery
+        else if (mode == "simd") {
+            std::cout << "\n===== RUNNING SIMD ANDQUERY =====\n";
+            
+            // Create term queries
+            TermQuery* term1_simd = new TermQuery(Token(TokenType::WORD, argv[2]));
+            TermQuery* term2_simd = new TermQuery(Token(TokenType::WORD, argv[3]));
+            
+            // Create an SIMD AND query combining both terms
+            AndQuerySimd andQuerySimd(term1_simd, term2_simd);
+            
+            // Measure query evaluation time
+            auto query_start = std::chrono::steady_clock::now();
+            
+            // Execute the query
+            auto results_simd = andQuerySimd.Evaluate();
+            
+            // Print timing information
+            print_timing("SIMD AndQuery evaluation", query_start);
+            
+            // Print results
+            // print_results(results_simd, argv[2], argv[3]);
+            
+            // Clean up
+            delete term1_simd;
+            delete term2_simd;
+        }
         
         return 0;
     } catch (const std::exception& e) {

@@ -72,8 +72,20 @@ public:
     std::vector<uint32_t> Evaluate() const override {
         std::vector<uint32_t> left_docs = left_->Evaluate();
         std::vector<uint32_t> right_docs = right_->Evaluate();
-        auto intersected_ids = intersect_gallop_vec(left_docs, right_docs);
-        return intersected_ids;
+        
+        //   auto intersected_ids = intersect_gallop_vec(left_docs, right_docs);
+        // return intersected_ids;
+        // Create a vector with enough space for results
+        std::vector<uint32_t> results(std::min(left_docs.size(), right_docs.size()));
+        
+        // Call SIMD intersection
+        size_t result_size = intersect_simd_sse(
+            left_docs.data(), right_docs.data(), 
+            results.data(), left_docs.size(), right_docs.size());
+        
+        // Resize to actual result size
+        results.resize(result_size);
+        return results;
     }
 };
 
