@@ -16,6 +16,8 @@ add_executable(pagerank_bench
     src/pagerank_bench.cpp
 )
 
+file(COPY config DESTINATION ${CMAKE_BINARY_DIR}/ranking)
+
 target_link_libraries(pagerank_bench PRIVATE
     spdlog::spdlog
     lib::core
