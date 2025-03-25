@@ -1,14 +1,25 @@
 find_package(OpenMP REQUIRED)
 
-add_library(pagerank_bench STATIC
+add_library(pagerank STATIC
     src/pagerank.cpp
-    src/pagerank_bench.cpp
 )
 
-target_link_libraries(pagerank_bench PUBLIC
+target_link_libraries(pagerank PUBLIC
     spdlog::spdlog
     lib::core
     common
-    omp
+    OpenMP::OpenMP_CXX
 )
-target_compile_options(pagerank_bench PRIVATE -fopenmp)
+target_compile_options(pagerank PRIVATE -fopenmp)
+
+add_executable(pagerank_bench
+    src/pagerank_bench.cpp
+)
+
+target_link_libraries(pagerank_bench PRIVATE
+    spdlog::spdlog
+    lib::core
+    common
+    pagerank
+    OpenMP::OpenMP_CXX
+)
