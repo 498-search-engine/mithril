@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
     }
     srand(498);
 
-    double tol = 1.0 / nodes;
+    const double tol = 1.0 / nodes;
 
     std::cout << "simulating " << nodes << " nodes with precision of " << tol << std::endl;
 
@@ -49,9 +49,9 @@ int main(int argc, char *argv[]) {
 
     m.Finalize();
 
-    for (int i = 0; i < m.values.size(); ++i) {
-        if (outDegree[m.col_idx[i]] > 0) {
-            m.values[i] /= outDegree[m.col_idx[i]];
+    for (int i = 0; i < m.values_.size(); ++i) {
+        if (outDegree[m.col_idx_[i]] > 0) {
+            m.values_[i] /= outDegree[m.col_idx_[i]];
         }
     }
 
@@ -61,13 +61,15 @@ int main(int argc, char *argv[]) {
     std::cout << "finished building graph in: " << duration.count() << " ms" << std::endl;
 
     start = std::chrono::steady_clock::now();
-    vector<double> result = PageRank(m, nodes);
+
+    PageRank algo(m, nodes);
+
     end = std::chrono::steady_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "finished pagerank in: " << duration.count() << " ms" << std::endl;
 
     // cout << "PageRank scores:\n";
-    // for (double score : result) { 
+    // for (double score : algo.GetPageRanks()) { 
     //     cout << score << " ";
     // }
     // cout << endl;
