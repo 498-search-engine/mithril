@@ -111,14 +111,14 @@ std::string IndexBuilder::StringVecToString(const std::vector<std::string>& vec)
     return result;
 }
 
-void IndexBuilder::process_document(const Document& doc) {
+void IndexBuilder::process_document(Document doc) {
     // Check if we need to flush the current block
     if (should_flush(doc)) {
         auto future = flush_block();
         future.wait();
     }
 
-    auto task = [this, doc]() {
+    auto task = [this, doc = std::move(doc)]() {
         const size_t estimated_unique_terms = doc.words.size() / 4;  // ~25% unique term ratio
         std::unordered_map<std::string, uint32_t> term_freqs;
         term_freqs.reserve(estimated_unique_terms);
@@ -245,7 +245,7 @@ void IndexBuilder::add_document(const std::string& doc_path) {
         }
     }
 
-    process_document(doc);
+    process_document(std::move(doc));
 }
 
 std::future<void> IndexBuilder::flush_block() {
