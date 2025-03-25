@@ -2,17 +2,19 @@
 #include "../src/Token.h"
 #include "../src/QueryConfig.h"
 
+#include <_types/_uint32_t.h>
 #include <chrono>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <sys/types.h>
 #include <vector>
 #include <spdlog/spdlog.h>
 
 namespace {
 
-void print_results(const std::vector<DocInfo>& docIDs, const std::string& term, size_t max_to_show = 10) {
+void print_results(const std::vector<uint32_t>& docIDs, const std::string& term, size_t max_to_show = 10) {
     spdlog::info("Found {} documents containing the term '{}'", docIDs.size(), term);
     
     const size_t num_to_show = std::min(docIDs.size(), max_to_show);
@@ -20,9 +22,9 @@ void print_results(const std::vector<DocInfo>& docIDs, const std::string& term, 
     if (num_to_show > 0) {
         spdlog::info("Top {} document IDs:", num_to_show);
         for (size_t i = 0; i < num_to_show; ++i) {
-            spdlog::info("{:2}. Document ID: {}", i + 1, docIDs[i].doc_id);
-            spdlog::info("{:2}. Term frequency: {}", i + 1, docIDs[i].frequency);
-            spdlog::info("{:2}. Url: {}", i + 1, docIDs[i].url);
+            spdlog::info("{:2}. Document ID: {}", i + 1, docIDs[i]);
+            // spdlog::info("{:2}. Term frequency: {}", i + 1, docIDs[i]);
+            // spdlog::info("{:2}. Url: {}", i + 1, docIDs[i].url);
             spdlog::info("---------");
 
         }
