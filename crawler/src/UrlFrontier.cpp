@@ -37,9 +37,9 @@ constexpr unsigned int URLHighScoreQueuePercent = 75;
 
 }  //  namespace
 
-UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests)
+UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests, size_t robotsCacheSize)
     : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
-      robotRulesCache_(concurrentRobotsRequests) {}
+      robotRulesCache_(concurrentRobotsRequests, robotsCacheSize) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);
@@ -356,9 +356,13 @@ void UrlFrontier::TouchRobotRequestTimeouts() {
     robotRulesCache_.TouchRobotRequestTimeouts();
 }
 
-core::Optional<unsigned long> UrlFrontier::LookUpCrawlDelay(const http::CanonicalHost& host,
-                                                            unsigned long defaultDelay) {
-    core::LockGuard lock(robotsCacheMu_);
+core::Optional<unsigned long> UrlFrontier::LookUpCrawlDelayNonblocking(const http::CanonicalHost& host,
+                                                                       unsigned long defaultDelay) {
+    core::LockGuard lock(robotsCacheMu_, core::DeferLock);
+    if (!lock.TryLock()) {
+        return core::nullopt;
+    }
+
     const auto* res = robotRulesCache_.GetOrFetch(host);
     if (res == nullptr) {
         return core::nullopt;

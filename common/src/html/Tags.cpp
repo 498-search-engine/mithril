@@ -42,7 +42,7 @@ DesiredAction LookupPossibleTag(const char* name, const char* nameEnd) {
             left = mid + 1;
     }
 
-    return DesiredAction::OrdinaryText;
+    return DesiredAction::Discard;
 }
 
 }  // namespace mithril::html::internal

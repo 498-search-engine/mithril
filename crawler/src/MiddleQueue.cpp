@@ -13,7 +13,6 @@
 #include <cassert>
 #include <cstddef>
 #include <limits>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <unistd.h>
@@ -116,10 +115,13 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
             }
 
             if (record->waitingDelayLookup) {
-                auto delay = frontier_->LookUpCrawlDelay(record->host, 0);
+                auto delay = frontier_->LookUpCrawlDelayNonblocking(record->host, 0);
                 if (delay.HasValue()) {
                     record->waitingDelayLookup = false;
                     record->crawlDelayMs = CrawlDelayFromDirective(*delay);
+                } else {
+                    // Still waiting
+                    continue;
                 }
             }
 
@@ -145,6 +147,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 
     MiddleQueueActiveQueueCount.Set(ActiveQueueCount());
     MiddleQueueTotalQueuedURLs.Set(totalQueuedURLs_);
+    MiddleQueueTotalHosts.Set(hosts_.size());
 }
 
 size_t MiddleQueue::ActiveQueueCount() const {
@@ -190,7 +193,7 @@ void MiddleQueue::PushURLForNewHost(long now, std::string url, const http::Canon
         .activeQueue = {},
     });
 
-    auto delay = frontier_->LookUpCrawlDelay(host, 0);
+    auto delay = frontier_->LookUpCrawlDelayNonblocking(host, 0);
     if (delay.HasValue()) {
         record->waitingDelayLookup = false;
         record->crawlDelayMs = CrawlDelayFromDirective(*delay);

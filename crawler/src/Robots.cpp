@@ -386,29 +386,30 @@ const core::Optional<unsigned long>& RobotRules::CrawlDelay() const {
     return crawlDelay_;
 }
 
-RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests) : maxInFlightRequests_(maxInFlightRequests) {}
+RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests, size_t cacheSize)
+    : maxInFlightRequests_(maxInFlightRequests), cache_(cacheSize) {}
 
 const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
-    auto it = cache_.find(canonicalHost.url);
-    if (it == cache_.end()) {
-        cache_.try_emplace(canonicalHost.url);
+    auto* entry = cache_.Find(canonicalHost.url);
+    if (entry == nullptr) {
+        cache_.Insert({canonicalHost.url, RobotCacheEntry{}});
         QueueFetch(canonicalHost);
         return nullptr;
     }
 
-    if (it->second.expiresAt == 0) {
+    if (entry->second.expiresAt == 0) {
         // Already fetching
         return nullptr;
     }
 
     auto now = MonotonicTime();
-    if (now >= it->second.expiresAt) {
-        it->second.expiresAt = 0;  // Mark as already fetching
+    if (now >= entry->second.expiresAt) {
+        entry->second.expiresAt = 0;  // Mark as already fetching
         QueueFetch(canonicalHost);
         return nullptr;
     }
 
-    return &it->second.rules;
+    return &entry->second.rules;
 }
 
 void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost) {
@@ -483,32 +484,26 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
     auto canonicalHost = CanonicalizeHost(r.req.Url());
     SPDLOG_TRACE("successful robots.txt request: {}", canonicalHost.host);
 
-    // TODO: when this is an LRU cache, could it be possible we don't find it?
-    // Would it matter?
-    auto it = cache_.find(canonicalHost.url);
-    if (it == cache_.end()) {
-        return;
-    }
-
+    auto& entry = cache_[canonicalHost.url];
     try {
         // Decode the body if it is encoded.
         r.res.DecodeBody();
     } catch (const std::runtime_error& e) {
         // Something went wrong while decoding
         spdlog::warn("encountered error while decoding body for {}: {}", r.req.Url().url, e.what());
-        it->second.rules = RobotRules::DisallowAll();
-        it->second.expiresAt = MonotonicTime() + RobotsTxtCacheFailureDurationSeconds;
+        entry.rules = RobotRules::DisallowAll();
+        entry.expiresAt = MonotonicTime() + RobotsTxtCacheFailureDurationSeconds;
         completedFetches_.push_back(std::move(canonicalHost));
         return;
     }
 
     switch (r.res.header.status) {
     case http::StatusCode::OK:
-        HandleRobotsOK(r.res.header, r.res, it->second);
+        HandleRobotsOK(r.res.header, r.res, entry);
         break;
 
     case http::StatusCode::NotFound:
-        HandleRobotsNotFound(it->second);
+        HandleRobotsNotFound(entry);
         break;
 
     case http::StatusCode::BadRequest:
@@ -516,11 +511,9 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
     case http::StatusCode::Forbidden:
     default:
         spdlog::info("got robots.txt status {} for {}", r.res.header.status, canonicalHost.url);
-        it->second.rules = RobotRules::DisallowAll();
-        it->second.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
+        entry.rules = RobotRules::DisallowAll();
+        entry.expiresAt = MonotonicTime() + RobotsTxtCacheDurationSeconds;
         break;
-
-        // TODO: cut-outs for 429, 5xx, etc.
     }
 
     completedFetches_.push_back(std::move(canonicalHost));
@@ -530,13 +523,10 @@ void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& fail
     auto canonicalHost = CanonicalizeHost(failed.req.Url());
     SPDLOG_TRACE("failed robots.txt request: {} {}", canonicalHost.host, http::StringOfRequestError(failed.error));
 
-    auto it = cache_.find(canonicalHost.url);
-    if (it == cache_.end()) {
-        return;
-    }
-
-    it->second.rules = RobotRules::DisallowAll();
-    it->second.expiresAt = MonotonicTime() + RobotsTxtCacheFailureDurationSeconds;
+    cache_[canonicalHost.url] = RobotCacheEntry{
+        .rules = RobotRules::DisallowAll(),
+        .expiresAt = MonotonicTime() + RobotsTxtCacheFailureDurationSeconds,
+    };
 
     completedFetches_.push_back(std::move(canonicalHost));
 }

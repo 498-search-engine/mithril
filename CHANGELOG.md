@@ -37,6 +37,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - expose metric with number of documents in corpus (#80)
 - support trailing wildcards in robots.txt (#87)
 - respect crawl-delay directive (#88)
+- use lru caches in crawler (#92)
+- support Crawler-delay directive (#92)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
@@ -56,6 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - small header and cmake version fix to compile and get work on gcp vm (#86)
 - gcp vm build, only use doc metadata in saving doc map to reduce mem use, ty @dsage (#90)
 - fix: termReader freq, positions decoding as index encoded now  (#91)
+- fix connection eof empty headers bug (#92)
 
 ## [0.1.0] - 2025-02-07
 
