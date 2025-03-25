@@ -5,15 +5,24 @@
 #include "data/Document.h"
 
 #include <future>
+#include <iostream>
+#include <queue>
 
 namespace mithril {
 
 using Document = data::Document;
 using docid_t = data::docid_t;
 
+struct DocumentMetadata {
+    data::docid_t id;
+    std::string url;
+    std::vector<std::string> title;
+};
+
 class IndexBuilder {
 public:
-    explicit IndexBuilder(const std::string& output_dir, size_t num_threads = std::thread::hardware_concurrency());
+    explicit IndexBuilder(const std::string& output_dir,
+                          size_t num_threads = std::thread::hardware_concurrency() * 3 / 2);
     ~IndexBuilder();
 
     void add_document(const std::string& words_path, const std::string& links_path);  // remnant
@@ -23,7 +32,8 @@ public:
 
 private:
     // doc
-    std::vector<data::Document> documents_;
+    // std::vector<data::Document> documents_;
+    std::vector<DocumentMetadata> document_metadata_;
     std::unordered_map<std::string, uint32_t> url_to_id_;
 
     // Current block
@@ -33,8 +43,9 @@ private:
 
     // Output config
     const std::string output_dir_;
-    static constexpr size_t MAX_BLOCK_SIZE = 512 * 1024 * 1024;
-    static constexpr size_t MERGE_FACTOR = 16;
+    std::string temp_dir_;
+    static constexpr size_t MAX_BLOCK_SIZE = 512 * 1024 * 1024;  // 1 GB
+    static constexpr size_t MERGE_FACTOR = 32;
 
     // core methods
     std::future<void> flush_block();
@@ -47,7 +58,8 @@ private:
 
     void save_document_map();
     std::string block_path(int block_num) const;
-    void process_document(const Document& doc);
+    void process_document(Document doc);
+    void create_term_dictionary();
 
     // helpers
     void add_terms(data::docid_t doc_id, const std::unordered_map<std::string, uint32_t>& term_freqs);
@@ -70,74 +82,6 @@ private:
 
     std::mutex block_mutex_;
     std::mutex document_mutex_;
-};
-
-class VByteCodec {
-public:
-    static void encode(uint32_t value, std::ostream& out) {
-        while (value >= 128) {
-            out.put((value & 127) | 128);
-            if (!out)
-                throw std::runtime_error("Failed to write VByte");
-            value >>= 7;
-        }
-        out.put(value);
-        if (!out)
-            throw std::runtime_error("Failed to write VByte");
-    }
-
-    static uint32_t decode(std::istream& in) {
-        uint32_t result = 0;
-        uint32_t shift = 0;
-        uint8_t byte;
-        do {
-            byte = in.get();
-            result |= (byte & 127) << shift;
-            shift += 7;
-        } while (byte & 128);
-        return result;
-    }
-
-    static uint32_t decode_from_memory(const char*& buffer) {
-        uint32_t result = 0;
-        uint32_t shift = 0;
-        uint8_t byte;
-
-        do {
-            byte = *reinterpret_cast<const uint8_t*>(buffer++);
-            result |= (byte & 127) << shift;
-            shift += 7;
-        } while (byte & 128);
-
-        return result;
-    }
-
-    static void encode_to_memory(uint32_t value, char*& buffer, size_t& remaining_space) {
-        while (value >= 128) {
-            if (remaining_space < 1)
-                throw std::runtime_error("Buffer overflow in VByte encoding");
-            *buffer++ = (value & 127) | 128;
-            remaining_space--;
-            value >>= 7;
-        }
-
-        if (remaining_space < 1)
-            throw std::runtime_error("Buffer overflow in VByte encoding");
-        *buffer++ = value;
-        remaining_space--;
-    }
-
-    static size_t max_bytes_needed(uint32_t value) {
-        if (value < 128)
-            return 1;
-        if (value < 16384)
-            return 2;
-        if (value < 2097152)
-            return 3;
-        if (value < 268435456)
-            return 4;
-        return 5;
-    }
 };
 
 }  // namespace mithril

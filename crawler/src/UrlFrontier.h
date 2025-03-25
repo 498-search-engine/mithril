@@ -7,6 +7,7 @@
 #include "core/cv.h"
 #include "core/locks.h"
 #include "core/mutex.h"
+#include "core/optional.h"
 #include "http/URL.h"
 #include "ranking/CrawlerRanker.h"
 
@@ -20,7 +21,7 @@ namespace mithril {
 
 class UrlFrontier {
 public:
-    UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests);
+    UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests, size_t robotsCacheSize);
 
     /**
      * @brief Initializes notifications on cv instances for ThreadSync.
@@ -43,6 +44,14 @@ public:
     bool Empty() const;
 
     /**
+     * @brief Copies the URL frontier state into the given directory.
+     *
+     * @param directory Directory to copy into.
+     * @return Whether the operation succeeded.
+     */
+    bool CopyStateToDirectory(const std::string& directory) const;
+
+    /**
      * @brief Runs the robots requests processing thread until an indicated
      * shutdown.
      *
@@ -56,6 +65,22 @@ public:
      * @param sync ThreadSync to communicate shutdown.
      */
     void FreshURLsThread(ThreadSync& sync);
+
+    /**
+     * @brief Resets the timeout progress for all active robots requests.
+     */
+    void TouchRobotRequestTimeouts();
+
+    /**
+     * @brief Look up the Crawl-Delay directive for a host. Obtains the
+     * specified value, a default if the host does not specify a default, and
+     * core::nullopt if the lookup is pending. Does not block.
+     *
+     * @param host Host to look up
+     * @param defaultDelay Default delay if host does not specify
+     */
+    core::Optional<unsigned long> LookUpCrawlDelayNonblocking(const http::CanonicalHost& host,
+                                                              unsigned long defaultDelay);
 
     /**
      * @brief Gets at least one URL from the frontier, up to max
@@ -137,8 +162,7 @@ private:
     void ProcessFreshURLs(ThreadSync& sync);
 
     struct Scorer {
-        // TODO: accept string_view instead?
-        static unsigned int Score(std::string_view url) { return ranking::GetUrlRank(std::string{url}); }
+        static unsigned int Score(std::string_view url) { return ranking::GetUrlRank(url); }
     };
 
     mutable core::Mutex urlQueueMu_;     // Lock for urls_

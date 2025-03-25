@@ -1,5 +1,6 @@
 #include "http/URL.h"
 
+#include <string>
 #include <string_view>
 #include <gtest/gtest.h>
 
@@ -76,6 +77,7 @@ TEST(URL, ParseInvalid) {
 
     // Invalid port (out of range)
     EXPECT_FALSE(ParseURL("http://example.com:65536"sv).has_value());
+    EXPECT_FALSE(ParseURL("http://tel:8883719655"sv).has_value());
 
     // Invalid characters in host
     EXPECT_FALSE(ParseURL("http://exam<>ple.com"sv).has_value());
@@ -172,4 +174,262 @@ TEST(URL, CanonicalizeHost) {
         EXPECT_EQ(canonical.host, "github.com");
         EXPECT_EQ(canonical.port, "80");
     }
+}
+
+// Basic path encoding tests
+TEST(URLEncodingTest, BasicPathEncoding) {
+    // Simple paths
+    EXPECT_EQ("/simple/path", EncodePath("/simple/path"));
+
+    // Spaces in path
+    EXPECT_EQ("/test%20path/file", EncodePath("/test path/file"));
+
+    // Mixed path with special characters
+    EXPECT_EQ("/user/john_doe/profile.html", EncodePath("/user/john_doe/profile.html"));
+
+    // Path with reserved characters
+    EXPECT_EQ("/path?with%3Aspecial=chars", EncodePath("/path?with:special=chars"));
+}
+
+// Query parameter tests
+TEST(URLEncodingTest, QueryParameterEncoding) {
+    // Path with query
+    EXPECT_EQ("/search?query=test%20value&page=2", EncodePath("/search?query=test value&page=2"));
+
+    // Multiple parameters
+    EXPECT_EQ("/api/v1?name=John%20Doe&role=admin&active=true",
+              EncodePath("/api/v1?name=John Doe&role=admin&active=true"));
+
+    // Special characters in query
+    EXPECT_EQ("/products?filter=%3C%3E&sort=price", EncodePath("/products?filter=<>&sort=price"));
+
+    // Question mark in query value
+    EXPECT_EQ("/search?q=what%3F&when=now", EncodePath("/search?q=what?&when=now"));
+
+    // Fragment
+    EXPECT_EQ("/search#hello%20world&123", EncodePath("/search#hello world&123"));
+}
+
+// Special character tests
+TEST(URLEncodingTest, SpecialCharacters) {
+    // Control characters
+    EXPECT_EQ("control%09char%0A", EncodePath("control\tchar\n"));
+
+    // International characters
+    EXPECT_EQ("caf%C3%A9/%E2%82%AC", EncodePath("café/€"));
+
+    // Reserved characters per RFC 3986
+    EXPECT_EQ("%21#%24%25&%27%28%29%2A%2B%2C%3B=", EncodePath("!#$%&'()*+,;="));
+}
+
+// Edge cases
+TEST(URLEncodingTest, EdgeCases) {
+    // Empty string
+    EXPECT_EQ("", EncodePath(""));
+
+    // Single character tests
+    EXPECT_EQ("%20", EncodePath(" "));
+    EXPECT_EQ("/", EncodePath("/"));
+    EXPECT_EQ("/?", EncodePath("/?"));
+    EXPECT_EQ("/?%3F", EncodePath("/??"));
+
+    // Percent sign
+    EXPECT_EQ("%25", EncodePath("%"));
+    EXPECT_EQ("%25%25", EncodePath("%%"));
+
+    // Trailing slash
+    EXPECT_EQ("/path/", EncodePath("/path/"));
+}
+
+// Basic decoding tests
+TEST(URLDecodingTest, BasicDecoding) {
+    // Simple encoded strings
+    EXPECT_EQ("Hello World", DecodeURL("Hello%20World"));
+    EXPECT_EQ("/test path/file", DecodeURL("/test%20path/file"));
+
+    // International characters
+    EXPECT_EQ("café/€", DecodeURL("caf%C3%A9/%E2%82%AC"));
+}
+
+// Special decoding cases
+TEST(URLDecodingTest, SpecialCases) {
+    // Percent sign
+    EXPECT_EQ("%", DecodeURL("%25"));
+
+    // Incomplete encoding
+    EXPECT_EQ("%5", DecodeURL("%5"));
+    EXPECT_EQ("%", DecodeURL("%"));
+
+    // Invalid hex in encoding
+    EXPECT_EQ("%XY", DecodeURL("%XY"));
+
+    // Reserved character
+    EXPECT_EQ("%2B", DecodeURL("%2B"));
+
+    // Don't decode reserved characters
+    EXPECT_EQ("example.com/folder%2Ffile.txt", DecodeURL("example.com/folder%2Ffile.txt"));
+}
+
+// Encode-decode consistency
+TEST(URLRoundTripTest, EncodeDecodeConsistency) {
+    // Simple string
+    std::string original = "Hello World";
+    EXPECT_EQ(original, DecodeURL(EncodePath(original)));
+
+    // Complex path with reserved chars
+    EXPECT_EQ(
+        "/api/v1/users?name=John Doe&role=admin&test=<>&special=%3A%2F%3F%23%5B%5D%40%21%24&%27%28%29%2A%2B%2C%3B",
+        DecodeURL(EncodePath("/api/v1/users?name=John Doe&role=admin&test=<>&special=:/?#[]@!$&'()*+,;")));
+
+    // International characters
+    original = "/café/München/北京/";
+    EXPECT_EQ(original, DecodeURL(EncodePath(original)));
+}
+
+// Specific test cases for path encoding rules
+TEST(URLEncodingTest, PathEncodingRules) {
+    // Forward slashes preserved in path
+    EXPECT_EQ("/a/b/c", EncodePath("/a/b/c"));
+
+    // Forward slashes encoded in query
+    EXPECT_EQ("/path?query=a%2Fb%2Fc", EncodePath("/path?query=a/b/c"));
+
+    // Question marks
+    EXPECT_EQ("/path?with%3Fquestions", EncodePath("/path?with?questions"));
+    EXPECT_EQ("/legitimate?param%3Fwith%3Fquestions", EncodePath("/legitimate?param?with?questions"));
+}
+
+class CanonicalizeURLTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Any setup code if needed
+    }
+
+    void TearDown() override {
+        // Any teardown code if needed
+    }
+
+    // Helper method to test canonicalization
+    static void TestCanonicalizationImpl(const std::string& input,
+                                         const std::string& expectedStr,
+                                         const char* file = __FILE__,
+                                         int line = __LINE__) {
+        auto urlOpt = ParseURL(input);
+        if (!urlOpt.has_value()) {
+            ADD_FAILURE_AT(file, line) << "Failed to parse URL: " << input;
+            return;
+        }
+
+        auto expected = ParseURL(expectedStr);
+        if (!expected.has_value()) {
+            ADD_FAILURE_AT(file, line) << "Failed to parse expected URL: " << expectedStr;
+            return;
+        }
+
+        auto result = CanonicalizeURL(*urlOpt);
+        if (result.url != expected->url) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected url: " << expected->url
+                                       << "\nActual url: " << result.url;
+        }
+        if (result.scheme != expected->scheme) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected scheme: " << expected->scheme
+                                       << "\nActual scheme: " << result.scheme;
+        }
+        if (result.host != expected->host) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected host: " << expected->host
+                                       << "\nActual host: " << result.host;
+        }
+        if (result.port != expected->port) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected port: " << expected->port
+                                       << "\nActual port: " << result.port;
+        }
+        if (result.path != expected->path) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected path: " << expected->path
+                                       << "\nActual path: " << result.path;
+        }
+    }
+};
+
+#define TestCanonicalization(input, expected) TestCanonicalizationImpl(input, expected, __FILE__, __LINE__)
+
+// Test that scheme and host are converted to lowercase
+TEST_F(CanonicalizeURLTest, LowercaseSchemeAndHost) {
+    TestCanonicalization("HTTP://ExAmPlE.CoM/path", "http://example.com/path");
+    TestCanonicalization("HTTPS://TEST.example.ORG/", "https://test.example.org/");
+}
+
+// Test that standard ports are omitted
+TEST_F(CanonicalizeURLTest, StandardPortsOmitted) {
+    TestCanonicalization("http://example.com:80/path", "http://example.com/path");
+    TestCanonicalization("https://example.com:443/path", "https://example.com/path");
+}
+
+// Test that non-standard ports are included
+TEST_F(CanonicalizeURLTest, NonStandardPortsIncluded) {
+    TestCanonicalization("http://example.com:8080/path", "http://example.com:8080/path");
+    TestCanonicalization("https://example.com:8443/path", "https://example.com:8443/path");
+}
+
+// Test that consecutive slashes in path are collapsed
+TEST_F(CanonicalizeURLTest, CollapseConsecutiveSlashes) {
+    TestCanonicalization("http://example.com//path", "http://example.com/path");
+    TestCanonicalization("http://example.com/path//to///resource", "http://example.com/path/to/resource");
+    TestCanonicalization("http://example.com////", "http://example.com/");
+}
+
+// Test that fragments are removed
+TEST_F(CanonicalizeURLTest, RemoveFragments) {
+    TestCanonicalization("http://example.com/path#fragment", "http://example.com/path");
+    TestCanonicalization("http://example.com/path?query=value#fragment", "http://example.com/path?query=value");
+    TestCanonicalization("http://example.com/#fragment", "http://example.com/");
+}
+
+// Test that path always starts with /
+TEST_F(CanonicalizeURLTest, PathStartsWithSlash) {
+    TestCanonicalization("http://example.com", "http://example.com/");
+    TestCanonicalization("http://example.com?query=value", "http://example.com/?query=value");
+    TestCanonicalization("http://example.com#fragment", "http://example.com/");
+}
+
+// Test combinations of requirements
+TEST_F(CanonicalizeURLTest, CombinedRequirements) {
+    TestCanonicalization("HTTP://ExAmPlE.CoM:80//path/to///resource?query=value#fragment",
+                         "http://example.com/path/to/resource?query=value");
+
+    TestCanonicalization("HTTPS://TEST.example.ORG:443///path///?a=b#fragment", "https://test.example.org/path/?a=b");
+
+    TestCanonicalization("HTTP://localhost:8080//", "http://localhost:8080/");
+}
+
+// Test with query parameters
+TEST_F(CanonicalizeURLTest, QueryParameters) {
+    TestCanonicalization("http://example.com/path?param=value", "http://example.com/path?param=value");
+
+    TestCanonicalization("http://example.com/path?param1=value1&param2=value2#fragment",
+                         "http://example.com/path?param1=value1&param2=value2");
+}
+
+// Test with empty paths
+TEST_F(CanonicalizeURLTest, EmptyPath) {
+    TestCanonicalization("http://example.com", "http://example.com/");
+    TestCanonicalization("http://example.com/", "http://example.com/");
+    TestCanonicalization("http://example.com?query=value", "http://example.com/?query=value");
+}
+
+// Test with relative directory traversal
+TEST_F(CanonicalizeURLTest, DirectoryTraversal) {
+    TestCanonicalization("http://example.com/a/b/../c/d/", "http://example.com/a/c/d/");
+    TestCanonicalization("http://example.com/a/b/../c/d", "http://example.com/a/c/d");
+    TestCanonicalization("http://example.com/../../a/./b/./c", "http://example.com/a/b/c");
+    TestCanonicalization("http://example.com/a/b/c/../../d/e/../f", "http://example.com/a/d/f");
+    TestCanonicalization("http://example.com/a/b/c/../../d/e/../f?123=456", "http://example.com/a/d/f?123=456");
+}
+
+// Test edge cases
+TEST_F(CanonicalizeURLTest, EdgeCases) {
+    // URL with unusual but valid characters
+    TestCanonicalization("http://example.com/~user/file.txt", "http://example.com/~user/file.txt");
+
+    // URL with encoded characters
+    TestCanonicalization("http://example.com/path%20with%20spaces", "http://example.com/path%20with%20spaces");
 }

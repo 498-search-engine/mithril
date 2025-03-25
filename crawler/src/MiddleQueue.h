@@ -7,6 +7,7 @@
 #include "UrlFrontier.h"
 #include "core/memory.h"
 #include "core/optional.h"
+#include "http/URL.h"
 
 #include <cstddef>
 #include <queue>
@@ -26,7 +27,7 @@ public:
                 size_t urlBatchSize,
                 size_t hostUrlLimit,
                 double queueUtilizationTarget,
-                long defaultCrawlDelayMs);
+                unsigned long defaultCrawlDelayMs);
 
     /**
      * @brief Gets URLs from the middle queue, pulling from the frontier if
@@ -51,16 +52,25 @@ public:
      *
      * @param out Vector to put URLs into.
      */
-    void ExtractQueuedURLs(std::vector<std::string>& out);
+    void DumpQueuedURLs(std::vector<std::string>& out);
 
 private:
     struct HostRecord {
-        std::string host;
-        long crawlDelayMs{};
+        http::CanonicalHost host;
+        bool waitingDelayLookup{true};
+        unsigned long crawlDelayMs{};
         long earliestNextCrawl{};
         std::queue<std::string> queue;
         core::Optional<size_t> activeQueue;
     };
+
+    /**
+     * @brief Compute a safe, reasonable crawl delay in milliseconds from a
+     * Crawl-Delay directive.
+     *
+     * @param directive Crawl-Delay directive value (seconds)
+     */
+    unsigned long CrawlDelayFromDirective(unsigned long directive) const;
 
     /**
      * @brief Returns the number of queues actively in use.
@@ -95,7 +105,7 @@ private:
      * @param url URL to add
      * @param host Host of URL
      */
-    void PushURLForNewHost(long now, std::string url, std::string host);
+    void PushURLForNewHost(long now, std::string url, const http::CanonicalHost& host);
 
     /**
      * @brief Pops a URL from the queue of a host. Requires the host to have a
@@ -142,7 +152,7 @@ private:
     size_t urlBatchSize_;
     size_t hostUrlLimit_;
     double queueUtilizationTarget_;
-    long defaultCrawlDelayMs_;
+    unsigned long defaultCrawlDelayMs_;
 
     size_t k_{0};
     size_t totalQueuedURLs_{0};

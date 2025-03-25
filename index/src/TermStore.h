@@ -14,30 +14,24 @@ class PostingList {
 public:
     void add(const Posting& posting);
     void add(uint32_t doc_id, uint32_t freq);
-    void add_with_positions(uint32_t doc_id, uint32_t freq, const std::vector<uint32_t>& positions);
-    std::vector<uint32_t> get_positions(size_t posting_index) const;
-    const std::vector<PositionSyncPoint>& position_sync_points() const { return position_sync_points_; }
     const std::vector<Posting>& postings() const;
-    size_t find_nearest_position_sync_point(uint32_t target_position) const;
+    const std::vector<SyncPoint>& sync_points() const { return sync_points_; }
+
     size_t size_bytes() const;
     void clear();
     bool empty() const;
-    static constexpr uint32_t SYNC_INTERVAL = 1024;
-    static constexpr uint32_t POSITION_SYNC_INTERVAL = 128;
-    const std::vector<SyncPoint>& sync_points() const { return sync_points_; }
 
-    PositionsStore positions_store_;
+    static constexpr uint32_t SYNC_INTERVAL = 8 * 1024 * 1024;  // 1 MB
 
 private:
     std::vector<Posting> postings_;
     size_t size_bytes_{0};
     std::vector<SyncPoint> sync_points_;
-    std::vector<PositionSyncPoint> position_sync_points_;
 };
 
 class Dictionary {
 public:
-    explicit Dictionary(size_t bucket_size_hint = (1 << 20));
+    explicit Dictionary(size_t bucket_size_hint = (1 << 23));
 
     PostingList& get_or_create(const std::string& term);
     bool contains(const std::string& term) const;

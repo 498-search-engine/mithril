@@ -23,7 +23,7 @@ namespace mithril::html::internal {
 // <script>, <style>, and <svg> require discarding the the entire section.
 // <!--, <title>, <a>, <base> and <embed> are special-cased.
 
-enum class DesiredAction { OrdinaryText, Title, Comment, Discard, DiscardSection, Anchor, Base, Embed };
+enum class DesiredAction { OrdinaryText, Title, Comment, Discard, DiscardSection, Anchor, Base, Embed, Meta, HTML };
 
 // name points to beginning of the possible HTML tag name.
 // nameEnd points to one past last character.
@@ -84,6 +84,7 @@ const HtmlTag TagsRecognized[] = {
     {      "data",        DesiredAction::Discard},
     {  "datalist",        DesiredAction::Discard},
     {        "dd",        DesiredAction::Discard},
+    {      "defs", DesiredAction::DiscardSection},
     {       "del",        DesiredAction::Discard},
     {   "details",        DesiredAction::Discard},
     {       "dfn",        DesiredAction::Discard},
@@ -114,7 +115,9 @@ const HtmlTag TagsRecognized[] = {
     {    "header",        DesiredAction::Discard},
     {    "hgroup",        DesiredAction::Discard},
     {        "hr",        DesiredAction::Discard},
-    {      "html",        DesiredAction::Discard},
+
+    {      "html",           DesiredAction::HTML},
+
     {         "i",        DesiredAction::Discard},
     {    "iframe",        DesiredAction::Discard},
     {       "img",        DesiredAction::Discard},
@@ -134,7 +137,9 @@ const HtmlTag TagsRecognized[] = {
     {   "marquee",        DesiredAction::Discard},
     {      "menu",        DesiredAction::Discard},
     {  "menuitem",        DesiredAction::Discard},
-    {      "meta",        DesiredAction::Discard},
+
+    {      "meta",           DesiredAction::Meta},
+
     {     "meter",        DesiredAction::Discard},
     {       "nav",        DesiredAction::Discard},
     {      "nobr",        DesiredAction::Discard},
@@ -179,6 +184,7 @@ const HtmlTag TagsRecognized[] = {
     {       "sup",        DesiredAction::Discard},
 
     {       "svg", DesiredAction::DiscardSection},
+    {    "symbol", DesiredAction::DiscardSection},
 
     {     "table",        DesiredAction::Discard},
     {     "tbody",        DesiredAction::Discard},

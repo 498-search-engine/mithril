@@ -1,27 +1,38 @@
 #include "Config.h"
 #include "Coordinator.h"
+#include "core/memory.h"
+#include "http/AsyncResolver.h"
+#include "http/Resolver.h"
 #include "http/SSL.h"
 
-#include <cassert>
 #include <csignal>
 #include <exception>
+#include <iostream>
 #include <string>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 
 int main(int argc, char* argv[]) {
-#if !defined(NDEBUG)
-    spdlog::set_level(spdlog::level::trace);
-#else
-    spdlog::set_level(spdlog::level::info);
-#endif
-
     signal(SIGPIPE, SIG_IGN);
 
+    mithril::CrawlerConfig config;
+    try {
+        config = mithril::LoadConfigFromFile(argc > 1 ? argv[1] : "crawler.conf");
+        auto logLevel = spdlog::level::from_str(config.log_level);
+        spdlog::set_level(logLevel);
+        if (logLevel == spdlog::level::off) {
+            std::cout << "logging off" << std::endl;
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("failed to load config: {}", e.what());
+        return 1;
+    }
+
     mithril::http::InitializeSSL();
+    mithril::http::ApplicationResolver =
+        core::UniquePtr<mithril::http::Resolver>(new mithril::http::AsyncResolver{config.dns_cache_size});
 
     try {
-        auto config = mithril::LoadConfigFromFile(argc > 1 ? argv[1] : "crawler.conf");
         mithril::Coordinator c(config);
         c.Run();
     } catch (const std::exception& e) {
@@ -29,6 +40,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    mithril::http::ApplicationResolver.Reset(nullptr);
     mithril::http::DeinitializeSSL();
 
     return 0;

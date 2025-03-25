@@ -2,6 +2,8 @@
 
 #include "http/URL.h"
 
+#include <cctype>
+#include <string>
 #include <utility>
 
 namespace mithril::http {
@@ -9,9 +11,11 @@ namespace mithril::http {
 namespace {
 
 constexpr const char* CRLF = "\r\n";
-constexpr const char* UserAgentHeader = "User-Agent: mithril-crawler/1.0 (mithril498@umich.edu)\r\n";
+constexpr const char* UserAgentHeader =
+    "User-Agent: mithril-crawler/1.0 (mithril498@umich.edu; +https://498-search-engine.github.io/website/)\r\n";
 constexpr const char* AcceptAllHeader = "Accept: */*\r\n";
-constexpr const char* AcceptEncodingHeader = "Accept-Encoding: identity\r\n";
+constexpr const char* AcceptEncodingIdentityHeader = "Accept-Encoding: identity\r\n";
+constexpr const char* AcceptEncodingGzipHeader = "Accept-Encoding: gzip\r\n";
 constexpr const char* ConnectionCloseHeader = "Connection: close\r\n";
 
 }  // namespace
@@ -36,10 +40,10 @@ const RequestOptions& Request::Options() const {
 }
 
 std::string BuildRawRequestString(const Request& req) {
-    return BuildRawRequestString(req.GetMethod(), req.Url());
+    return BuildRawRequestString(req.GetMethod(), req.Url(), req.Options());
 }
 
-std::string BuildRawRequestString(Method method, const URL& url) {
+std::string BuildRawRequestString(Method method, const URL& url, const RequestOptions& options) {
     std::string rawRequest;
     rawRequest.reserve(256);
 
@@ -52,7 +56,8 @@ std::string BuildRawRequestString(Method method, const URL& url) {
     if (url.path.empty()) {
         rawRequest.append("/");
     } else {
-        rawRequest.append(url.path);
+        auto encoded = EncodePath(url.path);
+        rawRequest.append(encoded);
     }
 
     rawRequest.append(" HTTP/1.1\r\nHost: ");
@@ -60,7 +65,11 @@ std::string BuildRawRequestString(Method method, const URL& url) {
     rawRequest.append(CRLF);
     rawRequest.append(UserAgentHeader);
     rawRequest.append(AcceptAllHeader);
-    rawRequest.append(AcceptEncodingHeader);
+    if (options.enableCompression) {
+        rawRequest.append(AcceptEncodingGzipHeader);
+    } else {
+        rawRequest.append(AcceptEncodingIdentityHeader);
+    }
     rawRequest.append(ConnectionCloseHeader);
     rawRequest.append(CRLF);
 

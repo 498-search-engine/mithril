@@ -2,6 +2,7 @@
 #define COMMON_HTTP_CONNECTION_H
 
 #include "http/Request.h"
+#include "http/Resolver.h"
 #include "http/Response.h"
 #include "http/URL.h"
 
@@ -47,7 +48,7 @@ public:
     bool IsConnecting() const;
 
     /**
-     * @brief Returns whether the connection is actively sending/receiveing data
+     * @brief Returns whether the connection is actively sending/receiving data
      * from the remote server.
      */
     bool IsActive() const;
@@ -80,6 +81,7 @@ private:
     friend class RequestExecutor;
 
     enum class State : uint8_t {
+        Resolving,       // Resolving address
         TCPConnecting,   // Establishing connection with connect syscall
         SSLConnecting,   // Establishing SSL connection with SSL_connect
         Sending,         // Writing HTTP request to network
@@ -92,7 +94,9 @@ private:
         ConnectError,           // Error while establishing connection
         SocketError,            // Error while reading/writing from socket
         UnexpectedEOFError,     // Got unexpected EOF while reading response
+        InvalidResponseError,   // Generic bad response data
         ResponseTooBigError,    // Response body or header was too big
+        ResponseWrongType,      // Response Content-Type header was unacceptable
         ResponseWrongLanguage,  // Response Content-Language header was unacceptable
     };
 
@@ -100,11 +104,11 @@ private:
      * @brief Construct a new connection to be executed.
      *
      * @param fd Socket fd
-     * @param address Address to connect to. Connection takes ownership of this
-     * addrinfo and will call freeaddrinfo when appropriate.
-     * @param req Request to be executed on the connection
+     * @param method HTTP method
+     * @param url URL to fetch
+     * @param options Request options
      */
-    Connection(int fd, struct addrinfo* address, Method method, const URL& url, RequestOptions options);
+    Connection(int fd, Method method, const URL& url, RequestOptions options);
 
     void InitializeSSL();
 
@@ -123,7 +127,7 @@ private:
     void ProcessBody();
     void ProcessChunks();
 
-    bool ValidateHeaders(const std::string& headers);
+    bool ValidateHeaders(const ResponseHeader& headers);
 
     int SocketDescriptor() const;
     bool IsSecure() const;
@@ -131,10 +135,11 @@ private:
     bool IsReading() const;
 
     int fd_;
-    struct addrinfo* address_;
+    ResolvedAddr address_;
     State state_;
 
     URL url_;
+    std::string port_;
     RequestOptions reqOptions_;
     std::string rawRequest_;
     size_t requestBytesSent_;
@@ -146,7 +151,10 @@ private:
     size_t currentChunkBytesRead_;
 
     std::vector<char> buffer_;
+    std::vector<char> headers_;
     std::vector<char> body_;
+
+    ResponseHeader parsedHeader_;
 
     SSL* ssl_;
     bool isSecure_;

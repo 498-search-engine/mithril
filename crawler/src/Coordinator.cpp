@@ -1,5 +1,6 @@
 #include "Coordinator.h"
 
+#include "Clock.h"
 #include "Config.h"
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
@@ -7,6 +8,7 @@
 #include "RequestManager.h"
 #include "State.h"
 #include "UrlFrontier.h"
+#include "Util.h"
 #include "Worker.h"
 #include "core/memory.h"
 #include "core/thread.h"
@@ -14,8 +16,10 @@
 #include "data/Reader.h"
 #include "data/Serialize.h"
 #include "data/Writer.h"
+#include "http/URL.h"
 #include "metrics/MetricsServer.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <csignal>
 #include <cstddef>
@@ -36,33 +40,59 @@ constexpr size_t NumWorkers = 2;
 constexpr size_t ConcurrentRequests = 10;
 
 Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
-    if (!DirectoryExists(config.data_directory.c_str())) {
-        spdlog::error("configured data_directory does not exist: {}", config.data_directory);
+    if (!DirectoryExists(config.docs_directory.c_str())) {
+        spdlog::error("configured docs_directory does not exist: {}", config.docs_directory);
+        exit(1);
+    }
+    if (!DirectoryExists(config.state_directory.c_str())) {
+        spdlog::error("configured state_directory does not exist: {}", config.state_directory);
+        exit(1);
+    }
+    if (!DirectoryExists(config.snapshot_directory.c_str())) {
+        spdlog::error("configured snapshot_directory does not exist: {}", config.snapshot_directory);
         exit(1);
     }
 
-    frontierDirectory_ = config.data_directory + "/frontier";
+    auto lockFilePath = LockPath();
+    if (FileExists(lockFilePath.c_str())) {
+        spdlog::error("lock file {} present!", lockFilePath);
+        spdlog::error("crawler may already be running, or a un-graceful shutdown occurred");
+        exit(1);
+    }
+
+    {
+        // Create lock file
+        auto lockFile = data::FileWriter{lockFilePath.c_str()};
+        data::SerializeValue(true, lockFile);
+    }
+
+    frontierDirectory_ = config.state_directory + "/frontier";
     if (!DirectoryExists(frontierDirectory_.c_str())) {
         // Create frontier directory
         mkdir(frontierDirectory_.c_str(), 0755);
     }
 
-    docsDirectory_ = config.data_directory + "/docs";
-    if (!DirectoryExists(docsDirectory_.c_str())) {
-        // Create docs directory
-        mkdir(docsDirectory_.c_str(), 0755);
+    for (const auto& host : config_.blacklist_hosts) {
+        auto h = ToLowerCase(host);
+        auto parts = SplitString(h, '.');
+        std::reverse(parts.begin(), parts.end());
+        blacklistedHostsTrie_.Insert(parts);
     }
 
     state_ = core::UniquePtr<LiveState>(new LiveState{});
 
     docQueue_ = core::UniquePtr<DocumentQueue>(new DocumentQueue{state_->threadSync});
-    frontier_ = core::UniquePtr<UrlFrontier>(new UrlFrontier{frontierDirectory_, config.concurrent_robots_requests});
-    requestManager_ = core::UniquePtr<RequestManager>(new RequestManager{frontier_.Get(), docQueue_.Get(), config});
+    frontier_ = core::UniquePtr<UrlFrontier>(
+        new UrlFrontier{frontierDirectory_, config.concurrent_robots_requests, config.robots_cache_size});
+    requestManager_ = core::UniquePtr<RequestManager>(
+        new RequestManager{frontier_.Get(), docQueue_.Get(), config, blacklistedHostsTrie_});
 
     metricsServer_ = core::UniquePtr<metrics::MetricsServer>(new metrics::MetricsServer{config.metrics_port});
+
+    frontier_->InitSync(state_->threadSync);
     RegisterCrawlerMetrics(*metricsServer_);
 
-    RecoverState();
+    RecoverState(StatePath());
 }
 
 void Coordinator::Run() {
@@ -87,7 +117,7 @@ void Coordinator::Run() {
 
     for (size_t i = 0; i < config_.num_workers; ++i) {
         workerThreads.emplace_back([&] {
-            Worker w(*state_, docQueue_.Get(), frontier_.Get(), docsDirectory_);
+            Worker w(*state_, docQueue_.Get(), frontier_.Get(), config_.docs_directory, blacklistedHostsTrie_);
             w.Run();
         });
         ++threadCount;
@@ -101,6 +131,8 @@ void Coordinator::Run() {
     ++threadCount;
     core::Thread metricsThread([&] { metricsServer_->Run(state_->threadSync); });
     ++threadCount;
+
+    core::Thread snapshotThread([this, threadCount] { this->SnapshotThreadEntry(threadCount); });
 
     // Wait for SIGINT or SIGTERM
     sigset_t signals;
@@ -126,26 +158,34 @@ void Coordinator::Run() {
     for (auto& t : workerThreads) {
         t.Join();
     }
+    snapshotThread.Join();
     metricsThread.Join();
 
     spdlog::info("all threads stopped, saving crawler state");
-    DumpState();
+    DumpState(StatePath());
+
+    spdlog::info("crawler state saved, cleaning up");
+    unlink(LockPath().c_str());
+
     spdlog::info("shutdown complete, goodbye!");
 }
 
-std::string Coordinator::StatePath() const {
-    return config_.data_directory + "/state.dat";
+std::string Coordinator::LockPath() const {
+    return config_.state_directory + "/crawler_lock";
 }
 
-void Coordinator::DumpState() {
-    auto stateFilePath = StatePath();
-    auto stateFileTempPath = stateFilePath + ".tmp";
+std::string Coordinator::StatePath() const {
+    return config_.state_directory + "/state.dat";
+}
+
+void Coordinator::DumpState(const std::string& file) {
+    auto stateFileTempPath = file + ".tmp";
 
     PersistentState state;
     state.nextDocumentID = state_->nextDocumentID.load();
     frontier_->DumpPendingURLs(state.pendingURLs);
-    requestManager_->ExtractQueuedURLs(state.activeCrawlURLs);
-    docQueue_->ExtractCompletedURLs(state.activeCrawlURLs);
+    requestManager_->DumpQueuedURLs(state.activeCrawlURLs);
+    docQueue_->DumpCompletedURLs(state.activeCrawlURLs);
 
     spdlog::debug("saved state: next document id = {}", state.nextDocumentID);
     spdlog::debug("saved state: pending url count = {}", state.pendingURLs.size());
@@ -159,22 +199,21 @@ void Coordinator::DumpState() {
     }
 
     // Replace any old state file
-    int status = rename(stateFileTempPath.c_str(), stateFilePath.c_str());
+    int status = rename(stateFileTempPath.c_str(), file.c_str());
     if (status == -1) {
         spdlog::error("failed to dump crawler state to disk: {}", std::strerror(errno));
     }
 }
 
-void Coordinator::RecoverState() {
-    auto stateFilePath = StatePath();
-    if (!FileExists(stateFilePath.c_str())) {
-        spdlog::info("no state file found at {}", stateFilePath);
+void Coordinator::RecoverState(const std::string& file) {
+    if (!FileExists(file.c_str())) {
+        spdlog::info("no state file found at {}", file);
         return;
     }
 
     PersistentState state;
     {
-        auto f = data::FileReader{stateFilePath.c_str()};
+        auto f = data::FileReader{file.c_str()};
         data::DeserializeValue(state, f);
     }
 
@@ -185,6 +224,83 @@ void Coordinator::RecoverState() {
     state_->nextDocumentID.store(state.nextDocumentID);
     frontier_->PushURLs(state.pendingURLs);
     requestManager_->RestoreQueuedURLs(state.activeCrawlURLs);
+}
+
+void Coordinator::SnapshotThreadEntry(size_t n) {
+    auto start = MonotonicTime();
+    while (!state_->threadSync.ShouldShutdown()) {
+        sleep(1);
+        if (state_->threadSync.ShouldShutdown()) {
+            return;
+        }
+
+        auto corpusSize = state_->nextDocumentID.load();
+        TotalDocumentCorpusSizeMetric.Set(static_cast<size_t>(corpusSize));
+
+        auto now = MonotonicTime();
+        if (now - start >= config_.snapshot_period_seconds) {
+            DoSnapshot(n);
+            start = MonotonicTime();
+        }
+    }
+}
+
+void Coordinator::DoSnapshot(size_t n) {
+    spdlog::info("requesting pause for snapshot");
+    state_->threadSync.StartPause(static_cast<int>(n));
+    spdlog::info("taking snapshot of crawler state");
+
+    auto snapshotDir = config_.snapshot_directory + "/crawler_snapshot";
+    auto snapshotTempDir = config_.snapshot_directory + "/crawler_snapshot.tmp";
+    auto snapshotOldDir = config_.snapshot_directory + "/crawler_snapshot.old";
+
+    if (DirectoryExists(snapshotTempDir.c_str())) {
+        RmRf(snapshotTempDir.c_str());
+    }
+    mkdir(snapshotTempDir.c_str(), 0755);
+
+    DumpState(snapshotTempDir + "/state.dat");
+    bool ok = frontier_->CopyStateToDirectory(snapshotTempDir);
+    if (!ok) {
+        spdlog::error("failed to copy frontier state to snapshot directory");
+        state_->threadSync.EndPause();
+        return;
+    }
+
+    bool cleanOld = false;
+    if (DirectoryExists(snapshotDir.c_str())) {
+        if (DirectoryExists(snapshotOldDir.c_str())) {
+            RmRf(snapshotOldDir.c_str());
+        }
+
+        int status = rename(snapshotDir.c_str(), snapshotOldDir.c_str());
+        if (status == -1) {
+            spdlog::error("failed to rename old snapshot: {}", std::strerror(errno));
+            state_->threadSync.EndPause();
+            return;
+        }
+        cleanOld = true;
+    }
+
+    int status = rename(snapshotTempDir.c_str(), snapshotDir.c_str());
+    if (status == -1) {
+        spdlog::error("failed to copy frontier state to snapshot directory: {}", std::strerror(errno));
+        state_->threadSync.EndPause();
+        return;
+    }
+
+    if (cleanOld) {
+        RmRf(snapshotOldDir.c_str());
+    }
+
+    // Reset progress on request timeouts -- snapshot may have taken a sizeable
+    // amount of time and we don't want to count the duration elapsed against
+    // the request timeout.
+    requestManager_->TouchRequestTimeouts();
+    frontier_->TouchRobotRequestTimeouts();
+
+    spdlog::info("resuming crawler");
+    state_->threadSync.EndPause();
 }
 
 }  // namespace mithril

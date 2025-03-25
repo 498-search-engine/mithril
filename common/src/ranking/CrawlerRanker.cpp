@@ -3,14 +3,15 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace mithril::ranking {
 
-uint32_t GetUrlRank(const std::string& url) {
+uint32_t GetUrlRank(std::string_view url) {
     CrawlerRankingsStruct ranker{
         .tld = "", .domainName = "", .urlLength = 0, .parameterCount = 0, .pageDepth = 0, .isHttps = false};
 
-    GetStringRankings(url.data(), ranker);
+    GetStringRankings(url, ranker);
 
     uint32_t score = 0;
 
@@ -64,32 +65,35 @@ uint32_t GetUrlRank(const std::string& url) {
     return score;
 }
 
-void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker) {
+void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
+    const char* c = url.data();
+    const char* end = url.data() + url.size();
+
     // Read until end of protocol to check whether it is HTTPS or not
-    while (*url != ':') {
-        if (*url == 's') {
+    while (*c != ':') {
+        if (*c == 's') {
             ranker.isHttps = true;
         }
-        url++;
+        c++;
     };
 
     // Get rid of two slashes after : (//)
-    url = url + 3;
+    c = c + 3;
 
     bool readTld = false;
     // Read until the domain part is over
-    while (*url != '/' && *url) {
+    while (*c != '/' && c < end) {
         if (readTld) {
-            ranker.tld.push_back(*url);
+            ranker.tld.push_back(*c);
         }
 
-        if (*url == '.') {
+        if (*c == '.') {
             readTld = true;
             ranker.tld = "";
         }
 
-        ranker.domainName.push_back(*url);
-        url++;
+        ranker.domainName.push_back(*c);
+        c++;
     }
 
     if (ranker.domainName.starts_with("www.")) {
@@ -97,20 +101,21 @@ void GetStringRankings(const char* url, CrawlerRankingsStruct& ranker) {
     }
 
     // Read until the URL is over
-    while (*url) {
-        if (*url == '?' || *url == '&') {
+    while (c < end) {
+        if (*c == '?' || *c == '&') {
             ranker.parameterCount++;
-        } else if (*url == '/') {
+        } else if (*c == '/') {
             ranker.pageDepth++;
         }
 
         ranker.urlLength++;
-        url++;
+        c++;
     }
 
     // if it ended in a /, depth should not increase
-    if (*(--url) == '/') {
+    if (c[-1] == '/') {
         ranker.pageDepth--;
     }
 }
+
 }  // namespace mithril::ranking

@@ -1,6 +1,7 @@
 build/*
 build_debug/
 build_release/
+build_perf/
 .vscode/*
 .DS_Store
 .cache/
@@ -9,4 +10,4 @@ bench/
 tags
 
 # crawler data
-data/
+/data/

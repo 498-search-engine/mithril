@@ -8,6 +8,12 @@ namespace mithril {
 
 using namespace metrics;
 
+inline auto TotalDocumentCorpusSizeMetric = Metric{
+    "crawler_document_corpus_size",
+    MetricTypeGauge,
+    "Number of documents in the document corpus",
+};
+
 inline auto DocumentsProcessedMetric = Metric{
     "crawler_documents_processed",
     MetricTypeCounter,
@@ -23,7 +29,13 @@ inline auto DocumentProcessDurationMetric = HistogramMetric{
 inline auto DocumentSizeBytesMetric = HistogramMetric{
     "crawler_document_size_bytes",
     "Processed document size in bytes",
-    {1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 17, 1 << 18, 1 << 19, 1 << 20},
+    {1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21, 1 << 22},
+};
+
+inline auto CrawlRequestErrorsMetric = Metric{
+    "crawler_crawl_request_errors",
+    MetricTypeCounter,
+    "Number of errors encountered during a crawl request",
 };
 
 inline auto CrawlResponseCodesMetric = Metric{
@@ -80,6 +92,12 @@ inline auto MiddleQueueTotalQueuedURLs = Metric{
     "Number of queued URLs across all queues in the middle queue",
 };
 
+inline auto MiddleQueueTotalHosts = Metric{
+    "crawler_middle_queue_total_hosts",
+    MetricTypeGauge,
+    "Number of tracked hosts in the middle queue",
+};
+
 inline auto FrontierSize = Metric{
     "crawler_frontier_size",
     MetricTypeGauge,
@@ -99,9 +117,11 @@ inline auto FrontierFreshURLs = Metric{
 };
 
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {
+    server.Register(&TotalDocumentCorpusSizeMetric);
     server.Register(&DocumentsProcessedMetric);
     server.Register(&DocumentProcessDurationMetric);
     server.Register(&DocumentSizeBytesMetric);
+    server.Register(&CrawlRequestErrorsMetric);
     server.Register(&CrawlResponseCodesMetric);
     server.Register(&RobotsResponseCodesMetric);
     server.Register(&InFlightCrawlRequestsMetric);
@@ -111,6 +131,7 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&DocumentQueueSizeMetric);
     server.Register(&MiddleQueueActiveQueueCount);
     server.Register(&MiddleQueueTotalQueuedURLs);
+    server.Register(&MiddleQueueTotalHosts);
     server.Register(&FrontierSize);
     server.Register(&FrontierQueueSize);
     server.Register(&FrontierFreshURLs);

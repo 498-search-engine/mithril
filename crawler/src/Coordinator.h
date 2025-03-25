@@ -5,10 +5,12 @@
 #include "DocumentQueue.h"
 #include "RequestManager.h"
 #include "State.h"
+#include "StringTrie.h"
 #include "UrlFrontier.h"
 #include "core/memory.h"
 #include "metrics/MetricsServer.h"
 
+#include <cstddef>
 #include <string>
 
 namespace mithril {
@@ -19,15 +21,19 @@ public:
     void Run();
 
 private:
+    void SnapshotThreadEntry(size_t n);
+    void DoSnapshot(size_t n);
+
+    std::string LockPath() const;
     std::string StatePath() const;
 
-    void DumpState();
-    void RecoverState();
+    void DumpState(const std::string& file);
+    void RecoverState(const std::string& file);
 
     const CrawlerConfig config_;
+    StringTrie blacklistedHostsTrie_;
 
     std::string frontierDirectory_;
-    std::string docsDirectory_;
 
     core::UniquePtr<LiveState> state_;
 

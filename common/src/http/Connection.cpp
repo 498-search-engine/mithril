@@ -3,9 +3,11 @@
 #include "Util.h"
 #include "http/Request.h"
 #include "http/RequestExecutor.h"
+#include "http/Resolver.h"
 #include "http/Response.h"
 #include "http/SSL.h"
 #include "http/URL.h"
+#include "spdlog/common.h"
 
 #include <algorithm>
 #include <cassert>
@@ -32,31 +34,30 @@
 
 namespace mithril::http {
 
+using namespace std::string_view_literals;
+
 namespace {
 
 constexpr size_t MaxHeaderSize = 8192;
 constexpr size_t BufferSize = 8192;
-constexpr const char* ContentLengthHeader = "Content-Length: ";
-constexpr const char* ContentLanguageHeader = "Content-Language: ";
-constexpr const char* TransferEncodingChunkedHeader = "Transfer-Encoding: chunked";
-constexpr const char* HeaderDelimiter = "\r\n\r\n";
-constexpr const char* CRLF = "\r\n";
+constexpr auto HeaderDelimiter = "\r\n\r\n"sv;
+constexpr auto CRLF = "\r\n"sv;
 
-void PrintSSLError(SSL* ssl, int status, const char* operation) {
+void PrintSSLError(SSL* ssl, int status, const char* operation, spdlog::level::level_enum level) {
     int sslErr = SSL_get_error(ssl, status);
-    spdlog::warn("connection: {} failed with error code {}", operation, sslErr);
+    spdlog::log(level, "connection: {} failed with error code {}", operation, sslErr);
 
     // Print the entire error queue
     unsigned long err;
     while ((err = ERR_get_error()) != 0) {
         char errBuf[256];
         ERR_error_string_n(err, errBuf, sizeof(errBuf));
-        spdlog::warn("ssl error: {}", errBuf);
+        spdlog::log(level, "ssl error: {}", errBuf);
     }
 }
 
 void PrintSSLConnectError(SSL* ssl, int status) {
-    PrintSSLError(ssl, status, "SSL_connect");
+    PrintSSLError(ssl, status, "SSL_connect", spdlog::level::warn);
 
     // Print verification errors if any
     long verifyResult = SSL_get_verify_result(ssl);
@@ -76,24 +77,6 @@ void PrintSSLConnectError(SSL* ssl, int status) {
     }
 }
 
-bool ContentLanguageMatches(std::string_view header, std::string_view lang) {
-    if (lang.empty()) {
-        return true;
-    }
-
-    auto semiPos = header.find(';');
-    if (semiPos != std::string_view::npos) {
-        header = header.substr(0, semiPos);
-    }
-
-    if (lang.back() == '*') {
-        lang.remove_suffix(1);
-        return InsensitiveStartsWith(header, lang);
-    } else {
-        return InsensitiveStrEquals(header, lang);
-    }
-}
-
 }  // namespace
 
 std::optional<Connection> Connection::NewFromRequest(const Request& req) {
@@ -101,28 +84,8 @@ std::optional<Connection> Connection::NewFromRequest(const Request& req) {
 }
 
 std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, RequestOptions options) {
-    struct addrinfo* address = nullptr;
-    struct addrinfo hints {};
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    bool isSecure = url.scheme == "https";
-    const char* port = url.port.empty() ? (isSecure ? "443" : "80") : url.port.c_str();
-
-    int status = getaddrinfo(url.host.c_str(), port, &hints, &address);
-    if (status != 0) {
-        spdlog::warn("failed to get addr for {}:{}: {}", url.host, port, gai_strerror(status));
-        return std::nullopt;
-    } else if (address == nullptr) {
-        spdlog::warn("failed to get addr for {}:{}: address is null", url.host, port);
-        return std::nullopt;
-    }
-
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (fd == -1) {
-        freeaddrinfo(address);
         spdlog::error("failed to create socket: {}", strerror(errno));
         return std::nullopt;
     }
@@ -132,16 +95,16 @@ std::optional<Connection> Connection::NewFromURL(Method method, const URL& url, 
         // continue anyway
     }
 
-    return Connection{fd, address, method, url, std::move(options)};
+    return Connection{fd, method, url, std::move(options)};
 }
 
-Connection::Connection(int fd, struct addrinfo* address, Method method, const URL& url, RequestOptions options)
+Connection::Connection(int fd, Method method, const URL& url, RequestOptions options)
     : fd_(fd),
-      address_(address),
-      state_(State::TCPConnecting),
+      state_(State::Resolving),
       url_(url),
+      port_(url.port.empty() ? (url.scheme == "https" ? "443" : "80") : url.port),
       reqOptions_(std::move(options)),
-      rawRequest_(BuildRawRequestString(method, url)),
+      rawRequest_(BuildRawRequestString(method, url, options)),
       requestBytesSent_(0),
       contentLength_(0),
       headersLength_(0),
@@ -161,9 +124,10 @@ Connection::~Connection() {
 
 Connection::Connection(Connection&& other) noexcept
     : fd_(other.fd_),
-      address_(other.address_),
+      address_(std::move(other.address_)),
       state_(other.state_),
       url_(std::move(other.url_)),
+      port_(std::move(other.port_)),
       reqOptions_(std::move(other.reqOptions_)),
       rawRequest_(std::move(other.rawRequest_)),
       requestBytesSent_(other.requestBytesSent_),
@@ -177,7 +141,6 @@ Connection::Connection(Connection&& other) noexcept
       ssl_(other.ssl_),
       isSecure_(other.isSecure_) {
     other.fd_ = -1;
-    other.address_ = nullptr;
     other.state_ = State::Closed;
     other.ssl_ = nullptr;
 }
@@ -186,9 +149,10 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     Close();
 
     fd_ = other.fd_;
-    address_ = other.address_;
+    address_ = std::move(other.address_);
     state_ = other.state_;
     url_ = std::move(other.url_);
+    port_ = std::move(other.port_);
     reqOptions_ = std::move(other.reqOptions_);
     rawRequest_ = std::move(other.rawRequest_);
     requestBytesSent_ = other.requestBytesSent_;
@@ -203,7 +167,6 @@ Connection& Connection::operator=(Connection&& other) noexcept {
     isSecure_ = other.isSecure_;
 
     other.fd_ = -1;
-    other.address_ = nullptr;
     other.state_ = State::Closed;
     other.ssl_ = nullptr;
 
@@ -226,35 +189,38 @@ void Connection::InitializeSSL() {
 
     ssl_ = SSL_new(ctx);
     if (ssl_ == nullptr) {
-        // TODO: error handling strategy
-        throw std::runtime_error("Failed to create SSL object");
+        spdlog::error("failed to create SSL object");
+        state_ = State::ConnectError;
+        return;
     }
 
     int status = SSL_set_fd(ssl_, fd_);
     if (status != 1) {
-        PrintSSLError(ssl_, status, "SSL_set_fd");
+        PrintSSLError(ssl_, status, "SSL_set_fd", spdlog::level::err);
         SSL_free(ssl_);
         ssl_ = nullptr;
-        // TODO: error handling strategy
-        throw std::runtime_error("Failed to set SSL file descriptor");
+        state_ = State::ConnectError;
+        return;
     }
 
     // Set Server Name Indication (SNI)
     status = SSL_set_tlsext_host_name(ssl_, url_.host.c_str());
     if (status != 1) {
-        PrintSSLError(ssl_, status, "SSL_set_tlsext_host_name");
+        PrintSSLError(ssl_, status, "SSL_set_tlsext_host_name", spdlog::level::err);
         SSL_free(ssl_);
         ssl_ = nullptr;
-        throw std::runtime_error("Failed to set SNI hostname");
+        state_ = State::ConnectError;
+        return;
     }
 
     // Set DNS hostname to verify
     status = SSL_set1_host(ssl_, url_.host.c_str());
     if (status != 1) {
-        PrintSSLError(ssl_, status, "SSL_set1_host");
+        PrintSSLError(ssl_, status, "SSL_set1_host", spdlog::level::err);
         SSL_free(ssl_);
         ssl_ = nullptr;
-        throw std::runtime_error("Failed to set certificate verification hostname");
+        state_ = State::ConnectError;
+        return;
     }
 }
 
@@ -264,11 +230,6 @@ void Connection::Close() {
         SSL_free(ssl_);
         ssl_ = nullptr;
     }
-    if (address_ != nullptr) {
-        // TODO(dsage): only do this if we manage the lifetime of address_
-        freeaddrinfo(address_);
-        address_ = nullptr;
-    }
     if (fd_ != -1) {
         close(fd_);
         fd_ = -1;
@@ -277,16 +238,17 @@ void Connection::Close() {
 
 Response Connection::GetResponse() {
     assert(state_ == State::Complete);
+    assert(!headers_.empty());
 
     // Close socket and shutdown connection
     state_ = State::Closed;
     Close();
 
-    auto header = std::vector<char>{buffer_.begin(), buffer_.begin() + headersLength_};
     buffer_.clear();
     return Response{
-        std::move(header),
+        std::move(headers_),
         std::move(body_),
+        std::move(parsedHeader_),
     };
 }
 
@@ -337,7 +299,9 @@ bool Connection::WriteToSocketSSL() {
             } else if (err == SSL_ERROR_ZERO_RETURN || err == SSL_ERROR_SYSCALL) {
                 return true;
             } else {
-                PrintSSLError(ssl_, bytesSent, "SSL_write");
+#if not defined(NDEBUG)
+                PrintSSLError(ssl_, bytesSent, "SSL_write", spdlog::level::warn);
+#endif
                 state_ = State::SocketError;
                 Close();
                 return false;
@@ -368,8 +332,7 @@ bool Connection::ReadFromSocketRaw() {
                 // No more data available right now
                 return false;
             }
-            // TODO: error logging
-            spdlog::error("connection: read from socket: {}", strerror(errno));
+            spdlog::warn("connection: read from socket: {}", strerror(errno));
             state_ = State::SocketError;
             Close();
             return false;
@@ -398,7 +361,9 @@ bool Connection::ReadFromSocketSSL() {
             } else if (err == SSL_ERROR_ZERO_RETURN || err == SSL_ERROR_SYSCALL) {
                 return true;
             } else {
-                PrintSSLError(ssl_, bytesRead, "SSL_read");
+#if not defined(NDEBUG)
+                PrintSSLError(ssl_, bytesRead, "SSL_read", spdlog::level::warn);
+#endif
                 state_ = err == SSL_ERROR_SSL ? State::UnexpectedEOFError : State::SocketError;
                 Close();
                 return false;
@@ -409,8 +374,28 @@ bool Connection::ReadFromSocketSSL() {
 }
 
 void Connection::Connect() {
+    if (state_ == State::Resolving) {
+        Resolver::ResolutionResult result{};
+        bool resolved = ApplicationResolver->Resolve(url_.host, port_, result);
+        if (!resolved) {
+            // Address resolution in progress
+            return;
+        }
+
+        if (result.status != 0) {
+            spdlog::warn("failed to get addr for {}:{}", url_.host, port_);
+            state_ = State::ConnectError;
+            Close();
+            return;
+        }
+
+        assert(result.addr.has_value());
+        address_ = std::move(*result.addr);
+        state_ = State::TCPConnecting;
+    }
+
     if (state_ == State::TCPConnecting) {
-        int status = connect(fd_, address_->ai_addr, address_->ai_addrlen);
+        int status = connect(fd_, address_.AddrInfo()->ai_addr, address_.AddrInfo()->ai_addrlen);
         if (status == 0) {
             state_ = isSecure_ ? State::SSLConnecting : State::Sending;
         } else if (status < 0) {
@@ -441,9 +426,11 @@ void Connection::Connect() {
                 // Establishing SSL connection in progress
                 return;
             }
-
             // Actual SSL error occurred
+
+#if not defined(NDEBUG)
             PrintSSLConnectError(ssl_, status);
+#endif
             state_ = State::ConnectError;
             Close();
             return;
@@ -468,10 +455,11 @@ void Connection::Process(bool gotEof) {
 
     if (gotEof) {
         if (!IsError()) {
-            if ((state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
+            if (state_ == State::Sending || state_ == State::ReadingHeaders ||
+                (state_ == State::ReadingBody && bodyBytesRead_ < contentLength_) ||
                 (state_ == State::ReadingChunks && currentChunkSize_ != 0)) {
                 state_ = State::UnexpectedEOFError;
-                spdlog::warn("connection: closed before receiving complete response from {}:{}", url_.host, url_.port);
+                SPDLOG_DEBUG("connection: closed before receiving complete response from {}:{}", url_.host, url_.port);
             } else {
                 state_ = State::Complete;
             }
@@ -518,7 +506,7 @@ bool Connection::ProcessReceive() {
 }
 
 bool Connection::IsConnecting() const {
-    return state_ == State::TCPConnecting || state_ == State::SSLConnecting;
+    return state_ == State::Resolving || state_ == State::TCPConnecting || state_ == State::SSLConnecting;
 }
 
 bool Connection::IsActive() const {
@@ -527,18 +515,22 @@ bool Connection::IsActive() const {
 
 bool Connection::IsError() const {
     return state_ == State::ConnectError || state_ == State::SocketError || state_ == State::UnexpectedEOFError ||
-           state_ == State::ResponseTooBigError || state_ == State::ResponseWrongLanguage;
+           state_ == State::InvalidResponseError || state_ == State::ResponseTooBigError ||
+           state_ == State::ResponseWrongType || state_ == State::ResponseWrongLanguage;
 }
 
 RequestError Connection::GetError() const {
     switch (state_) {
     case State::ResponseTooBigError:
         return RequestError::ResponseTooBig;
+    case State::ResponseWrongType:
+        return RequestError::ResponseWrongType;
     case State::ResponseWrongLanguage:
         return RequestError::ResponseWrongLanguage;
     case State::ConnectError:
     case State::SocketError:
     case State::UnexpectedEOFError:
+    case State::InvalidResponseError:
     default:
         return RequestError::ConnectionError;
     }
@@ -558,7 +550,7 @@ bool Connection::IsReading() const {
 
 void Connection::ProcessHeaders() {
     // Look for header delimiter
-    auto headerEnd = std::search(buffer_.begin(), buffer_.end(), HeaderDelimiter, HeaderDelimiter + 4);
+    auto headerEnd = std::search(buffer_.begin(), buffer_.end(), HeaderDelimiter.begin(), HeaderDelimiter.end());
 
     if (headerEnd == buffer_.end()) {
         if (buffer_.size() > MaxHeaderSize) {
@@ -572,48 +564,91 @@ void Connection::ProcessHeaders() {
 
     // Headers are complete
     headersLength_ = headerEnd - buffer_.begin() + 4;  // Include delimiter
-    auto headers = std::string{buffer_.begin(), headerEnd};
+    headers_.resize(headersLength_);
+    std::memcpy(headers_.data(), buffer_.data(), headersLength_);
 
-    if (!ValidateHeaders(headers)) {
-        // Headers are not valid for request options
+    auto parsedHeader = ParseResponseHeader(std::string_view{headers_.data(), headers_.size()});
+    if (!parsedHeader.has_value()) {
+        spdlog::debug("failed to parse headers for {}", url_.url);
+        state_ = State::InvalidResponseError;
+        return;
+    }
+    parsedHeader_ = std::move(*parsedHeader);
+
+    if (!ValidateHeaders(parsedHeader_)) {
+        // Headers are not valid for request options. State has been set.
         return;
     }
 
     // Check for chunked encoding
-    if (FindCaseInsensitive(headers, TransferEncodingChunkedHeader) != std::string::npos) {
+    if (parsedHeader_.TransferEncoding != nullptr) {
+        // Only supported transfer encoding is chunked
+        if (!InsensitiveStrEquals(parsedHeader_.TransferEncoding->value, "chunked"sv)) {
+            state_ = State::InvalidResponseError;
+            return;
+        }
         state_ = State::ReadingChunks;
         ProcessChunks();
         return;
     }
 
     // Look for Content-Length header
-    auto contentLengthPos = FindCaseInsensitive(headers, ContentLengthHeader);
-    if (contentLengthPos != std::string::npos) {
-        contentLengthPos += strlen(ContentLengthHeader);
-        auto lengthEnd = headers.find(CRLF, contentLengthPos);
-        contentLength_ = std::stoul(headers.substr(contentLengthPos, lengthEnd - contentLengthPos));
-        buffer_.reserve(buffer_.size() + contentLength_);
-        body_.reserve(contentLength_);
+    if (parsedHeader_.ContentLength != nullptr) {
+        auto contentLength = std::string{parsedHeader_.ContentLength->value};
+        try {
+            contentLength_ = std::stoul(contentLength);
+        } catch (const std::invalid_argument&) {
+            state_ = State::InvalidResponseError;
+            return;
+        } catch (const std::out_of_range&) {
+            state_ = State::InvalidResponseError;
+            return;
+        }
+
         if (reqOptions_.maxResponseSize > 0 && contentLength_ > reqOptions_.maxResponseSize) {
             // Response is too big
             spdlog::debug("content-length {} for response {} exceeds max response size", contentLength_, url_.url);
             state_ = State::ResponseTooBigError;
             return;
         }
+
+        buffer_.reserve(buffer_.size() + contentLength_);
+        body_.reserve(contentLength_);
+    } else {
+        // No Content-Length or Transfer-Encoding chunked
+        state_ = State::InvalidResponseError;
+        return;
     }
 
     state_ = State::ReadingBody;
     ProcessBody();  // Process any body data we already have
 }
 
-bool Connection::ValidateHeaders(const std::string& headers) {
+bool Connection::ValidateHeaders(const ResponseHeader& headers) {
+    // Check Content-Type if specified in options AND 2xx status code
+    if (!reqOptions_.allowedMimeType.empty() && headers.status / 100 == 2) {
+        if (headers.ContentType == nullptr) {
+            spdlog::debug("content-type <none> for response {} is not acceptable", url_.url);
+            state_ = State::ResponseWrongType;
+            return false;
+        }
+
+        auto contentType = headers.ContentType->value;
+        auto anyMatch =
+            std::any_of(reqOptions_.allowedMimeType.begin(),
+                        reqOptions_.allowedMimeType.end(),
+                        [contentType](std::string_view mimeType) { return ContentTypeMatches(contentType, mimeType); });
+        if (!anyMatch) {
+            spdlog::debug("content-type {} for response {} is not acceptable", contentType, url_.url);
+            state_ = State::ResponseWrongType;
+            return false;
+        }
+    }
+
+    // Check Content-Language if specified in options
     if (!reqOptions_.allowedContentLanguage.empty()) {
-        // Look for Content-Language header
-        auto contentLanguagePos = FindCaseInsensitive(headers, ContentLanguageHeader);
-        if (contentLanguagePos != std::string::npos) {
-            contentLanguagePos += strlen(ContentLanguageHeader);
-            auto langEnd = headers.find(CRLF, contentLanguagePos);
-            auto contentLanguage = headers.substr(contentLanguagePos, langEnd - contentLanguagePos);
+        if (headers.ContentLanguage != nullptr) {
+            auto contentLanguage = headers.ContentLanguage->value;
             auto anyMatch = std::any_of(
                 reqOptions_.allowedContentLanguage.begin(),
                 reqOptions_.allowedContentLanguage.end(),
@@ -655,14 +690,23 @@ void Connection::ProcessChunks() {
         if (currentChunkSize_ == 0) {
             // Need to read next chunk size
             auto chunkHeaderEnd =
-                std::search(buffer_.begin() + headersLength_ + bodyBytesRead_, buffer_.end(), CRLF, CRLF + 2);
+                std::search(buffer_.begin() + headersLength_ + bodyBytesRead_, buffer_.end(), CRLF.begin(), CRLF.end());
 
             if (chunkHeaderEnd == buffer_.end()) {
                 return;  // Don't have complete chunk header
             }
 
             auto chunkHeader = std::string{buffer_.begin() + headersLength_ + bodyBytesRead_, chunkHeaderEnd};
-            currentChunkSize_ = std::stoul(chunkHeader, nullptr, 16);
+            try {
+                currentChunkSize_ = std::stoul(chunkHeader, nullptr, 16);
+            } catch (const std::invalid_argument&) {
+                state_ = State::InvalidResponseError;
+                return;
+            } catch (const std::out_of_range&) {
+                state_ = State::InvalidResponseError;
+                return;
+            }
+
             bodyBytesRead_ += (chunkHeaderEnd - (buffer_.begin() + headersLength_ + bodyBytesRead_)) + 2;
 
             if (currentChunkSize_ == 0) {

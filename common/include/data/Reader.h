@@ -52,6 +52,9 @@ public:
     bool Read(void* out, size_t size);
     size_t Remaining();
 
+    const char* Data() const;
+    void SeekForward(size_t amount);
+
 private:
     std::span<const char> data_;
     size_t position_ = 0;

@@ -1,6 +1,7 @@
 #ifndef CRAWLER_PRIORITYURLQUEUE_H
 #define CRAWLER_PRIORITYURLQUEUE_H
 
+#include "FileSystem.h"
 #include "core/optional.h"
 #include "core/ordered_map_file.h"
 #include "core/vector_file.h"
@@ -48,7 +49,7 @@ public:
         }
 
         if (exists) {
-            struct stat st {};
+            struct stat st{};
             if (fstat(fd_, &st) == -1) {
                 close(fd_);
                 throw std::runtime_error("failed to get string file size");
@@ -182,6 +183,15 @@ constexpr size_t UrlTreeArity = 128;
  * @brief A on-disk store of URLs.
  */
 class URLStore {
+
+private:
+    URLStore(const char* urlDataPath, const char* offsetPath, const char* urlIndexPath)
+        : urlDataPath_(urlDataPath),
+          offsetPath_(offsetPath),
+          urlIndexPath_(urlIndexPath),
+          stringFile_(urlDataPath, offsetPath),
+          urlIndex_(urlIndexPath, internal::StringFileComparator{stringFile_}) {}
+
 public:
     using url_id_t = uint32_t;
 
@@ -190,8 +200,13 @@ public:
                    (directory + "/url_offsets.dat").c_str(),
                    (directory + "/url_index.dat").c_str()) {}
 
-    URLStore(const char* urlDataPath, const char* offsetPath, const char* urlIndexPath)
-        : stringFile_(urlDataPath, offsetPath), urlIndex_(urlIndexPath, internal::StringFileComparator{stringFile_}) {}
+    bool CopyStateToDirectory(const std::string& directory) const {
+        bool ok = true;
+        ok &= CopyFile(urlDataPath_.c_str(), (directory + "/url_data.dat").c_str());
+        ok &= CopyFile(offsetPath_.c_str(), (directory + "/url_offsets.dat").c_str());
+        ok &= CopyFile(urlIndexPath_.c_str(), (directory + "/url_index.dat").c_str());
+        return ok;
+    }
 
     /**
      * @brief Returns whether the given URL is in the store already.
@@ -236,6 +251,10 @@ public:
     std::string_view URL(url_id_t id) const { return stringFile_[id]; }
 
 private:
+    std::string urlDataPath_;
+    std::string offsetPath_;
+    std::string urlIndexPath_;
+
     internal::StringFile stringFile_;
     core::OrderedMapFile<url_id_t, url_id_t, UrlTreeArity, internal::StringFileComparator> urlIndex_;
 };
@@ -259,11 +278,21 @@ class PriorityURLQueue {
 
 public:
     PriorityURLQueue(const std::string& directory, unsigned int highScoreCutoff, unsigned int highScoreQueuePercent)
-        : highScoreCutoff_(highScoreCutoff),
+        : highScoreQueuePath_(directory + "/url_queue.dat"),
+          lowScoreQueuePath_(directory + "/url_queue_low_score.dat"),
+          highScoreCutoff_(highScoreCutoff),
           highScoreQueuePercent_(highScoreQueuePercent),
           store_(directory),
-          highScoreQueuedURLs_((directory + "/url_queue.dat").c_str()),
-          lowScoreQueuedURLs_((directory + "/url_queue_low_score.dat").c_str()) {}
+          highScoreQueuedURLs_(highScoreQueuePath_.c_str()),
+          lowScoreQueuedURLs_(lowScoreQueuePath_.c_str()) {}
+
+    bool CopyStateToDirectory(const std::string& directory) const {
+        bool ok = true;
+        ok &= store_.CopyStateToDirectory(directory);
+        ok &= CopyFile(highScoreQueuePath_.c_str(), (directory + "/url_queue.dat").c_str());
+        ok &= CopyFile(lowScoreQueuePath_.c_str(), (directory + "/url_queue_low_score.dat").c_str());
+        return ok;
+    }
 
     bool Seen(std::string_view url) { return store_.Contains(url); }
 
@@ -373,6 +402,9 @@ private:
         }
         queue.PopBack();
     }
+
+    std::string highScoreQueuePath_;
+    std::string lowScoreQueuePath_;
 
     unsigned int highScoreCutoff_;
     unsigned int highScoreQueuePercent_;

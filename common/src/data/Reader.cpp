@@ -43,6 +43,9 @@ FileReader& FileReader::operator=(FileReader&& other) noexcept {
 }
 
 bool FileReader::Read(void* data, size_t size) {
+    if (size == 0) {
+        return true;
+    }
     return fread(data, 1, size, file_) == size;
 }
 
@@ -64,16 +67,26 @@ void FileReader::Close() {
 BufferReader::BufferReader(std::span<const char> d) : data_(d) {}
 
 bool BufferReader::Read(void* out, size_t size) {
-    if (position_ + size > data_.size()) {
+    if (size == 0) {
+        return true;
+    } else if (position_ + size > data_.size()) {
         return false;
     }
-    memcpy(out, data_.data() + position_, size);
-    position_ += size;
+    memcpy(out, Data(), size);
+    SeekForward(size);
     return true;
 }
 
 size_t BufferReader::Remaining() {
     return data_.size() - position_;
+}
+
+const char* BufferReader::Data() const {
+    return data_.data() + position_;
+}
+
+void BufferReader::SeekForward(size_t amount) {
+    position_ += amount;
 }
 
 

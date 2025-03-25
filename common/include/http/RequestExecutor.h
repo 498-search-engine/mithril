@@ -36,7 +36,6 @@ struct RequestState {
 struct CompleteResponse {
     Request req;
     Response res;
-    ResponseHeader header;
 };
 
 enum class RequestError : uint8_t {
@@ -48,6 +47,7 @@ enum class RequestError : uint8_t {
     TooManyRedirects,
     TimedOut,
     ResponseTooBig,
+    ResponseWrongType,
     ResponseWrongLanguage,
 };
 
@@ -73,10 +73,12 @@ constexpr std::string_view StringOfRequestError(RequestError e) {
         return "TimedOut"sv;
     case RequestError::ResponseTooBig:
         return "ResponseTooBig"sv;
+    case RequestError::ResponseWrongType:
+        return "ResponseWrongType"sv;
     case RequestError::ResponseWrongLanguage:
         return "ResponseWrongLanguage"sv;
     default:
-        return "Unkown"sv;
+        return "Unknown"sv;
     }
 }
 
@@ -95,6 +97,11 @@ public:
      * @param req Request to add.
      */
     void Add(Request req);
+
+    /**
+     * @brief Resets the timeout progress for all active requests.
+     */
+    void TouchRequestTimeouts();
 
     /**
      * @brief Processes events from all managed connections.

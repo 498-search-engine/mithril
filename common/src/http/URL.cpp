@@ -1,13 +1,16 @@
 #include "http/URL.h"
 
 #include "Util.h"
+#include "core/array.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <spdlog/spdlog.h>
 
 namespace mithril::http {
@@ -138,8 +141,15 @@ std::optional<URL> ParseURL(std::string_view s) {
             return std::nullopt;
         }
 
-        const int portNum = std::stoi(u.port);
-        if (portNum < 1 || portNum > 65535) {
+        try {
+            const int portNum = std::stoi(u.port);
+            if (portNum < 1 || portNum > 65535) {
+                SPDLOG_DEBUG("parse url: port {} out of range in {}", u.port, uv);
+                return std::nullopt;
+            }
+        } catch (const std::invalid_argument&) {
+            return std::nullopt;
+        } catch (const std::out_of_range&) {
             SPDLOG_DEBUG("parse url: port {} out of range in {}", u.port, uv);
             return std::nullopt;
         }
@@ -150,22 +160,26 @@ std::optional<URL> ParseURL(std::string_view s) {
     return u;
 }
 
-std::string CanonicalizeURL(const URL& url) {
-    std::string normalized;
-    normalized.reserve(url.url.size());
+URL CanonicalizeURL(const URL& url) {
+    URL canonical{};
+    std::string canonicalFull;
+    canonicalFull.reserve(url.url.size());
 
     // Lowercase scheme and host
     std::string scheme = url.scheme;
     std::transform(scheme.begin(), scheme.end(), scheme.begin(), [](unsigned char c) { return std::tolower(c); });
+    canonical.scheme = scheme;
 
     std::string host = url.host;
     std::transform(host.begin(), host.end(), host.begin(), [](unsigned char c) { return std::tolower(c); });
+    canonical.host = host;
 
-    normalized += scheme + "://" + host;
+    canonicalFull += scheme + "://" + host;
 
     // Add non-default port
     if (!url.port.empty() && !((scheme == "http" && url.port == "80") || (scheme == "https" && url.port == "443"))) {
-        normalized += ":" + url.port;
+        canonicalFull += ":" + url.port;
+        canonical.port = url.port;
     }
 
     // Normalize path
@@ -173,7 +187,7 @@ std::string CanonicalizeURL(const URL& url) {
     cleanPath.reserve(url.path.size());
     bool prevSlash = false;
 
-    // Ensure leading slash and collapse duplicates
+    // Ensure leading slash and collapse consecutive /'s
     if (url.path.empty() || url.path[0] != '/') {
         cleanPath += '/';
         prevSlash = true;
@@ -185,20 +199,24 @@ std::string CanonicalizeURL(const URL& url) {
                 cleanPath += '/';
                 prevSlash = true;
             }
-        } else {
-            cleanPath += c;
-            prevSlash = false;
+            continue;
         }
+        prevSlash = false;
+
+        if (c == '#') {
+            // Start of fragment, we don't want it
+            break;
+        }
+        cleanPath += c;
     }
 
-    // Handle trailing slash for empty paths
-    if (cleanPath.empty() || (cleanPath.size() == 1 && cleanPath[0] == '/')) {
-        normalized += "/";
-    } else {
-        normalized += cleanPath;
-    }
+    cleanPath = ResolvePath(cleanPath);  // Resolve directory . and ..
 
-    return normalized;
+    canonicalFull += cleanPath;
+    canonical.path = cleanPath;
+
+    canonical.url = std::move(canonicalFull);
+    return canonical;
 }
 
 CanonicalHost CanonicalizeHost(const http::URL& url) {
@@ -220,6 +238,95 @@ CanonicalHost CanonicalizeHost(const http::URL& url) {
     }
 
     return canonical;
+}
+
+constexpr core::Array<char, 16> Hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+std::string EncodePath(std::string_view u) {
+    std::string result;
+    bool inQuery = false;
+
+    auto encodeChar = [&result](unsigned char c) {
+        result += '%';
+        result += Hex[c >> 4];    // First hex digit
+        result += Hex[c & 0x0F];  // Second hex digit
+    };
+
+    for (unsigned char c : u) {
+        bool encode = false;
+        // RFC 3986 section 2.3 Unreserved Characters (allowed unencoded)
+        // ALPHA / DIGIT / "-" / "." / "_" / "~"
+        if (std::isalnum(c) || c == '-' || c == '.' || c == '_' || c == '~') {
+            encode = false;
+        } else if (c == '/') {
+            encode = inQuery;
+        } else if (c == '?' || c == '#') {
+            encode = inQuery;
+            inQuery = true;
+        } else if (c == '&' || c == '=') {
+            encode = !inQuery;
+        } else {
+            encode = true;
+        }
+
+        if (encode) {
+            encodeChar(c);
+        } else {
+            result.push_back(static_cast<char>(c));
+        }
+    }
+
+    return result;
+}
+
+std::string DecodeURL(std::string_view u) {
+    // RFC 3986 2.2
+    constexpr std::string_view ReservedChars = ":/?#[]@!$&'()*+,;="sv;
+
+    std::string result;
+    size_t i = 0;
+
+    while (i < u.size()) {
+        if (u[i] == '%' && i < u.size() - 2) {
+            unsigned char c = 0;
+            auto high = u[i + 1];
+            if (high >= '0' && high <= '9') {
+                c = static_cast<unsigned char>((high - '0') << 4);
+            } else if (high >= 'A' && high <= 'F') {
+                c = static_cast<unsigned char>((high - 'A' + 10) << 4);
+            } else {
+                result.push_back(u[i]);
+                ++i;
+                continue;
+            }
+            auto low = u[i + 2];
+            if (low >= '0' && low <= '9') {
+                c |= static_cast<unsigned char>(low - '0');
+            } else if (low >= 'A' && low <= 'F') {
+                c |= static_cast<unsigned char>(low - 'A' + 10);
+            } else {
+                result.push_back(u[i]);
+                ++i;
+                continue;
+            }
+
+            auto decoded = static_cast<char>(c);
+
+            if (std::find(ReservedChars.begin(), ReservedChars.end(), c) == ReservedChars.end()) {
+                // Not a reserved character
+                result.push_back(static_cast<char>(c));
+                i += 3;
+            } else {
+                // Reserved character, don't decode
+                result.push_back(u[i]);
+                ++i;
+            }
+        } else {
+            result.push_back(u[i]);
+            ++i;
+        }
+    }
+    return result;
 }
 
 }  // namespace mithril::http
