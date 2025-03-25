@@ -6,6 +6,21 @@ Based on Bleve
 ## Basic Grammar
 
 
+Title terms get a "#" prefix
+URL terms get a "@" prefix
+Anchor terms get a "$" prefix
+Description terms get a "%" prefix
+Body terms have no special prefix
+
+enum class FieldType {
+    BODY = 0,
+    TITLE = 1,
+    URL = 2,
+    ANCHOR = 3,
+    DESC = 4
+    // Can be extended with HEADING, BOLD, etc.
+};
+
 
 phrase := term [ operator phrase ]
 
@@ -105,3 +120,54 @@ QUOTE               ::= "\"" ;
 WS                  ::= " " | "\t" | "\n" | "\r" ;
 ALPHA               ::= "a".."z" | "A".."Z" ;
 DIGIT               ::= "0".."9" ;
+
+
+
+
+uct DocInfo {
+//     uint32_t doc_id;
+//     uint32_t total_frequency;  // Sum of all term frequencies
+//     std::string url;
+//     std::vector<std::string> title;
+//     uint32_t frequency; 
+    
+//     // Store term-specific information
+//     struct TermData {
+//         std::string term;
+//         uint32_t frequency;
+//         std::vector<uint32_t> positions;
+        
+//         TermData(std::string t, uint32_t freq) : term(std::move(t)), frequency(freq) {}
+//     };
+    
+//     std::vector<TermData> term_data;  // Data for each term that matched this document
+
+//     DocInfo(uint32_t id, uint32_t freq) : doc_id(id), total_frequency(freq) {}
+    
+//     // Add information for a new term
+//     void addTerm(const std::string& term, uint32_t freq, const std::vector<uint32_t>& pos = {}) {
+//         TermData data(term, freq);
+//         data.positions = pos;
+//         term_data.push_back(std::move(data));
+//         total_frequency += freq;
+//     }
+    
+//     // Merge another DocInfo into this one
+//     void merge(const DocInfo& other) {
+//         total_frequency += other.total_frequency;
+        
+//         // Merge term data
+//         for (const auto& data : other.term_data) {
+//             term_data.push_back(data);
+//         }
+        
+//         // If the other document has URL/title and this one doesn't, copy it
+//         if (url.empty() && !other.url.empty()) {
+//             url = other.url;
+//         }
+        
+//         if (title.empty() && !other.title.empty()) {
+//             title = other.title;
+//         }
+//     }
+// };

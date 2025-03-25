@@ -1,5 +1,6 @@
 add_library(query STATIC
     src/Lexer.cpp
+    src/intersect.cpp
 )
 target_include_directories(query PUBLIC src)
 target_link_libraries(query PUBLIC
@@ -56,6 +57,17 @@ target_link_libraries(query_driver PRIVATE
     query
     index
 )
+
+# Add query driver executable
+add_executable(and_test
+    tests/and_test.cpp
+)
+target_link_libraries(and_test PRIVATE
+    query
+    index
+    common
+)
+
 
 
 # Register the test
