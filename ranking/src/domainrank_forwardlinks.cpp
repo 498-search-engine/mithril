@@ -14,7 +14,7 @@
 #include <fstream>
 
 static constexpr std::string input_dir = "pages";
-static constexpr std::string output_file = "pageranks_out.txt";
+static constexpr std::string output_file = "domainranks_out.txt";
 static inline std::unordered_map<std::string, int> linkToNode;
 static inline std::unordered_map<int, std::string> nodeToLink;
 static inline std::unordered_map<int, std::vector<int>> nodeConnections;
@@ -22,13 +22,33 @@ static inline int nodes = 0;
 
 using namespace mithril;
 
+std::string GetLinkDomain(const std::string& link) {
+    int c = 0;
+    std::string ret;
+
+    for (char ch : link) {
+        ret += ch;
+
+        if (ch == '/') {
+            c++;
+        }
+
+        if (c == 3) {
+            break;
+        }
+    }
+
+    return ret;
+}
+
 int GetLinkNode(const std::string& link) {
-    auto it = linkToNode.find(link);
+    std::string domain = GetLinkDomain(link);
+    auto it = linkToNode.find(domain);
     int nodeNo;
     if (it == linkToNode.end()) {
         nodeNo = nodes;
-        linkToNode[link] = nodeNo;
-        nodeToLink[nodeNo] = link;
+        linkToNode[domain] = nodeNo;
+        nodeToLink[nodeNo] = domain;
         nodes++;
     } else {
         nodeNo = it->second; 

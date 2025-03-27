@@ -20,6 +20,10 @@ add_executable(pagerank_forwardlinks
     src/pagerank_forwardlinks.cpp
 )
 
+add_executable(domainrank_forwardlinks
+    src/domainrank_forwardlinks.cpp
+)
+
 file(COPY config DESTINATION ${CMAKE_BINARY_DIR}/ranking)
 
 target_link_libraries(pagerank_bench PRIVATE
@@ -31,6 +35,14 @@ target_link_libraries(pagerank_bench PRIVATE
 )
 
 target_link_libraries(pagerank_forwardlinks PRIVATE
+    spdlog::spdlog
+    lib::core
+    common
+    pagerank
+    OpenMP::OpenMP_CXX
+)
+
+target_link_libraries(domainrank_forwardlinks PRIVATE
     spdlog::spdlog
     lib::core
     common
