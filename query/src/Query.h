@@ -4,11 +4,13 @@
 #define QUERY_H_
 
 #include <_types/_uint32_t.h>
+#include <memory>
 #include <vector>
 #include <utility>
 #include <string>
 #include "Token.h"
 #include "../../index/src/TermReader.h"
+#include "../../index/src/TermAND.h"
 #include "QueryConfig.h"
 #include "intersect.h"
 #include <unordered_map>
@@ -21,21 +23,29 @@ const int MAX_DOCUMENTS = 1e5;
 class Query {
 public:
     virtual ~Query() {}
-    [[nodiscard]] virtual std::vector<uint32_t> Evaluate() const { return {}; }
 
-    // [[nodiscard]] virtual mithril::IndexStreamReader GetISR() const { return {}; }
+    // Evaluates everything in one go 
+    [[nodiscard]] virtual std::vector<uint32_t> evaluate() const { return {}; }
 
+    // Helps us do some more fine grained stream reading
+    virtual uint32_t get_next_doc() const { return 0; }
+    virtual bool has_next() const { return false; }
+    // [[nodiscard]] virtual mithril::IndexStreamReader& get_isr() const = 0;
+    
+    [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const = 0;
+
+private: 
 };
 
 class TermQuery : public Query {
 public:
-    TermQuery(Token token) : token_(std::move(token)) {}
+    TermQuery(Token token) : token_(std::move(token)) {
+    }
 
-    Token getToken() { return token_; }
+    Token get_token() { return token_; }
 
-    std::vector<uint32_t> Evaluate() const override {
+    std::vector<uint32_t> evaluate() const override {
         mithril::TermReader term(query::QueryConfig::IndexPath, token_.value);
-        // mithril::DocumentMapReader doc_reader(query::QueryConfig::IndexPath);
 
         std::vector<uint32_t> results;
         results.reserve(MAX_DOCUMENTS);
@@ -49,54 +59,25 @@ public:
         return results;
     }
 
+    [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
+        return std::make_unique<mithril::TermReader>(query::QueryConfig::IndexPath, token_.value);
+    }
+
 private:
     Token token_;
     static constexpr int MAX_DOCUMENTS = 100000;
 };
 
 
-
-class AndQuerySimd : public Query {
-    // Combines results where ALL terms must match
-    Query* left_; 
-    Query* right_; 
-
-public: 
-    AndQuerySimd(Query* left, Query* right) : left_(left), right_(right) {
-        if (!left && !right){
-            std::cerr << "Need a left and right query\n";
-            exit(1);
-        }
-    }
-
-    std::vector<uint32_t> Evaluate() const override {
-        std::vector<uint32_t> left_docs = left_->Evaluate();
-        std::vector<uint32_t> right_docs = right_->Evaluate();
-        
-        //   auto intersected_ids = intersect_gallop_vec(left_docs, right_docs);
-        // return intersected_ids;
-        // Create a vector with enough space for results
-        std::vector<uint32_t> results(std::min(left_docs.size(), right_docs.size()));
-        
-        // Call SIMD intersection
-        size_t result_size = intersect_simd_sse(
-            left_docs.data(), right_docs.data(), 
-            results.data(), left_docs.size(), right_docs.size());
-        
-        // Resize to actual result size
-        results.resize(result_size);
-        return results;
-    }
-};
-
 // ... existing code ...
 
-class AndQuery : public Query {
+class AndQuery :  Query {
     // Combines results where ALL terms must match
     Query* left_; 
     Query* right_; 
 
 public: 
+
     AndQuery(Query* left, Query* right) : left_(left), right_(right) {
         if (!left && !right){
             std::cerr << "Need a left and right query\n";
@@ -104,58 +85,55 @@ public:
         }
     }
 
-    std::vector<uint32_t> Evaluate() const override {
-        // Get the left and right ISRs
-        mithril::TermReader left_isr = getISR(left_);
-        mithril::TermReader right_isr = getISR(right_);
-        
-        std::vector<uint32_t> results;
-        results.reserve(MAX_DOCUMENTS);
-        
-        // Continue while both iterators have documents
-        while (left_isr.hasNext() && right_isr.hasNext()) {
-            uint32_t left_doc_id = left_isr.currentDocID();
-            uint32_t right_doc_id = right_isr.currentDocID();
-            
-            if (left_doc_id == right_doc_id) {
-                // Match found, add to results
-                results.push_back(left_doc_id);
-                // Advance both readers
-                left_isr.moveNext();
-                right_isr.moveNext();
-            } else if (left_doc_id < right_doc_id) {
-                // Left is behind, advance it
-                left_isr.moveNext();
-            } else {
-                // Right is behind, advance it
-                right_isr.moveNext();
-            }
-            
-            // Stop if we've collected enough documents
-            if (results.size() >= MAX_DOCUMENTS) {
-                break;
-            }
-        }
-        
-        return results;
+    std::vector<uint32_t> evaluate() const override {
+        std::vector<uint32_t> left_docs = left_->evaluate();
+        std::vector<uint32_t> right_docs = right_->evaluate();
+        auto intersected_ids = intersect_gallop_vec(left_docs, right_docs);
+        return intersected_ids;
     }
-
-private:
-    // Helper method to get an ISR from a query
-    mithril::TermReader getISR(Query* query) const {
-        // This is a simplification - in a real implementation,
-        // you'd want to add methods to get the proper ISRs from each query type
-        // For now, we're assuming all queries can be converted to a term reader
-        if (auto* term_query = dynamic_cast<TermQuery*>(query)) {
-            return mithril::TermReader(query::QueryConfig::IndexPath, 
-                                     term_query->getToken().value);
-        }
-        
-        // Handle error case
-        std::cerr << "Unable to convert query to ISR\n";
-        return mithril::TermReader(query::QueryConfig::IndexPath, "");
+    
+    [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
+        std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers(2);
+        readers.push_back(std::move(left_->generate_isr()));
+        readers.push_back(std::move(right_->generate_isr()));
+        return std::make_unique<mithril::TermAND>(std::move(readers));
     }
 };
+
+
+
+// class AndQuerySimd : public Query {
+//     // Combines results where ALL terms must match
+//     Query* left_; 
+//     Query* right_; 
+
+// public: 
+//     AndQuerySimd(Query* left, Query* right) : left_(left), right_(right) {
+//         if (!left && !right){
+//             std::cerr << "Need a left and right query\n";
+//             exit(1);
+//         }
+//     }
+
+//     std::vector<uint32_t> Evaluate() const override {
+//         std::vector<uint32_t> left_docs = left_->Evaluate();
+//         std::vector<uint32_t> right_docs = right_->Evaluate();
+        
+//         //   auto intersected_ids = intersect_gallop_vec(left_docs, right_docs);
+//         // return intersected_ids;
+//         // Create a vector with enough space for results
+//         std::vector<uint32_t> results(std::min(left_docs.size(), right_docs.size()));
+        
+//         // Call SIMD intersection
+//         size_t result_size = intersect_simd_sse(
+//             left_docs.data(), right_docs.data(), 
+//             results.data(), left_docs.size(), right_docs.size());
+        
+//         // Resize to actual result size
+//         results.resize(result_size);
+//         return results;
+//     }
+// };
 
 
 
