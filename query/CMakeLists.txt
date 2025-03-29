@@ -38,6 +38,15 @@ target_link_libraries(test_query PRIVATE
     index
 )
 
+# Add test executable
+add_executable(parser_driver
+    tests/parser_driver.cpp
+)
+target_link_libraries(parser_driver PRIVATE
+    query
+    index
+)
+
 
 
 # Add lexer driver executable
