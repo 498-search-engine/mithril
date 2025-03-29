@@ -1,7 +1,9 @@
 #include "pagerank.h"
+
+#include <cmath>
 #include <omp.h>
 
-PageRank::PageRank(core::CSRMatrix &matrix_, int N) : matrix_(matrix_) {
+PageRank::PageRank(core::CSRMatrix& matrix_, int N) : matrix_(matrix_) {
     int maxIteration = configuration_.GetInt("max_iterations");
     double d = configuration_.GetDouble("decay_factor");
     double tol = 1.0 / N;
@@ -14,15 +16,15 @@ PageRank::PageRank(core::CSRMatrix &matrix_, int N) : matrix_(matrix_) {
         std::vector<double> newR = matrix_.Multiply(results_);
 
         double diff = 0.0;
-        #pragma omp parallel for reduction(+:diff)
+#pragma omp parallel for reduction(+ : diff)
         for (int i = 0; i < N; ++i) {
             newR[i] = d * newR[i] + teleport[i];
             diff += fabs(newR[i] - results_[i]);
         }
-        if (diff < tol) { 
+        if (diff < tol) {
             break;
         }
-        
+
         results_ = newR;
     }
 }

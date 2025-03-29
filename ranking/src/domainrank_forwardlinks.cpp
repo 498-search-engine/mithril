@@ -1,20 +1,19 @@
-#include "pagerank.h"
-
 #include "data/Deserialize.h"
+#include "data/Document.h"
 #include "data/Gzip.h"
 #include "data/Reader.h"
-#include "data/Document.h"
+#include "pagerank.h"
 
-#include <numeric>
-#include <spdlog/spdlog.h>
-#include <unordered_map>
-#include <vector>
-#include <unordered_set>
 #include <filesystem>
 #include <fstream>
+#include <numeric>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <spdlog/spdlog.h>
 
-static constexpr std::string input_dir = "pages";
-static constexpr std::string output_file = "domainranks_out.txt";
+static const std::string input_dir = "pages";
+static const std::string output_file = "domainranks_out.txt";
 static inline std::unordered_map<std::string, int> linkToNode;
 static inline std::unordered_map<int, std::string> nodeToLink;
 static inline std::unordered_map<int, std::vector<int>> nodeConnections;
@@ -51,9 +50,9 @@ int GetLinkNode(const std::string& link) {
         nodeToLink[nodeNo] = domain;
         nodes++;
     } else {
-        nodeNo = it->second; 
+        nodeNo = it->second;
     }
-    
+
     return nodeNo;
 }
 
@@ -74,7 +73,7 @@ void Process() {
             }
 
             int fromNode = GetLinkNode(doc.url);
-            auto &vec = nodeConnections[fromNode];
+            auto& vec = nodeConnections[fromNode];
 
             for (const std::string& link : doc.forwardLinks) {
                 vec.push_back(GetLinkNode(link));
@@ -85,13 +84,13 @@ void Process() {
     }
 }
 
-int main(int argc, char *argv[]) {    
- #if !defined(NDEBUG)
+int main(int argc, char* argv[]) {
+#if !defined(NDEBUG)
     spdlog::set_level(spdlog::level::debug);
 #else
     spdlog::set_level(spdlog::level::info);
 #endif
-    
+
     auto start = std::chrono::steady_clock::now();
 
     spdlog::info("Starting page rank forward links test...");
@@ -111,7 +110,7 @@ int main(int argc, char *argv[]) {
     core::CSRMatrix m(nodes);
     std::vector<double> outDegree(nodes, 0.0);
 
-    for (auto &[node, value] : nodeConnections) {
+    for (auto& [node, value] : nodeConnections) {
         for (auto target : value) {
             m.AddEdge(target, node, 1.0);
         }
@@ -149,8 +148,7 @@ int main(int argc, char *argv[]) {
     std::vector<size_t> idx(scores.size());
     std::iota(idx.begin(), idx.end(), 0);
 
-    stable_sort(idx.begin(), idx.end(),
-       [&scores](size_t i1, size_t i2) {return scores[i1] < scores[i2];});
+    stable_sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) { return scores[i1] < scores[i2]; });
 
     for (int i = 0; i < idx.size(); ++i) {
         out_file << nodeToLink[idx[i]] << ": " << scores[idx[i]] << std::endl;
@@ -158,10 +156,9 @@ int main(int argc, char *argv[]) {
 
     out_file.close();
     // cout << "PageRank scores:\n";
-    // for (double score : algo.GetPageRanks()) { 
+    // for (double score : algo.GetPageRanks()) {
     //     cout << score << " ";
     // }
     // cout << endl;
     return 0;
 }
-
