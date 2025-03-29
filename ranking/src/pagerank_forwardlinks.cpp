@@ -13,8 +13,8 @@
 #include <filesystem>
 #include <fstream>
 
-static constexpr std::string input_dir = "pages";
-static constexpr std::string output_file = "pageranks_out.txt";
+static const std::string input_dir = "pages";
+static const std::string output_file = "pageranks_out.txt";
 static inline std::unordered_map<std::string, int> linkToNode;
 static inline std::unordered_map<int, std::string> nodeToLink;
 static inline std::unordered_map<int, std::vector<int>> nodeConnections;
