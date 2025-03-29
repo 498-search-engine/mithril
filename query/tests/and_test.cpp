@@ -2,6 +2,8 @@
 #include <iostream>
 #include <string>
 #include <chrono>
+#include <iomanip>
+#include <algorithm>
 
 // Helper function for printing timing information
 long print_timing(const std::string& operation, const std::chrono::steady_clock::time_point& start_time) {
@@ -44,11 +46,24 @@ void print_results(const std::vector<uint32_t>& results, const char* term1, cons
     }
 }
 
+// Collect documents using ISR approach
+std::vector<uint32_t> collect_from_isr(std::unique_ptr<mithril::IndexStreamReader> isr, size_t max_docs = 100000) {
+    std::vector<uint32_t> results;
+    results.reserve(max_docs);
+    
+    while (isr->hasNext() && results.size() < max_docs) {
+        results.push_back(isr->currentDocID());
+        isr->moveNext();
+    }
+    
+    return results;
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 5) {
         std::cerr << "Usage: " << argv[0] << " <index_path> <term1> <term2> <mode>\n";
-        std::cerr << "Example: " << argv[0] << " ./my_index computer science regular\n";
-        std::cerr << "Modes: regular, simd\n";
+        std::cerr << "Example: " << argv[0] << " ./my_index computer science direct\n";
+        std::cerr << "Modes: direct, isr\n";
         return 1;
     }
     
@@ -57,9 +72,9 @@ int main(int argc, char* argv[]) {
     
     // Determine which mode to run
     std::string mode = argv[4];
-    if (mode != "regular" && mode != "simd") {
+    if (mode != "direct" && mode != "isr") {
         std::cerr << "Invalid mode: " << mode << "\n";
-        std::cerr << "Valid modes: regular, simd\n";
+        std::cerr << "Valid modes: direct, isr\n";
         return 1;
     }
     
@@ -68,60 +83,50 @@ int main(int argc, char* argv[]) {
     std::cout << "Mode: " << mode << std::endl;
     
     try {
-        // Run regular AndQuery
-        if (mode == "regular") {
-            std::cout << "\n===== RUNNING REGULAR ANDQUERY =====\n";
-            
-            // Create two term queries from command line arguments
-            TermQuery* term1 = new TermQuery(Token(TokenType::WORD, argv[2]));
-            TermQuery* term2 = new TermQuery(Token(TokenType::WORD, argv[3]));
-            
-            // Create an AND query combining both terms
-            AndQuery andQuery(term1, term2);
-            
-            // Measure query evaluation time
-            auto query_start = std::chrono::steady_clock::now();
-            
-            // Execute the query
-            auto results = andQuery.Evaluate();
-            
-            // Print timing information
-            print_timing("Regular AndQuery evaluation", query_start);
-            
-            // Print results
-            // print_results(results, argv[2], argv[3]);
-            
-            // Clean up
-            delete term1;
-            delete term2;
-        }
-        // Run SIMD AndQuery
-        else if (mode == "simd") {
-            std::cout << "\n===== RUNNING SIMD ANDQUERY =====\n";
-            
-            // Create term queries
-            TermQuery* term1_simd = new TermQuery(Token(TokenType::WORD, argv[2]));
-            TermQuery* term2_simd = new TermQuery(Token(TokenType::WORD, argv[3]));
-            
-            // Create an SIMD AND query combining both terms
-            AndQuerySimd andQuerySimd(term1_simd, term2_simd);
+        // Create two term queries from command line arguments
+        TermQuery* term1 = new TermQuery(Token(TokenType::WORD, argv[2]));
+        TermQuery* term2 = new TermQuery(Token(TokenType::WORD, argv[3]));
+        
+        // Create an AND query combining both terms
+        AndQuery andQuery(term1, term2);
+        
+        std::vector<uint32_t> results;
+        
+        // Run query based on selected mode
+        if (mode == "direct") {
+            std::cout << "\n===== RUNNING DIRECT EVALUATION =====\n";
             
             // Measure query evaluation time
             auto query_start = std::chrono::steady_clock::now();
             
-            // Execute the query
-            auto results_simd = andQuerySimd.Evaluate();
+            // Execute the query using direct evaluation
+            results = andQuery.evaluate();
             
             // Print timing information
-            print_timing("SIMD AndQuery evaluation", query_start);
-            
-            // Print results
-            // print_results(results_simd, argv[2], argv[3]);
-            
-            // Clean up
-            delete term1_simd;
-            delete term2_simd;
+            print_timing("Direct AND evaluation", query_start);
         }
+        else if (mode == "isr") {
+            std::cout << "\n===== RUNNING ISR STREAMING =====\n";
+            
+            // Measure query evaluation time using ISR
+            auto query_start = std::chrono::steady_clock::now();
+            
+            // Generate an ISR for the AND query
+            auto and_isr = andQuery.generate_isr();
+            
+            // Collect results by iterating through the ISR
+            results = collect_from_isr(std::move(and_isr));
+            
+            // Print timing information
+            print_timing("ISR AND streaming", query_start);
+        }
+        
+        // Print results
+        print_results(results, argv[2], argv[3]);
+        
+        // Clean up
+        delete term1;
+        delete term2;
         
         return 0;
     } catch (const std::exception& e) {

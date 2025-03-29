@@ -43,7 +43,7 @@ TEST_F(QueryTest, TermQueryConstruction) {
     TermQuery query(CreateToken("example"));
     
     // We expect an empty result since the index path is random
-    auto results = query.Evaluate();
+    auto results = query.evaluate();
     
     // Verify that evaluating a query with a non-existent index returns empty results
     EXPECT_TRUE(results.empty());
@@ -57,7 +57,7 @@ TEST_F(QueryTest, BaseQueryMethods) {
     
     // Base Query's Evaluate should return empty vector
     Query base_query;
-    auto results = base_query.Evaluate();
+    auto results = base_query.evaluate();
     EXPECT_TRUE(results.empty());
 }
 
@@ -65,19 +65,19 @@ TEST_F(QueryTest, BaseQueryMethods) {
 TEST_F(QueryTest, DifferentTokenTypes) {
     // Test with WORD token
     TermQuery word_query(CreateToken("wordtoken", TokenType::WORD));
-    auto word_results = word_query.Evaluate();
+    auto word_results = word_query.evaluate();
     EXPECT_TRUE(word_results.empty());
     
     // Test with PHRASE token
     TermQuery phrase_query(CreateToken("phrase token", TokenType::PHRASE));
-    auto phrase_results = phrase_query.Evaluate();
+    auto phrase_results = phrase_query.evaluate();
     EXPECT_TRUE(phrase_results.empty());
 }
 
 // Test with empty token value
 TEST_F(QueryTest, EmptyTokenValue) {
     TermQuery empty_query(CreateToken(""));
-    auto results = empty_query.Evaluate();
+    auto results = empty_query.evaluate();
     EXPECT_TRUE(results.empty());
 }
 
@@ -92,20 +92,20 @@ TEST_F(QueryTest, MultipleRandomPaths) {
     // Test with first random path
     const_cast<std::string&>(query::QueryConfig::IndexPath) = "random_path_1";
     TermQuery query1(CreateToken("test"));
-    auto results1 = query1.Evaluate();
+    auto results1 = query1.evaluate();
     EXPECT_TRUE(results1.empty());
     
     // Test with second random path
     const_cast<std::string&>(query::QueryConfig::IndexPath) = "random_path_2";
     TermQuery query2(CreateToken("test"));
-    auto results2 = query2.Evaluate();
+    auto results2 = query2.evaluate();
     EXPECT_TRUE(results2.empty());
 }
 
 // Test with special characters in token
 TEST_F(QueryTest, SpecialCharactersInToken) {
     TermQuery query(CreateToken("special!@#$%^&*()"));
-    auto results = query.Evaluate();
+    auto results = query.evaluate();
     EXPECT_TRUE(results.empty());
 }
 
@@ -113,7 +113,7 @@ TEST_F(QueryTest, SpecialCharactersInToken) {
 TEST_F(QueryTest, VeryLongToken) {
     std::string long_token(1000, 'a'); // 1000 'a' characters
     TermQuery query(CreateToken(long_token));
-    auto results = query.Evaluate();
+    auto results = query.evaluate();
     EXPECT_TRUE(results.empty());
 }
 
