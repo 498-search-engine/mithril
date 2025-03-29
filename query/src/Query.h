@@ -30,9 +30,10 @@ public:
     // Helps us do some more fine grained stream reading
     virtual uint32_t get_next_doc() const { return 0; }
     virtual bool has_next() const { return false; }
-    // [[nodiscard]] virtual mithril::IndexStreamReader& get_isr() const = 0;
     
-    [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const = 0;
+    [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const {
+        return nullptr; 
+    };
 
 private: 
 };
@@ -71,7 +72,7 @@ private:
 
 // ... existing code ...
 
-class AndQuery :  Query {
+class AndQuery :  public Query {
     // Combines results where ALL terms must match
     Query* left_; 
     Query* right_; 

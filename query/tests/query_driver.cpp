@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
         
         // Create and evaluate query
         TermQuery query(token);
-        auto docIDs = query.Evaluate();
+        auto docIDs = query.evaluate();
         
         // Print timing information
         print_timing("Query evaluation", query_start);
