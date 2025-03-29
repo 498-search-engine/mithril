@@ -68,6 +68,16 @@ target_link_libraries(and_test PRIVATE
     common
 )
 
+# Add query driver executable
+add_executable(or_test
+    tests/or_test.cpp
+)
+target_link_libraries(or_test PRIVATE
+    query
+    index
+    common
+)
+
 
 
 # Register the test
