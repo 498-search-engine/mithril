@@ -70,10 +70,7 @@ private:
 };
 
 
-// ... existing code ...
-
 class AndQuery :  public Query {
-    // Combines results where ALL terms must match
     Query* left_; 
     Query* right_; 
 
@@ -89,17 +86,48 @@ public:
     std::vector<uint32_t> evaluate() const override {
         std::vector<uint32_t> left_docs = left_->evaluate();
         std::vector<uint32_t> right_docs = right_->evaluate();
-        auto intersected_ids = intersect_gallop_vec(left_docs, right_docs);
+        auto intersected_ids = intersect_simple(left_docs, right_docs);
+
         return intersected_ids;
     }
     
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers(2);
+        std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
         readers.push_back(std::move(left_->generate_isr()));
         readers.push_back(std::move(right_->generate_isr()));
         return std::make_unique<mithril::TermAND>(std::move(readers));
     }
 };
+
+class OrQuery :  public Query {
+    Query* left_; 
+    Query* right_; 
+
+public: 
+
+    OrQuery(Query* left, Query* right) : left_(left), right_(right) {
+        if (!left && !right){
+            std::cerr << "Need a left and right query\n";
+            exit(1);
+        }
+    }
+
+    std::vector<uint32_t> evaluate() const override {
+        std::vector<uint32_t> left_docs = left_->evaluate();
+        std::vector<uint32_t> right_docs = right_->evaluate();
+        auto intersected_ids = union_simple(left_docs, right_docs);
+
+        return intersected_ids;
+    }
+    
+    [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
+        std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
+        readers.push_back(std::move(left_->generate_isr()));
+        readers.push_back(std::move(right_->generate_isr()));
+        return std::make_unique<mithril::TermAND>(std::move(readers));
+    }
+};
+
 
 
 
