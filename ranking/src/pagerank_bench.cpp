@@ -1,13 +1,13 @@
 #include "pagerank.h"
 
-#include <vector>
-#include <unordered_set>
 #include <chrono>
+#include <unordered_set>
+#include <vector>
 
 using namespace std;
 
-int main(int argc, char *argv[]) {    
-    int nodes = 1000; // 100 mill
+int main(int argc, char* argv[]) {
+    int nodes = 1000;  // 100 mill
     if (argc > 1) {
         nodes = stoi(argv[1]);
     }
@@ -29,9 +29,9 @@ int main(int argc, char *argv[]) {
             // random spammy pages with loads of links
             outgoingNodes += 1000;
         }
-    
+
         // assume pages have at least 3 links to somewhere else
-        outgoingNodes += 3; 
+        outgoingNodes += 3;
         outgoingNodes = min(outgoingNodes, nodes - 2);
 
         unordered_set<int> alreadyAdded;
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
             while (outnode == i || alreadyAdded.contains(outnode)) {
                 outnode = rand() % nodes;
             }
-            
+
             alreadyAdded.insert(outnode);
             m.AddEdge(outnode, i, 1.0);
         }
@@ -70,10 +70,9 @@ int main(int argc, char *argv[]) {
     std::cout << "finished pagerank in: " << duration.count() << " ms" << std::endl;
 
     // cout << "PageRank scores:\n";
-    // for (double score : algo.GetPageRanks()) { 
+    // for (double score : algo.GetPageRanks()) {
     //     cout << score << " ";
     // }
     // cout << endl;
     return 0;
 }
-
