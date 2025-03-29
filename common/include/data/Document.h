@@ -21,6 +21,7 @@ struct Document {
     std::vector<std::string> title;
     std::vector<std::string> description;
     std::vector<std::string> words;
+    std::vector<std::string> forwardLinks;
 };
 
 struct DocumentView {
@@ -29,6 +30,7 @@ struct DocumentView {
     const std::vector<std::string_view>& title;
     const std::vector<std::string_view>& description;
     const std::vector<std::string_view>& words;
+    const std::vector<std::string>& forwardLinks;
 };
 
 template<>
@@ -40,6 +42,7 @@ struct Serialize<Document> {
         SerializeValue(doc.title, w);
         SerializeValue(doc.description, w);
         SerializeValue(doc.words, w);
+        SerializeValue(doc.forwardLinks, w);
     }
 };
 
@@ -52,6 +55,7 @@ struct Serialize<DocumentView> {
         SerializeValue(doc.title, w);
         SerializeValue(doc.description, w);
         SerializeValue(doc.words, w);
+        SerializeValue(doc.forwardLinks, w);
     }
 };
 
@@ -64,7 +68,8 @@ struct Deserialize<Document> {
             && DeserializeValue(doc.url, r)
             && DeserializeValue(doc.title, r)
             && DeserializeValue(doc.description, r)
-            && DeserializeValue(doc.words, r);
+            && DeserializeValue(doc.words, r)
+            && DeserializeValue(doc.forwardLinks, r);
         // clang-format on
     }
 };
