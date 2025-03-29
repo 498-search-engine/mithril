@@ -8,9 +8,11 @@
 #include <vector>
 #include <utility>
 #include <string>
+#include "TermOR.h"
 #include "Token.h"
 #include "../../index/src/TermReader.h"
 #include "../../index/src/TermAND.h"
+#include "../../index/src/TermOR.h"
 #include "QueryConfig.h"
 #include "intersect.h"
 #include <unordered_map>
@@ -124,73 +126,10 @@ public:
         std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
         readers.push_back(std::move(left_->generate_isr()));
         readers.push_back(std::move(right_->generate_isr()));
-        return std::make_unique<mithril::TermAND>(std::move(readers));
+        return std::make_unique<mithril::TermOR>(std::move(readers));
     }
 };
 
-
-
-
-// class AndQuerySimd : public Query {
-//     // Combines results where ALL terms must match
-//     Query* left_; 
-//     Query* right_; 
-
-// public: 
-//     AndQuerySimd(Query* left, Query* right) : left_(left), right_(right) {
-//         if (!left && !right){
-//             std::cerr << "Need a left and right query\n";
-//             exit(1);
-//         }
-//     }
-
-//     std::vector<uint32_t> Evaluate() const override {
-//         std::vector<uint32_t> left_docs = left_->Evaluate();
-//         std::vector<uint32_t> right_docs = right_->Evaluate();
-        
-//         //   auto intersected_ids = intersect_gallop_vec(left_docs, right_docs);
-//         // return intersected_ids;
-//         // Create a vector with enough space for results
-//         std::vector<uint32_t> results(std::min(left_docs.size(), right_docs.size()));
-        
-//         // Call SIMD intersection
-//         size_t result_size = intersect_simd_sse(
-//             left_docs.data(), right_docs.data(), 
-//             results.data(), left_docs.size(), right_docs.size());
-        
-//         // Resize to actual result size
-//         results.resize(result_size);
-//         return results;
-//     }
-// };
-
-
-
-// class OrQuery : public Query {
-//     // Combines results where ALL terms must match
-//     Query* left_; 
-//     Query* right_; 
-
-// public: 
-//     OrQuery(Query* left, Query* right) : left_(left), right_(right) {
-//         if (!left && !right){
-//             std::cerr << "Need a left and right query\n";
-//             exit(1);
-//         }
-//     }
-
-//     std::vector<uint32_t> Evaluate() const override {
-//         std::vector<uint32_t> left_docs = left_->Evaluate();
-//         std::vector<uint32_t> right_docs = right_->Evaluate();
-//         auto intersected_ids = (left_docs, right_docs);
-//         return intersected_ids;
-//     }
-// };
-
-
-// class OrQuery : public Query {
-//     // Combines results where ANY terms can match
-// };
 
 // class NotQuery : public Query {
 //     // Excludes documents matching the negated term
