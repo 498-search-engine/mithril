@@ -21,8 +21,17 @@ void TermOR::moveNext() {
     if (at_end_) {
         return;
     }
-    // Advance the curr min reader
-    readers_[current_min_index_]->moveNext();
+    
+    // Get the current document ID before moving
+    data::docid_t current_doc_id = readers_[current_min_index_]->currentDocID();
+    
+    // Advance all readers that point to the current document ID
+    for (auto& reader : readers_) {
+        if (reader->hasNext() && reader->currentDocID() == current_doc_id) {
+            reader->moveNext();
+        }
+    }
+    
     // Find the new minimum
     findMinimumReader();
 }
