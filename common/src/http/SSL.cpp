@@ -44,9 +44,9 @@ void InitializeSSL() {
     SSL_CTX_set_default_verify_paths(ctx);
 
     uint64_t options = 0;
-    options |= SSL_OP_IGNORE_UNEXPECTED_EOF;  // There are many non-compliant servers that will close the connection
+    //options |= SSL_OP_IGNORE_UNEXPECTED_EOF;  // There are many non-compliant servers that will close the connection
                                               // without performing SSL teardown.
-    options |= SSL_OP_ENABLE_KTLS;            // Make an effort to use kTLS offload when possible.
+    //options |= SSL_OP_ENABLE_KTLS;            // Make an effort to use kTLS offload when possible.
 
     SSL_CTX_set_options(ctx, options);
 
