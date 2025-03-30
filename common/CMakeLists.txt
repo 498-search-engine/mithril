@@ -42,3 +42,23 @@ target_link_libraries(common
     spdlog::spdlog
     lib::core
 )
+
+file(COPY config DESTINATION ${CMAKE_BINARY_DIR}/common)
+
+add_executable(crawler_rank_test 
+    src/ranking/CrawlerRanker.cpp
+    src/ranking/CrawlerRankerTest.cpp
+)
+
+add_executable(crawler_rank_struct_test 
+    src/ranking/CrawlerRanker.cpp
+    src/ranking/CrawlerRankerStructTest.cpp
+)
+
+target_link_libraries(crawler_rank_test PRIVATE
+    common
+)
+
+target_link_libraries(crawler_rank_struct_test PRIVATE
+    common
+)
