@@ -75,7 +75,7 @@ struct CrawlerRankingsStruct {
     bool isHttps;
 };
 
-uint32_t GetUrlRank(std::string_view url);
+int32_t GetUrlRank(std::string_view url);
 
 const std::unordered_set<std::string> WhitelistTld = {
     "com",  // Commercial (most trusted and widely used)

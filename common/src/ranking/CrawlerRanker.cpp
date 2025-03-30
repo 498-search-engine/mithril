@@ -7,7 +7,7 @@
 
 namespace mithril::ranking {
 
-uint32_t GetUrlRank(std::string_view url) {
+int32_t GetUrlRank(std::string_view url) {
     CrawlerRankingsStruct ranker{
         .tld = "", 
         .domainName = "",
@@ -127,7 +127,7 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
     while (c < end) {
         if (*c == '?' || *c == '&') {
             ranker.parameterCount++;
-            
+
             readExtension = false;
         } else if (*c == '/') {
             ranker.pageDepth++;
