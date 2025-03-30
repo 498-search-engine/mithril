@@ -8,20 +8,18 @@
 namespace mithril::ranking {
 
 int32_t GetUrlRank(std::string_view url) {
-    CrawlerRankingsStruct ranker{
-        .tld = "", 
-        .domainName = "",
-        .extension = "",
-        .urlLength = 0, 
-        .parameterCount = 0,
-        .pageDepth = 0, 
-        .subdomainCount = 0,
-        .isHttps = false
-    };
+    CrawlerRankingsStruct ranker{.tld = "",
+                                 .domainName = "",
+                                 .extension = "",
+                                 .urlLength = 0,
+                                 .parameterCount = 0,
+                                 .pageDepth = 0,
+                                 .subdomainCount = 0,
+                                 .isHttps = false};
 
     GetStringRankings(url, ranker);
 
-    uint32_t score = 0;
+    int32_t score = 0;
 
     // * Site TLD (whitelist)
     if (WhitelistTld.contains(ranker.tld)) {
@@ -34,7 +32,7 @@ int32_t GetUrlRank(std::string_view url) {
     }
 
     // * Domain name length
-    uint32_t domainNamePenalty = 0;
+    int32_t domainNamePenalty = 0;
     if (ranker.domainName.length() > DomainLengthAcceptable) {
         // NOLINTNEXTLINE(bugprone-narrowing-conversions)
         domainNamePenalty = DomainPenaltyPerExtraLength * (ranker.domainName.length() - DomainLengthAcceptable);
@@ -42,7 +40,7 @@ int32_t GetUrlRank(std::string_view url) {
     score += DomainNameScore - std::min(domainNamePenalty, DomainNameScore);
 
     // * URL length
-    uint32_t urlPenalty = 0;
+    int32_t urlPenalty = 0;
     if (ranker.urlLength > UrlLengthAcceptable) {
         // NOLINTNEXTLINE(bugprone-narrowing-conversions)
         urlPenalty = UrlPenaltyPerExtraLength * (ranker.urlLength - UrlLengthAcceptable);
@@ -50,7 +48,7 @@ int32_t GetUrlRank(std::string_view url) {
     score += UrlLengthScore - std::min(urlPenalty, UrlLengthScore);
 
     // * Number of parameters
-    uint32_t numParamPenalty = 0;
+    int32_t numParamPenalty = 0;
     if (ranker.parameterCount > NumberParamAcceptable) {
         // NOLINTNEXTLINE(bugprone-narrowing-conversions)
         numParamPenalty = NumberParamPenaltyPerExtraParam * (ranker.parameterCount - NumberParamAcceptable);
@@ -58,7 +56,7 @@ int32_t GetUrlRank(std::string_view url) {
     score += NumberParamScore - std::min(numParamPenalty, NumberParamScore);
 
     // Depth of page
-    uint32_t depthPagePenalty = 0;
+    int32_t depthPagePenalty = 0;
     if (ranker.pageDepth > DepthPageAcceptable) {
         // NOLINTNEXTLINE(bugprone-narrowing-conversions)
         depthPagePenalty = DepthPagePenalty * (ranker.pageDepth - DepthPageAcceptable);
@@ -140,7 +138,7 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
         } else if (readExtension) {
             ranker.extension += *c;
         }
-        
+
         ranker.urlLength++;
         c++;
     }
