@@ -65,6 +65,78 @@ TEST(URL, ParseValid) {
     }
 }
 
+TEST(URL, ParseFileExtension) {
+    // File extension normal
+    {
+        auto result = ParseURL("http://example.com/path/to/page.html"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "html");
+    }
+
+    // File extension many dots
+    {
+        auto result = ParseURL("http://example.com/path/to/a.very.cool/page.tar.gz"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "gz");
+    }
+
+    // No file extension
+    {
+        auto result = ParseURL("http://example.com/path/to/a.very.cool/page"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "");
+    }
+
+    // File extension with query parameters
+    {
+        auto result = ParseURL("http://example.com/path/to/document.pdf?id=123&user=test"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "pdf");
+    }
+
+    // File extension with fragment
+    {
+        auto result = ParseURL("http://example.com/downloads/file.zip#section1"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "zip");
+    }
+
+    // File extension with uppercase
+    {
+        auto result = ParseURL("http://example.com/documents/report.PDF"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "PDF");
+    }
+
+    // File extension with dot at the end
+    {
+        auto result = ParseURL("http://example.com/path/strange.file."sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "");
+    }
+
+    // Path ending with dot
+    {
+        auto result = ParseURL("http://example.com/folder/name."sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "");
+    }
+
+    // Special characters in extension
+    {
+        auto result = ParseURL("http://example.com/download/script.js~v2"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "js~v2");
+    }
+
+    // Root path with extension
+    {
+        auto result = ParseURL("http://example.com/index.php"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "php");
+    }
+}
+
 TEST(URL, ParseInvalid) {
     // Empty URL
     EXPECT_FALSE(ParseURL(""sv).has_value());

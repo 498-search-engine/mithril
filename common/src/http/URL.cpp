@@ -194,6 +194,29 @@ std::string_view URL::BasePath() const {
     return std::string_view{path}.substr(0, path.size() - queryFragment.size());
 }
 
+std::string_view URL::Extension() const {
+    auto b = BasePath();
+    if (b.empty()) {
+        return ""sv;
+    }
+
+    auto lastDot = b.rfind('.');
+    if (lastDot == std::string_view::npos) {
+        return ""sv;
+    }
+
+    auto lastSlash = b.rfind('/');
+    if (lastSlash == std::string_view::npos) {
+        lastSlash = 0;
+    }
+
+    if (lastDot < lastSlash) {
+        return ""sv;
+    }
+
+    return b.substr(lastDot + 1);
+}
+
 std::optional<URL> ParseURL(std::string_view s) {
     auto u = URL{
         .url = std::string{s},

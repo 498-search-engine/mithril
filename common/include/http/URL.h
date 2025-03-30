@@ -22,6 +22,7 @@ struct URL {
     std::string queryFragment;
 
     std::string_view BasePath() const;
+    std::string_view Extension() const;
 };
 
 struct CanonicalHost {
