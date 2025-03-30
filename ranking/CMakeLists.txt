@@ -25,7 +25,13 @@ target_link_libraries(pagerank PUBLIC
     common
     OpenMP::OpenMP_CXX
 )
-target_compile_options(pagerank PRIVATE -fopenmp)
+
+# Only apply `-fopenmp` on non-Apple Clang systems
+if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME MATCHES "Darwin"))
+    target_compile_options(pagerank PRIVATE -fopenmp)
+else()
+    message(STATUS "Skipping -fopenmp for Apple Clang (unsupported)")
+endif()
 
 add_executable(pagerank_bench
     src/pagerank_bench.cpp
