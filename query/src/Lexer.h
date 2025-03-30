@@ -37,7 +37,7 @@ public:
      * Checks if the input has been fully consumed.
      * Returns true if there are no more tokens to read.
      */
-    [[nodiscard]] auto EndOfInput() const -> bool;
+    [[nodiscard]] auto EndOfInput() -> bool;
 
 private:
     std::string input_;  // The input string to be tokenized

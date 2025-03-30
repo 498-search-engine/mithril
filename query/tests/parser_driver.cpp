@@ -128,21 +128,10 @@ auto main(int argc, char* argv[]) -> int {
         for (size_t i = 0; i < tokens.size(); ++i) {
             const auto& token = tokens[i];
             std::cout << "  " << i+1 << ": ";
-            
-            switch (token.type) {
-                case TokenType::WORD:     std::cout << "WORD"; break;
-                case TokenType::PHRASE:   std::cout << "PHRASE"; break;
-                case TokenType::FIELD:    std::cout << "FIELD"; break;
-                case TokenType::COLON:    std::cout << "COLON"; break;
-                case TokenType::OPERATOR: std::cout << "OPERATOR"; break;
-                case TokenType::LPAREN:   std::cout << "LPAREN"; break;
-                case TokenType::RPAREN:   std::cout << "RPAREN"; break;
-                case TokenType::EOFTOKEN: std::cout << "EOF"; break;
-                default:                  std::cout << "UNKNOWN"; break;
-            }
-            
-            std::cout << " \"" << token.value << "\"" << std::endl;
+            std::cout << token.toString() << " \"" << token.value << "\"" << std::endl;
         }
+
+        return 0; 
         
         // Parse tokens
         Parser parser(tokens);

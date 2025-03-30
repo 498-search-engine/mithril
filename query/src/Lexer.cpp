@@ -42,8 +42,8 @@ Token Lexer::PeekToken() {
     return peekedToken_;
 }
 
-bool Lexer::EndOfInput() const {
-    return position_ >= input_.length();
+bool Lexer::EndOfInput() {
+    return PeekToken().type == TokenType::EOFTOKEN;
 }
 
 // Private helpers

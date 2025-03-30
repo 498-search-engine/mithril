@@ -18,8 +18,25 @@ public:
 
 class Parser {
 public:
+    // Updated constructor to take a string and tokenize it using Lexer
+    explicit Parser(const std::string& input) : 
+        input_(input), 
+        current_position_(0) {
+        // Use Lexer to tokenize the input
+        Lexer lexer(input);
+        while (!lexer.EndOfInput()) {
+            tokens_.push_back(lexer.NextToken());
+        }
+        // Remove EOF token if present
+        if (!tokens_.empty() && tokens_.back().type == TokenType::EOFTOKEN) {
+            tokens_.pop_back();
+        }
+    }
 
-    explicit Parser(const std::vector<Token>& tokens) : tokens_(tokens), current_position_(0) {}
+    // Keep the existing constructor for flexibility
+    explicit Parser(const std::vector<Token>& tokens) : 
+        tokens_(tokens), 
+        current_position_(0) {}
 
     std::unique_ptr<Query> parse() {
         if (tokens_.empty()) {
@@ -149,6 +166,7 @@ private:
         throw ParseException("Expected term, field, phrase, or '('");
     }
     
+    std::string input_;  // Store the original input string
     std::vector<Token> tokens_;
     size_t current_position_;
 };
