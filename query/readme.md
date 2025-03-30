@@ -12,6 +12,7 @@ Anchor terms get a "$" prefix
 Description terms get a "%" prefix
 Body terms have no special prefix
 
+```cpp
 enum class FieldType {
     BODY = 0,
     TITLE = 1,
@@ -20,7 +21,7 @@ enum class FieldType {
     DESC = 4
     // Can be extended with HEADING, BOLD, etc.
 };
-
+```
 
 phrase := term [ operator phrase ]
 
