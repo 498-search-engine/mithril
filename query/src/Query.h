@@ -37,6 +37,16 @@ public:
         return nullptr; 
     };
 
+    // Returns a string representation of the query for debugging/display
+    [[nodiscard]] virtual std::string to_string() const {
+        return "Query";
+    }
+    
+    // Optional: Get query type as string
+    [[nodiscard]] virtual std::string get_type() const {
+        return "Query";
+    }
+
 private: 
 };
 
@@ -64,6 +74,14 @@ public:
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
         return std::make_unique<mithril::TermReader>(query::QueryConfig::IndexPath, token_.value);
+    }
+
+    [[nodiscard]] std::string to_string() const override {
+        return "TERM(" + token_.value + ")";
+    }
+    
+    [[nodiscard]] std::string get_type() const override {
+        return "TermQuery";
     }
 
 private:
@@ -99,6 +117,14 @@ public:
         readers.push_back(std::move(right_->generate_isr()));
         return std::make_unique<mithril::TermAND>(std::move(readers));
     }
+
+    [[nodiscard]] std::string to_string() const override {
+        return "AND(" + left_->to_string() + ", " + right_->to_string() + ")";
+    }
+    
+    [[nodiscard]] std::string get_type() const override {
+        return "AndQuery";
+    }
 };
 
 class OrQuery :  public Query {
@@ -127,6 +153,14 @@ public:
         readers.push_back(std::move(left_->generate_isr()));
         readers.push_back(std::move(right_->generate_isr()));
         return std::make_unique<mithril::TermOR>(std::move(readers));
+    }
+
+    [[nodiscard]] std::string to_string() const override {
+        return "OR(" + left_->to_string() + ", " + right_->to_string() + ")";
+    }
+    
+    [[nodiscard]] std::string get_type() const override {
+        return "OrQuery";
     }
 };
 
