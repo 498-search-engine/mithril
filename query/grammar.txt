@@ -1,0 +1,37 @@
+
+Expression := QueryComponent [ OP Expression ]
+
+QueryComponent := FieldExpression | Keyword | ExactMatch | GroupedExpression
+
+FieldExpression := Field ":" (Keyword | ExactMatch)
+
+GroupedExpression := "(" Expression ")"           
+                 // For logical grouping
+Keyword := <string of alphanumeric characters>
+
+
+Field := "TITLE" | "TEXT"                                               // Enum of searchable fields
+
+
+ExactMatch := "\"" <string> "\""   // Exact phrase matching
+
+
+OP := "SPACE" | "AND" | "OR" | "NOT"                        // Space is the default
+        
+
+
+phrase := term [ operator phrase ]
+
+term := field_expr | simple_term | quoted_term | grouped_expr
+
+field_expr := field ":" (simple_term | quoted_term)
+
+field := "TITLE" | "TEXT"   // Enum of searchable fields
+
+simple_term := <string of alphanumeric characters>
+
+quoted_term := "\"" <string> "\""   // Exact phrase matching
+
+grouped_expr := "(" phrase ")"   // For logical grouping
+
+operator := "SPACE" | "AND" | "OR" | "NOT"     // Space is the default
