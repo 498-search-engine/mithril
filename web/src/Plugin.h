@@ -14,6 +14,6 @@ public:
 };
 
 extern PluginObject* Plugin;
-} // namespace mithril
+}  // namespace mithril
 
-#endif // WEB_PLUGIN_H
+#endif  // WEB_PLUGIN_H

@@ -21,7 +21,6 @@ add_executable(mithril_indexer
     src/main.cpp
 )
 target_link_libraries(mithril_indexer PRIVATE
-    spdlog::spdlog
     index
 )
 

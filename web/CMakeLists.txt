@@ -15,5 +15,4 @@ add_executable(mithril_server
 target_link_libraries(mithril_server
     web
     pthread
-    spdlog::spdlog
 )
