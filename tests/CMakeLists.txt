@@ -19,8 +19,6 @@ set(TEST_SOURCES
 add_executable(mithril_tests ${TEST_SOURCES})
 target_link_libraries(mithril_tests PRIVATE
     gtest_main
-    lib::core
-    common
     crawler
 )
 add_test(NAME mithril_tests COMMAND mithril_tests)

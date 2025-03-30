@@ -24,6 +24,5 @@ add_executable(mithril_crawler
 )
 
 target_link_libraries(mithril_crawler PRIVATE
-    spdlog::spdlog
     crawler
 )

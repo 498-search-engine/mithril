@@ -1,7 +1,10 @@
 #include "pagerank.h"
 
 #include <cmath>
+
+#if __has_include(<omp.h>)
 #include <omp.h>
+#endif
 
 PageRank::PageRank(core::CSRMatrix& matrix_, int N) : matrix_(matrix_) {
     int maxIteration = configuration_.GetInt("max_iterations");
