@@ -127,12 +127,15 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
     while (c < end) {
         if (*c == '?' || *c == '&') {
             ranker.parameterCount++;
+            
             readExtension = false;
         } else if (*c == '/') {
             ranker.pageDepth++;
-            ranker.extension = "";
+
+            ranker.extension.clear();
             readExtension = false;
         } else if (*c == '.') {
+            ranker.extension.clear();
             readExtension = true;
         } else if (readExtension) {
             ranker.extension += *c;
