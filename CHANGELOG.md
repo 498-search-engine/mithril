@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - respect crawl-delay directive (#88)
 - use lru caches in crawler (#92)
 - support Crawler-delay directive (#92)
+- url parsing additions (#98)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
