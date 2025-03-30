@@ -62,6 +62,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - fix connection eof empty headers bug (#92)
 - perf-improvement: halve position index size + double throughput by more aggressive `shouldStorePos` + dsage invertedIdx `std::move(doc)` (#93)
 - have anu's page rank stuff compile on VM (#95)
+- add subdomain & extension crawler ranking factors (#99)
 
 ## [0.1.0] - 2025-02-07
 
