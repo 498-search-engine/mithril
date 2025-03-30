@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstring>
 #include <exception>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -39,6 +40,10 @@ namespace mithril {
 using namespace std::string_view_literals;
 
 namespace {
+
+const std::set<std::string_view> BlacklistedBasePaths = {
+    "/search"sv,
+};
 
 void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& doc) {
     try {
@@ -311,6 +316,12 @@ std::vector<std::string> Worker::GetFollowURLs(const html::ParsedDocument& doc, 
 
         // Canonicalize URL
         auto canonical = http::CanonicalizeURL(*parsed);
+
+        // Check whether base path is blacklisted
+        if (BlacklistedBasePaths.contains(canonical.BasePath())) {
+            SPDLOG_TRACE("url {} has blacklisted base path", canonical.url);
+            continue;
+        }
 
         // Check whether host is blacklisted
         auto hostParts = SplitString(canonical.host, '.');
