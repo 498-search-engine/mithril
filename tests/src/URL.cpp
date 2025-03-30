@@ -407,6 +407,17 @@ TEST_F(CanonicalizeURLTest, QueryParameters) {
 
     TestCanonicalization("http://example.com/path?param1=value1&param2=value2#fragment",
                          "http://example.com/path?param1=value1&param2=value2");
+
+    // Removal and reordering of query parameters
+    TestCanonicalization("http://example.com/path?param2=value2&param1=value1",
+                         "http://example.com/path?param1=value1&param2=value2");
+    TestCanonicalization("http://example.com/path?xyz=123&abc", "http://example.com/path?abc&xyz=123");
+    TestCanonicalization("http://example.com/path?xyz=123&abc=", "http://example.com/path?abc&xyz=123");
+
+    TestCanonicalization("http://example.com/path?utm_source=google&thing=123&utm_term=thing+page&abc=hello+world",
+                         "http://example.com/path?abc=hello+world&thing=123");
+
+    TestCanonicalization("http://example.com/path?utm_source=google&utm_term=thing+page", "http://example.com/path");
 }
 
 // Test with empty paths
