@@ -19,6 +19,9 @@ struct URL {
     std::string host;
     std::string port;
     std::string path;
+
+    std::string_view BasePath() const;
+    std::string_view Extension() const;
 };
 
 struct CanonicalHost {

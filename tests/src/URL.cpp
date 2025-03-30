@@ -46,6 +46,7 @@ TEST(URL, ParseValid) {
         EXPECT_EQ(result->host, "example.com");
         EXPECT_EQ(result->port, "");
         EXPECT_EQ(result->path, "/search?q=test&page=1");
+        EXPECT_EQ(result->BasePath(), "/search");
     }
 
     // IPv4 address as host
@@ -56,6 +57,78 @@ TEST(URL, ParseValid) {
         EXPECT_EQ(result->host, "127.0.0.1");
         EXPECT_EQ(result->port, "8080");
         EXPECT_EQ(result->path, "/status");
+    }
+}
+
+TEST(URL, ParseFileExtension) {
+    // File extension normal
+    {
+        auto result = ParseURL("http://example.com/path/to/page.html"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "html");
+    }
+
+    // File extension many dots
+    {
+        auto result = ParseURL("http://example.com/path/to/a.very.cool/page.tar.gz"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "gz");
+    }
+
+    // No file extension
+    {
+        auto result = ParseURL("http://example.com/path/to/a.very.cool/page"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "");
+    }
+
+    // File extension with query parameters
+    {
+        auto result = ParseURL("http://example.com/path/to/document.pdf?id=123&user=test"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "pdf");
+    }
+
+    // File extension with fragment
+    {
+        auto result = ParseURL("http://example.com/downloads/file.zip#section1"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "zip");
+    }
+
+    // File extension with uppercase
+    {
+        auto result = ParseURL("http://example.com/documents/report.PDF"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "PDF");
+    }
+
+    // File extension with dot at the end
+    {
+        auto result = ParseURL("http://example.com/path/strange.file."sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "");
+    }
+
+    // Path ending with dot
+    {
+        auto result = ParseURL("http://example.com/folder/name."sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "");
+    }
+
+    // Special characters in extension
+    {
+        auto result = ParseURL("http://example.com/download/script.js~v2"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "js~v2");
+    }
+
+    // Root path with extension
+    {
+        auto result = ParseURL("http://example.com/index.php"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->Extension(), "php");
     }
 }
 
@@ -119,6 +192,15 @@ TEST(URL, ParseEdgeCases) {
         auto result = ParseURL("http://example.com/page#section1"sv);
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->path, "/page#section1");
+        EXPECT_EQ(result->BasePath(), "/page");
+    }
+
+    // URL with fragment before ?
+    {
+        auto result = ParseURL("http://example.com/page#section1?asdf=123"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->path, "/page#section1?asdf=123");
+        EXPECT_EQ(result->BasePath(), "/page");
     }
 
     // URL with special characters in path
@@ -126,6 +208,7 @@ TEST(URL, ParseEdgeCases) {
         auto result = ParseURL("http://example.com/path%20with%20spaces"sv);
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->path, "/path%20with%20spaces");
+        EXPECT_EQ(result->BasePath(), "/path%20with%20spaces");
     }
 
     // Maximum port number
@@ -347,6 +430,10 @@ protected:
             ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected path: " << expected->path
                                        << "\nActual path: " << result.path;
         }
+        if (result.BasePath() != expected->BasePath()) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected base path: " << expected->BasePath()
+                                       << "\nActual base path: " << result.BasePath();
+        }
     }
 };
 
@@ -407,6 +494,17 @@ TEST_F(CanonicalizeURLTest, QueryParameters) {
 
     TestCanonicalization("http://example.com/path?param1=value1&param2=value2#fragment",
                          "http://example.com/path?param1=value1&param2=value2");
+
+    // Removal and reordering of query parameters
+    TestCanonicalization("http://example.com/path?param2=value2&param1=value1",
+                         "http://example.com/path?param1=value1&param2=value2");
+    TestCanonicalization("http://example.com/path?xyz=123&abc", "http://example.com/path?abc&xyz=123");
+    TestCanonicalization("http://example.com/path?xyz=123&abc=", "http://example.com/path?abc&xyz=123");
+
+    TestCanonicalization("http://example.com/path?utm_source=google&thing=123&utm_term=thing+page&abc=hello+world",
+                         "http://example.com/path?abc=hello+world&thing=123");
+
+    TestCanonicalization("http://example.com/path?utm_source=google&utm_term=thing+page", "http://example.com/path");
 }
 
 // Test with empty paths
