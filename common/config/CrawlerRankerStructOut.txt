@@ -41,7 +41,7 @@ IsHttps: 1
 https://example.net/products/item1.html
 TLD: net
 Domain name: example.net
-Extension: .
+Extension: html
 URL Length: 20
 Param Count: 0
 Page depth: 2
@@ -71,7 +71,7 @@ IsHttps: 1
 https://example.edu/index.php
 TLD: edu
 Domain name: example.edu
-Extension: .
+Extension: php
 URL Length: 10
 Param Count: 0
 Page depth: 1
@@ -81,7 +81,7 @@ IsHttps: 1
 https://example.gov/documents/main.htm
 TLD: gov
 Domain name: example.gov
-Extension: .
+Extension: htm
 URL Length: 19
 Param Count: 0
 Page depth: 2
@@ -121,7 +121,7 @@ IsHttps: 1
 https://example.com/page.html?param=value
 TLD: com
 Domain name: example.com
-Extension: .
+Extension: html
 URL Length: 22
 Param Count: 1
 Page depth: 1
@@ -201,7 +201,7 @@ IsHttps: 1
 http://sub.example.com/download.pdf
 TLD: com
 Domain name: sub.example.com
-Extension: .
+Extension: pdf
 URL Length: 13
 Param Count: 0
 Page depth: 1
@@ -241,7 +241,7 @@ IsHttps: 1
 http://example.edu/document.xlsx
 TLD: edu
 Domain name: example.edu
-Extension: .
+Extension: xlsx
 URL Length: 14
 Param Count: 0
 Page depth: 1
@@ -261,7 +261,7 @@ IsHttps: 1
 https://example.gov/archive.zip
 TLD: gov
 Domain name: example.gov
-Extension: .
+Extension: zip
 URL Length: 12
 Param Count: 0
 Page depth: 1
@@ -271,7 +271,7 @@ IsHttps: 1
 https://example.net/image.gif
 TLD: net
 Domain name: example.net
-Extension: .
+Extension: gif
 URL Length: 10
 Param Count: 0
 Page depth: 1
@@ -281,7 +281,7 @@ IsHttps: 1
 http://longdomainnametest.com/video.mp4
 TLD: com
 Domain name: longdomainnametest.com
-Extension: .
+Extension: mp4
 URL Length: 10
 Param Count: 0
 Page depth: 1
@@ -291,7 +291,7 @@ IsHttps: 0
 https://example.com/data.json
 TLD: com
 Domain name: example.com
-Extension: .
+Extension: json
 URL Length: 10
 Param Count: 0
 Page depth: 1
@@ -301,7 +301,7 @@ IsHttps: 1
 http://sub.sub.example.com/download.exe
 TLD: com
 Domain name: sub.sub.example.com
-Extension: .
+Extension: exe
 URL Length: 13
 Param Count: 0
 Page depth: 1
@@ -311,7 +311,7 @@ IsHttps: 0
 http://verylongdomainnameexampletestingsite.com/long/path/document.doc?download=true
 TLD: com
 Domain name: verylongdomainnameexampletestingsite.com
-Extension: .
+Extension: doc
 URL Length: 37
 Param Count: 1
 Page depth: 3
@@ -321,7 +321,7 @@ IsHttps: 0
 https://example.org/archive.rar
 TLD: org
 Domain name: example.org
-Extension: .
+Extension: rar
 URL Length: 12
 Param Count: 0
 Page depth: 1
@@ -331,7 +331,7 @@ IsHttps: 1
 http://sub.example.net/video.mov
 TLD: net
 Domain name: sub.example.net
-Extension: .
+Extension: mov
 URL Length: 10
 Param Count: 0
 Page depth: 1
@@ -341,7 +341,7 @@ IsHttps: 0
 https://example.edu/temp/tmp/file.tmp
 TLD: edu
 Domain name: example.edu
-Extension: .
+Extension: tmp
 URL Length: 18
 Param Count: 0
 Page depth: 3
@@ -351,7 +351,7 @@ IsHttps: 1
 http://example.gov/backup/file.bak
 TLD: gov
 Domain name: example.gov
-Extension: .
+Extension: bak
 URL Length: 16
 Param Count: 0
 Page depth: 2
@@ -361,7 +361,7 @@ IsHttps: 0
 http://sub.sub.sub.example.com/installer.msi
 TLD: com
 Domain name: sub.sub.sub.example.com
-Extension: .
+Extension: msi
 URL Length: 14
 Param Count: 0
 Page depth: 1
@@ -371,7 +371,7 @@ IsHttps: 0
 https://example.net/data/2023/backup/database.sql
 TLD: net
 Domain name: example.net
-Extension: .
+Extension: sql
 URL Length: 30
 Param Count: 0
 Page depth: 4
@@ -381,7 +381,7 @@ IsHttps: 1
 http://example.com/user/uploads/profile/image.bmp
 TLD: com
 Domain name: example.com
-Extension: .
+Extension: bmp
 URL Length: 31
 Param Count: 0
 Page depth: 4
@@ -391,7 +391,7 @@ IsHttps: 0
 https://example.org/system/logs/error.log
 TLD: org
 Domain name: example.org
-Extension: .
+Extension: log
 URL Length: 22
 Param Count: 0
 Page depth: 3
@@ -431,7 +431,7 @@ IsHttps: 1
 https://example.com/page.html?
 TLD: com
 Domain name: example.com
-Extension: .
+Extension: html
 URL Length: 11
 Param Count: 1
 Page depth: 1
@@ -461,7 +461,7 @@ IsHttps: 1
 https://example.com/./path/../normalized
 TLD: com
 Domain name: example.com
-Extension: ...
+Extension: pathnormalized
 URL Length: 21
 Param Count: 0
 Page depth: 4
@@ -471,7 +471,7 @@ IsHttps: 1
 https://example.com/%20page%20name%20with%20spaces.html
 TLD: com
 Domain name: example.com
-Extension: .
+Extension: html
 URL Length: 36
 Param Count: 0
 Page depth: 1

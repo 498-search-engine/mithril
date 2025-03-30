@@ -130,11 +130,14 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
             readExtension = false;
         } else if (*c == '/') {
             ranker.pageDepth++;
+            ranker.extension = "";
+            readExtension = false;
         } else if (*c == '.') {
             readExtension = true;
+        } else if (readExtension) {
             ranker.extension += *c;
         }
-
+        
         ranker.urlLength++;
         c++;
     }
