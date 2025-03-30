@@ -50,6 +50,7 @@ TEST(URL, ParseValid) {
         EXPECT_EQ(result->port, "");
         EXPECT_EQ(result->path, "/search?q=test&page=1");
         EXPECT_EQ(result->queryFragment, "?q=test&page=1");
+        EXPECT_EQ(result->BasePath(), "/search");
     }
 
     // IPv4 address as host
@@ -128,6 +129,7 @@ TEST(URL, ParseEdgeCases) {
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->path, "/page#section1");
         EXPECT_EQ(result->queryFragment, "#section1");
+        EXPECT_EQ(result->BasePath(), "/page");
     }
 
     // URL with fragment before ?
@@ -136,6 +138,7 @@ TEST(URL, ParseEdgeCases) {
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->path, "/page#section1?asdf=123");
         EXPECT_EQ(result->queryFragment, "#section1?asdf=123");
+        EXPECT_EQ(result->BasePath(), "/page");
     }
 
     // URL with special characters in path
@@ -144,6 +147,7 @@ TEST(URL, ParseEdgeCases) {
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->path, "/path%20with%20spaces");
         EXPECT_EQ(result->queryFragment, "");
+        EXPECT_EQ(result->BasePath(), "/path%20with%20spaces");
     }
 
     // Maximum port number

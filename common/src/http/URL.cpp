@@ -190,6 +190,10 @@ std::string_view GetQueryFragmentOfPath(std::string_view fullPath) {
 
 }  // namespace
 
+std::string_view URL::BasePath() const {
+    return std::string_view{path}.substr(0, path.size() - queryFragment.size());
+}
+
 std::optional<URL> ParseURL(std::string_view s) {
     auto u = URL{
         .url = std::string{s},
