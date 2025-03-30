@@ -9,38 +9,6 @@
 
 using namespace mithril;
 
-// Helper function to visualize query structure
-void printQueryStructure(const std::unique_ptr<Query>& query, int depth = 0) {
-    // Print indentation based on depth
-    std::string indent(depth * 2, ' ');
-    
-    if (auto* termQuery = dynamic_cast<TermQuery*>(query.get())) {
-        // Display term query details
-        std::cout << indent << "TermQuery: \"" << termQuery->get_token().value << "\"" << std::endl;
-    }
-    else if (auto* andQuery = dynamic_cast<AndQuery*>(query.get())) {
-        // Display AND operation
-        std::cout << indent << "AndQuery:" << std::endl;
-        // We can't directly access left_ and right_ since they're private
-        // This is just a placeholder for the structure visualization
-        std::cout << indent << "  (cannot display children due to encapsulation)" << std::endl;
-    }
-    else if (auto* orQuery = dynamic_cast<OrQuery*>(query.get())) {
-        // Display OR operation
-        std::cout << indent << "OrQuery:" << std::endl;
-        // We can't directly access left_ and right_ since they're private
-        // This is just a placeholder for the structure visualization
-        std::cout << indent << "  (cannot display children due to encapsulation)" << std::endl;
-    }
-    else if (query) {
-        // Default case for other query types
-        std::cout << indent << "Unknown Query Type" << std::endl;
-    }
-    else {
-        std::cout << indent << "NULL Query" << std::endl;
-    }
-}
-
 // Helper function to print usage instructions
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " [options] [query]" << std::endl;
@@ -100,80 +68,71 @@ auto main(int argc, char* argv[]) -> int {
         }
     } else {
         // Otherwise, prompt for input
-        std::cout << "Enter a query to parse: ";
+        std::cout << "Enter a query to parse (Ctrl+C to exit): ";
         std::getline(std::cin, input);
     }
     
-    std::cout << "Parsing query: \"" << input << "\"" << std::endl;
-    std::cout << "-----------------------------------" << std::endl;
-    
-    try {
-        // Create lexer with the input
-        Lexer lexer(input);
-        
-        // Collect all tokens
-        std::vector<Token> tokens;
-        while (!lexer.EndOfInput()) {
-            Token token = lexer.NextToken();
-            tokens.push_back(token);
-            
-            // Stop if we reach EOF token
-            if (token.type == TokenType::EOFTOKEN) {
-                break;
-            }
-        }
-        
-        // Display tokens for reference
-        std::cout << "Tokens:" << std::endl;
-        for (size_t i = 0; i < tokens.size(); ++i) {
-            const auto& token = tokens[i];
-            std::cout << "  " << i+1 << ": ";
-            std::cout << token.toString() << " \"" << token.value << "\"" << std::endl;
-        }
-
-        return 0; 
-        
-        // Parse tokens
-        Parser parser(tokens);
-        std::unique_ptr<Query> queryTree = parser.parse();
-        
-        // Display query structure
-        std::cout << "\nParsed Query Structure:" << std::endl;
+    // Loop to handle multiple queries
+    while (true) {
+        std::cout << "\nParsing query: \"" << input << "\"" << std::endl;
         std::cout << "-----------------------------------" << std::endl;
-        printQueryStructure(queryTree);
         
-        // Example of evaluation (optional)
-        std::cout << "\nEvaluating Query..." << std::endl;
-        std::cout << "-----------------------------------" << std::endl;
         try {
-            std::vector<uint32_t> results = queryTree->evaluate();
-            std::cout << "Query returned " << results.size() << " results." << std::endl;
-            
-            // Display first few results if any
-            const size_t maxDisplay = 10;
-            if (!results.empty()) {
-                std::cout << "First " << std::min(maxDisplay, results.size()) << " document IDs:" << std::endl;
-                for (size_t i = 0; i < std::min(maxDisplay, results.size()); ++i) {
-                    std::cout << "  " << results[i];
-                    if (i < std::min(maxDisplay, results.size()) - 1) {
-                        std::cout << ", ";
-                    }
-                }
-                std::cout << std::endl;
+            // Create parser with the input
+            Parser parser(input);
+      
+            // Display tokens for reference
+            std::cout << "Tokens:" << std::endl;
+
+            for (size_t i = 0; i < parser.get_tokens().size(); ++i) {
+                const auto& token = parser.get_tokens()[i];
+                std::cout << "  " << i+1 << ": ";
+                std::cout << token.toString() << "\"" << std::endl;
             }
+
+            // Parse tokens
+            std::unique_ptr<Query> queryTree = parser.parse();
+            
+            // Display query structure
+            std::cout << "\nParsed Query Structure:" << std::endl;
+            std::cout << "-----------------------------------" << std::endl;
+            std::cout << queryTree->to_string() << std::endl;
+            
+            // Example of evaluation (optional)
+            std::cout << "\nEvaluating Query..." << std::endl;
+            std::cout << "-----------------------------------" << std::endl;
+            try {
+                std::vector<uint32_t> results = queryTree->evaluate();
+                std::cout << "Query returned " << results.size() << " results." << std::endl;
+                
+                // Display first few results if any
+                const size_t maxDisplay = 10;
+                if (!results.empty()) {
+                    std::cout << "First " << std::min(maxDisplay, results.size()) << " document IDs:" << std::endl;
+                    for (size_t i = 0; i < std::min(maxDisplay, results.size()); ++i) {
+                        std::cout << "  " << results[i];
+                        if (i < std::min(maxDisplay, results.size()) - 1) {
+                            std::cout << ", ";
+                        }
+                    }
+                    std::cout << std::endl;
+                }
+            }
+            catch (const std::exception& e) {
+                std::cout << "Evaluation error: " << e.what() << std::endl;
+            }
+        }
+        catch (const ParseException& e) {
+            std::cerr << "Parse error: " << e.what() << std::endl;
         }
         catch (const std::exception& e) {
-            std::cout << "Evaluation error: " << e.what() << std::endl;
+            std::cerr << "Error: " << e.what() << std::endl;
         }
         
-    }
-    catch (const ParseException& e) {
-        std::cerr << "Parse error: " << e.what() << std::endl;
-        return 1;
-    }
-    catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
+        // Prompt for the next query
+        std::cout << "\n-----------------------------------" << std::endl;
+        std::cout << "Enter a query to parse (Ctrl+C to exit): ";
+        std::getline(std::cin, input);
     }
     
     return 0;

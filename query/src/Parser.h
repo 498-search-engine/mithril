@@ -22,21 +22,16 @@ public:
     explicit Parser(const std::string& input) : 
         input_(input), 
         current_position_(0) {
-        // Use Lexer to tokenize the input
+
         Lexer lexer(input);
         while (!lexer.EndOfInput()) {
             tokens_.push_back(lexer.NextToken());
         }
-        // Remove EOF token if present
-        if (!tokens_.empty() && tokens_.back().type == TokenType::EOFTOKEN) {
-            tokens_.pop_back();
-        }
     }
 
-    // Keep the existing constructor for flexibility
-    explicit Parser(const std::vector<Token>& tokens) : 
-        tokens_(tokens), 
-        current_position_(0) {}
+    [[nodiscard]] auto get_tokens() const -> const std::vector<Token>& {
+        return tokens_;
+    }
 
     std::unique_ptr<Query> parse() {
         if (tokens_.empty()) {
@@ -98,64 +93,59 @@ private:
     
     // Grammar parsing methods
     std::unique_ptr<Query> parseExpression() {
-        return parseOr();
-    }
-    
-    std::unique_ptr<Query> parseOr() {
-        auto left = parseAnd();
-        
-        while (matchOperator("OR")) {
-            auto right = parseAnd();
-            left = std::make_unique<OrQuery>(left.release(), right.release());
-        }
-        
-        return left;
-    }
-    
-    std::unique_ptr<Query> parseAnd() {
-        auto left = parseTerm();
-        
-        while (matchOperator("AND") || matchOperator(" ")) {  // Space can represent implicit AND
-            auto right = parseTerm();
-            left = std::make_unique<AndQuery>(left.release(), right.release());
-        }
-        
-        return left;
-    }
-    
-    std::unique_ptr<Query> parseTerm() {
-        // Handle NOT operator (when implemented)
-        if (matchOperator("NOT")) {
-            auto operand = parseTerm();
-            // When you implement NotQuery, uncomment this:
-            // return std::make_unique<NotQuery>(operand.release());
-            throw ParseException("NOT operator not yet implemented");
-        }
-        
-        // Handle field queries (when implemented)
-        if (match(TokenType::FIELD)) {
-            Token field = tokens_[current_position_ - 1];
-            if (match(TokenType::COLON)) {
-                auto term = parseTerm();
-                // When you implement FieldQuery, uncomment this:
-                // return std::make_unique<FieldQuery>(field.value, term.release());
-                throw ParseException("Field queries not yet implemented");
+        try {
+            // Parse the first query component
+            auto leftComponent = parseQueryComponent();
+            
+            // Continue parsing operators and right-hand expressions as long as there are more tokens
+            while (!isAtEnd()) {
+                // If we see an operator, process the next component
+                if (matchOperator("AND") || matchOperator("OR") || matchOperator("NOT")) {
+                    std::string op = tokens_[current_position_ - 1].value;
+                    auto rightComponent = parseQueryComponent();
+                    
+                    if (op == "AND") {
+                        leftComponent = std::make_unique<AndQuery>(leftComponent.release(), rightComponent.release());
+                    } else if (op == "OR") {
+                        leftComponent = std::make_unique<OrQuery>(leftComponent.release(), rightComponent.release());
+                    } else if (op == "NOT") {
+                        // When you implement NotQuery, uncomment this:
+                        // return std::make_unique<NotQuery>(rightComponent.release());
+                        throw ParseException("NOT operator not yet implemented");
+                    }
+                } 
+                // If there's no operator but we have another component, treat as implicit AND
+                else if (peek().type == TokenType::WORD || 
+                         peek().type == TokenType::PHRASE || 
+                         peek().type == TokenType::FIELD || 
+                         peek().type == TokenType::LPAREN) {
+                    auto rightComponent = parseQueryComponent();
+                    leftComponent = std::make_unique<AndQuery>(leftComponent.release(), rightComponent.release());
+                }
+                // If we see something else (like a closing parenthesis), break out and return
+                else {
+                    break;
+                }
             }
-            throw ParseException("Expected ':' after field name");
+            
+            return leftComponent;
+        } catch (const ParseException& e) {
+            throw ParseException("Expression error: " + std::string(e.what()));
+        }
+    }
+    
+    std::unique_ptr<Query> parseQueryComponent() {
+        // Handle field expressions
+        if (match(TokenType::FIELD)) {
+            return parseFieldExpression();
         }
         
-        // Handle parenthesized expressions
-        if (match(TokenType::LPAREN)) {
-            auto expr = parseExpression();
-            expect(TokenType::RPAREN, "Expected ')' after expression");
-            return expr;
-        }
-        
-        // Handle simple terms and phrases
+        // Handle keywords (simple terms)
         if (match(TokenType::WORD)) {
             return std::make_unique<TermQuery>(Token(TokenType::WORD, tokens_[current_position_ - 1].value));
         }
         
+        // Handle exact matches (quoted terms)
         if (match(TokenType::PHRASE)) {
             // When you implement PhraseQuery, uncomment this:
             // return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1].value);
@@ -163,7 +153,30 @@ private:
             return std::make_unique<TermQuery>(Token(TokenType::PHRASE, tokens_[current_position_ - 1].value));
         }
         
-        throw ParseException("Expected term, field, phrase, or '('");
+        // Handle grouped expressions
+        if (match(TokenType::LPAREN)) {
+            auto expr = parseExpression();
+            expect(TokenType::RPAREN, "Expected ')' after expression");
+            return expr;
+        }
+        
+        throw ParseException("Expected keyword, field, exact match, or grouped expression");
+    }
+    
+    std::unique_ptr<Query> parseFieldExpression() {
+        Token field = tokens_[current_position_ - 1];
+        if (match(TokenType::COLON)) {
+            // Now we need either a keyword or exact match
+            if (match(TokenType::WORD) || match(TokenType::PHRASE)) {
+                Token term = tokens_[current_position_ - 1];
+                // When you implement FieldQuery, uncomment this:
+                // return std::make_unique<FieldQuery>(field.value, 
+                //     std::make_unique<TermQuery>(term).release());
+                throw ParseException("Field queries not yet implemented");
+            }
+            throw ParseException("Expected keyword or exact match after field specifier");
+        }
+        throw ParseException("Expected ':' after field name");
     }
     
     std::string input_;  // Store the original input string
