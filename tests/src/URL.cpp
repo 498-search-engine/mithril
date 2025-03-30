@@ -16,6 +16,7 @@ TEST(URL, ParseValid) {
         EXPECT_EQ(result->host, "example.com");
         EXPECT_EQ(result->port, "");
         EXPECT_EQ(result->path, "");
+        EXPECT_EQ(result->queryFragment, "");
     }
 
     // HTTPS with port
@@ -26,6 +27,7 @@ TEST(URL, ParseValid) {
         EXPECT_EQ(result->host, "localhost");
         EXPECT_EQ(result->port, "8080");
         EXPECT_EQ(result->path, "");
+        EXPECT_EQ(result->queryFragment, "");
     }
 
     // Complex path
@@ -36,6 +38,7 @@ TEST(URL, ParseValid) {
         EXPECT_EQ(result->host, "api.example.com");
         EXPECT_EQ(result->port, "");
         EXPECT_EQ(result->path, "/v1/users/123");
+        EXPECT_EQ(result->queryFragment, "");
     }
 
     // Path with query parameters
@@ -46,6 +49,7 @@ TEST(URL, ParseValid) {
         EXPECT_EQ(result->host, "example.com");
         EXPECT_EQ(result->port, "");
         EXPECT_EQ(result->path, "/search?q=test&page=1");
+        EXPECT_EQ(result->queryFragment, "?q=test&page=1");
     }
 
     // IPv4 address as host
@@ -56,6 +60,7 @@ TEST(URL, ParseValid) {
         EXPECT_EQ(result->host, "127.0.0.1");
         EXPECT_EQ(result->port, "8080");
         EXPECT_EQ(result->path, "/status");
+        EXPECT_EQ(result->queryFragment, "");
     }
 }
 
@@ -97,6 +102,7 @@ TEST(URL, ParseEdgeCases) {
         auto result = ParseURL("http://example.com"sv);
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->path, "");
+        EXPECT_EQ(result->queryFragment, "");
     }
 
     // No / with query
@@ -105,6 +111,7 @@ TEST(URL, ParseEdgeCases) {
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->host, "example.com");
         EXPECT_EQ(result->path, "?thing=123");
+        EXPECT_EQ(result->queryFragment, "?thing=123");
     }
 
     // Root path
@@ -112,6 +119,7 @@ TEST(URL, ParseEdgeCases) {
         auto result = ParseURL("http://example.com/"sv);
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->path, "/");
+        EXPECT_EQ(result->queryFragment, "");
     }
 
     // URL with fragments
@@ -119,6 +127,15 @@ TEST(URL, ParseEdgeCases) {
         auto result = ParseURL("http://example.com/page#section1"sv);
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->path, "/page#section1");
+        EXPECT_EQ(result->queryFragment, "#section1");
+    }
+
+    // URL with fragment before ?
+    {
+        auto result = ParseURL("http://example.com/page#section1?asdf=123"sv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(result->path, "/page#section1?asdf=123");
+        EXPECT_EQ(result->queryFragment, "#section1?asdf=123");
     }
 
     // URL with special characters in path
@@ -126,6 +143,7 @@ TEST(URL, ParseEdgeCases) {
         auto result = ParseURL("http://example.com/path%20with%20spaces"sv);
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result->path, "/path%20with%20spaces");
+        EXPECT_EQ(result->queryFragment, "");
     }
 
     // Maximum port number
@@ -346,6 +364,10 @@ protected:
         if (result.path != expected->path) {
             ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected path: " << expected->path
                                        << "\nActual path: " << result.path;
+        }
+        if (result.queryFragment != expected->queryFragment) {
+            ADD_FAILURE_AT(file, line) << "Input: " << input << "\nExpected queryFragment: " << expected->queryFragment
+                                       << "\nActual queryFragment: " << result.queryFragment;
         }
     }
 };

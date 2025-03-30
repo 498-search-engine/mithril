@@ -19,6 +19,7 @@ struct URL {
     std::string host;
     std::string port;
     std::string path;
+    std::string queryFragment;
 };
 
 struct CanonicalHost {

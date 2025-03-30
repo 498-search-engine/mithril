@@ -177,6 +177,17 @@ std::string CleanQueryParameters(std::string_view path, const std::set<std::stri
     return result;
 }
 
+std::string_view GetQueryFragmentOfPath(std::string_view fullPath) {
+    size_t queryFragmentStart = fullPath.size();
+    if (auto queryStart = fullPath.find('?'); queryStart != std::string_view::npos) {
+        queryFragmentStart = std::min(queryFragmentStart, queryStart);
+    }
+    if (auto fragmentStart = fullPath.find('#'); fragmentStart != std::string_view::npos) {
+        queryFragmentStart = std::min(queryFragmentStart, fragmentStart);
+    }
+    return fullPath.substr(queryFragmentStart);
+}
+
 }  // namespace
 
 std::optional<URL> ParseURL(std::string_view s) {
@@ -271,6 +282,7 @@ std::optional<URL> ParseURL(std::string_view s) {
     }
 
     u.path = uv.substr(i);  // Rest of string
+    u.queryFragment = GetQueryFragmentOfPath(u.path);
 
     return u;
 }
@@ -330,6 +342,7 @@ URL CanonicalizeURL(const URL& url) {
 
     canonicalFull += cleanPath;
     canonical.path = cleanPath;
+    canonical.queryFragment = GetQueryFragmentOfPath(cleanPath);
 
     canonical.url = std::move(canonicalFull);
     return canonical;
