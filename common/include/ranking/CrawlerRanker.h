@@ -34,12 +34,44 @@ constexpr uint32_t DepthPageScore = 40;
 constexpr uint32_t DepthPageAcceptable = 2;
 constexpr uint32_t DepthPagePenalty = 15;
 
+/**
+    Positive ranking
+*/
+// * Extensions (+30%)
+const std::unordered_set<std::string> GoodExtensionList = {"asp", "html", "htm", "php", "asp", ""};
+constexpr uint32_t ExtensionBoost = 30;
+
+/**
+     Negative ranking 
+*/
+// * Subdomain count (-50%)
+// Penalty is per subdomain that is not `www`
+// www.example.com has 1 subdomains (example)
+// www.eecs.example.com has 2 subdomain (eecs, example)
+constexpr uint32_t SubdomainAcceptable = 1;
+constexpr uint32_t SubdomainPenalty = 15;
+
+// * Extensions (-100%)
+const std::unordered_set<std::string> BadExtensionList = {
+    "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "odt", "ods", "odp", 
+    "zip", "rar", "7z", "tar", "gz", "bz2", "exe", "dmg", "pkg", "deb", 
+    "rpm", "iso", "img", "msi", "apk", "bin", "dat", "csv", "tsv", "json", 
+    "xml", "sql", "db", "mdb", "sqlite", "log", "bak", "tmp", "swp", 
+    "gif", "svg", "webp", "ico", "bmp", "tiff", "psd", "ai", "eps", 
+    "mp3", "wav", "ogg", "flac", "aac", "wma", "mid", "mp4", "avi", 
+    "mov", "wmv", "flv", "mkv", "webm", "m4v", "3gp", "mpeg", "mpg", 
+    "m4a", "aiff", "au", "raw", "cr2", "nef", "orf", "sr2", "torrent"
+};
+constexpr uint32_t ExtensionDebuff = 100;
+
 struct CrawlerRankingsStruct {
     std::string tld;
     std::string domainName;
+    std::string extension;
     uint32_t urlLength;
     uint32_t parameterCount;
     uint32_t pageDepth;
+    uint32_t subdomainCount;
     bool isHttps;
 };
 

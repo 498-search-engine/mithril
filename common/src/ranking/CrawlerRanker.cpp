@@ -9,7 +9,15 @@ namespace mithril::ranking {
 
 uint32_t GetUrlRank(std::string_view url) {
     CrawlerRankingsStruct ranker{
-        .tld = "", .domainName = "", .urlLength = 0, .parameterCount = 0, .pageDepth = 0, .isHttps = false};
+        .tld = "", 
+        .domainName = "",
+        .extension = "",
+        .urlLength = 0, 
+        .parameterCount = 0,
+        .pageDepth = 0, 
+        .subdomainCount = 0,
+        .isHttps = false
+    };
 
     GetStringRankings(url, ranker);
 
@@ -62,6 +70,18 @@ uint32_t GetUrlRank(std::string_view url) {
         score -= std::min(score, HttpsDebuffScore);
     }
 
+    // * Extensions
+    if (GoodExtensionList.contains(ranker.extension)) {
+        score += ExtensionBoost;
+    } else if (BadExtensionList.contains(ranker.extension)) {
+        score -= ExtensionDebuff;
+    }
+
+    // Subdomain count
+    if (ranker.subdomainCount > SubdomainAcceptable) {
+        score -= SubdomainPenalty * (ranker.subdomainCount - SubdomainAcceptable);
+    }
+
     return score;
 }
 
@@ -90,6 +110,7 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
         if (*c == '.') {
             readTld = true;
             ranker.tld = "";
+            ranker.subdomainCount++;
         }
 
         ranker.domainName.push_back(*c);
@@ -98,14 +119,20 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
 
     if (ranker.domainName.starts_with("www.")) {
         ranker.domainName.erase(0, 4);
+        ranker.subdomainCount--;
     }
 
     // Read until the URL is over
+    bool readExtension = false;
     while (c < end) {
         if (*c == '?' || *c == '&') {
             ranker.parameterCount++;
+            readExtension = false;
         } else if (*c == '/') {
             ranker.pageDepth++;
+        } else if (*c == '.') {
+            readExtension = true;
+            ranker.extension += *c;
         }
 
         ranker.urlLength++;
