@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - respect crawl-delay directive (#88)
 - use lru caches in crawler (#92)
 - support Crawler-delay directive (#92)
+- web server module (w threadpool, nonblocking io, and static file serving) and minimal snappy clean frontend (#97)
 - url parsing additions (#98)
 - add subdomain & extension crawler ranking factors (#99)
 
@@ -63,6 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - fix connection eof empty headers bug (#92)
 - perf-improvement: halve position index size + double throughput by more aggressive `shouldStorePos` + dsage invertedIdx `std::move(doc)` (#93)
 - have anu's page rank stuff compile on VM (#95)
+- cmake compile for apple clang + remove dupl compile warnings (#100)
 
 ## [0.1.0] - 2025-02-07
 

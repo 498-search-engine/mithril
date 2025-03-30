@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mithril</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>mithril search</h1>
+      <p>light as a feather, strong as dragon scales</p>
+    </header>
+
+    <main>
+      <form id="search-form" class="search-form">
+        <input type="text" id="search-input" placeholder="Search the depths...">
+        <button type="submit">Search</button>
+      </form>
+
+      <div class="tips">
+        Try: 
+        <a href="#" class="example" data-query="algorithms">algorithms</a>
+        <a href="#" class="example" data-query="site:github.com c++">site:github.com c++</a>
+        <a href="#" class="example" data-query="data structures">data structures</a>
+      </div>
+
+      <div id="loading" class="loading">Finding results...</div>
+
+      <div id="results-meta" class="results-meta">
+        <span id="results-count"></span>
+        <span id="query-time"></span>
+      </div>
+
+      <div id="results" class="results"></div>
+    </main>
+
+    <footer>
+      <p>All that is gold does not glitter, not all who search are lost.</p>
+    </footer>
+  </div>
+  <script src="search.js"></script>
+</body>
+</html>
