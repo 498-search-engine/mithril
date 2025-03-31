@@ -261,7 +261,7 @@ private:
 
 template<typename T>
 concept URLScorer = requires(std::string_view url) {
-    { T::Score(url) } -> std::same_as<unsigned int>;
+    { T::Score(url) } -> std::same_as<int>;
 };
 
 template<URLScorer Scorer>
@@ -271,7 +271,7 @@ class PriorityURLQueue {
 
     struct QueuedURL {
         url_id_t id;
-        unsigned int score;
+        int score;
     };
 
     using queue_t = core::VectorFile<QueuedURL>;
@@ -308,8 +308,11 @@ public:
         }
 
         auto score = Scorer::Score(url);
-        auto queued = QueuedURL{*id, score};
+        if (score < 0) {
+            return;
+        }
 
+        auto queued = QueuedURL{*id, score};
         if (score >= highScoreCutoff_) {
             highScoreQueuedURLs_.PushBack(queued);
         } else {
