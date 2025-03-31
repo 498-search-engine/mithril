@@ -42,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - web server module (w threadpool, nonblocking io, and static file serving) and minimal snappy clean frontend (#97)
 - url parsing additions (#98)
 - add subdomain & extension crawler ranking factors (#99)
+- discard urls with score < 0 (#101)
 
 ### Fixed
 - Fix copying body data from buffer (#24)

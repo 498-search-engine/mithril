@@ -162,7 +162,7 @@ private:
     void ProcessFreshURLs(ThreadSync& sync);
 
     struct Scorer {
-        static unsigned int Score(std::string_view url) { return ranking::GetUrlRank(url); }
+        static int Score(std::string_view url) { return ranking::GetUrlRank(url); }
     };
 
     mutable core::Mutex urlQueueMu_;     // Lock for urls_
