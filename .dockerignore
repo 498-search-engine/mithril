@@ -1,0 +1,11 @@
+/data/
+/.git/
+/build/
+/.clang-format
+/.clang-tidy
+/.clangd
+/.dockerignore
+/.gitignore
+/.gitmodules
+/*Dockerfile
+*.md
