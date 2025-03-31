@@ -7,13 +7,19 @@
 
 namespace mithril::ranking {
 
-uint32_t GetUrlRank(std::string_view url) {
-    CrawlerRankingsStruct ranker{
-        .tld = "", .domainName = "", .urlLength = 0, .parameterCount = 0, .pageDepth = 0, .isHttps = false};
+int32_t GetUrlRank(std::string_view url) {
+    CrawlerRankingsStruct ranker{.tld = "",
+                                 .domainName = "",
+                                 .extension = "",
+                                 .urlLength = 0,
+                                 .parameterCount = 0,
+                                 .pageDepth = 0,
+                                 .subdomainCount = 0,
+                                 .isHttps = false};
 
     GetStringRankings(url, ranker);
 
-    uint32_t score = 0;
+    int32_t score = 0;
 
     // * Site TLD (whitelist)
     if (WhitelistTld.contains(ranker.tld)) {
@@ -26,7 +32,7 @@ uint32_t GetUrlRank(std::string_view url) {
     }
 
     // * Domain name length
-    uint32_t domainNamePenalty = 0;
+    int32_t domainNamePenalty = 0;
     if (ranker.domainName.length() > DomainLengthAcceptable) {
         // NOLINTNEXTLINE(bugprone-narrowing-conversions)
         domainNamePenalty = DomainPenaltyPerExtraLength * (ranker.domainName.length() - DomainLengthAcceptable);
@@ -34,7 +40,7 @@ uint32_t GetUrlRank(std::string_view url) {
     score += DomainNameScore - std::min(domainNamePenalty, DomainNameScore);
 
     // * URL length
-    uint32_t urlPenalty = 0;
+    int32_t urlPenalty = 0;
     if (ranker.urlLength > UrlLengthAcceptable) {
         // NOLINTNEXTLINE(bugprone-narrowing-conversions)
         urlPenalty = UrlPenaltyPerExtraLength * (ranker.urlLength - UrlLengthAcceptable);
@@ -42,7 +48,7 @@ uint32_t GetUrlRank(std::string_view url) {
     score += UrlLengthScore - std::min(urlPenalty, UrlLengthScore);
 
     // * Number of parameters
-    uint32_t numParamPenalty = 0;
+    int32_t numParamPenalty = 0;
     if (ranker.parameterCount > NumberParamAcceptable) {
         // NOLINTNEXTLINE(bugprone-narrowing-conversions)
         numParamPenalty = NumberParamPenaltyPerExtraParam * (ranker.parameterCount - NumberParamAcceptable);
@@ -50,7 +56,7 @@ uint32_t GetUrlRank(std::string_view url) {
     score += NumberParamScore - std::min(numParamPenalty, NumberParamScore);
 
     // Depth of page
-    uint32_t depthPagePenalty = 0;
+    int32_t depthPagePenalty = 0;
     if (ranker.pageDepth > DepthPageAcceptable) {
         // NOLINTNEXTLINE(bugprone-narrowing-conversions)
         depthPagePenalty = DepthPagePenalty * (ranker.pageDepth - DepthPageAcceptable);
@@ -60,6 +66,18 @@ uint32_t GetUrlRank(std::string_view url) {
     // * HTTPS
     if (!ranker.isHttps) {
         score -= std::min(score, HttpsDebuffScore);
+    }
+
+    // * Extensions
+    if (GoodExtensionList.contains(ranker.extension)) {
+        score += ExtensionBoost;
+    } else if (BadExtensionList.contains(ranker.extension)) {
+        score -= ExtensionDebuff;
+    }
+
+    // Subdomain count
+    if (ranker.subdomainCount > SubdomainAcceptable) {
+        score -= SubdomainPenalty * (ranker.subdomainCount - SubdomainAcceptable);
     }
 
     return score;
@@ -90,6 +108,7 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
         if (*c == '.') {
             readTld = true;
             ranker.tld = "";
+            ranker.subdomainCount++;
         }
 
         ranker.domainName.push_back(*c);
@@ -98,14 +117,26 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
 
     if (ranker.domainName.starts_with("www.")) {
         ranker.domainName.erase(0, 4);
+        ranker.subdomainCount--;
     }
 
     // Read until the URL is over
+    bool readExtension = false;
     while (c < end) {
         if (*c == '?' || *c == '&') {
             ranker.parameterCount++;
+
+            readExtension = false;
         } else if (*c == '/') {
             ranker.pageDepth++;
+
+            ranker.extension.clear();
+            readExtension = false;
+        } else if (*c == '.') {
+            ranker.extension.clear();
+            readExtension = true;
+        } else if (readExtension) {
+            ranker.extension += *c;
         }
 
         ranker.urlLength++;

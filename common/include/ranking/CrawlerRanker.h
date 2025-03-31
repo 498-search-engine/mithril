@@ -9,41 +9,70 @@
 namespace mithril::ranking {
 // * HTTPS (50%)
 // a debuff for sites that don't have HTTPS by 50 points.
-constexpr uint32_t HttpsDebuffScore = 50;
+constexpr int32_t HttpsDebuffScore = 50;
 // * Site TLD (whitelist) (10%)
-constexpr uint32_t WhitelistTldScore = 10;
+constexpr int32_t WhitelistTldScore = 10;
 // * Domain whitelist (10%)
-constexpr uint32_t WhitelistDomainScore = 10;
+constexpr int32_t WhitelistDomainScore = 10;
 // * Domain name length (10%)
 // note: includes TLD length
 // note: ignores www.
-constexpr uint32_t DomainNameScore = 10;
-constexpr uint32_t DomainLengthAcceptable = 11;
-constexpr uint32_t DomainPenaltyPerExtraLength = 5;
+constexpr int32_t DomainNameScore = 10;
+constexpr int32_t DomainLengthAcceptable = 11;
+constexpr int32_t DomainPenaltyPerExtraLength = 5;
 // * URL length (10%)
 // note: URL length does not include domain name length
-constexpr uint32_t UrlLengthScore = 10;
-constexpr uint32_t UrlLengthAcceptable = 60;
-constexpr uint32_t UrlPenaltyPerExtraLength = 5;
+constexpr int32_t UrlLengthScore = 10;
+constexpr int32_t UrlLengthAcceptable = 60;
+constexpr int32_t UrlPenaltyPerExtraLength = 5;
 // * Number of parameters (20%)
-constexpr uint32_t NumberParamScore = 20;
-constexpr uint32_t NumberParamAcceptable = 1;
-constexpr uint32_t NumberParamPenaltyPerExtraParam = 5;
+constexpr int32_t NumberParamScore = 20;
+constexpr int32_t NumberParamAcceptable = 1;
+constexpr int32_t NumberParamPenaltyPerExtraParam = 5;
 // * Depth of page (40%)
-constexpr uint32_t DepthPageScore = 40;
-constexpr uint32_t DepthPageAcceptable = 2;
-constexpr uint32_t DepthPagePenalty = 15;
+constexpr int32_t DepthPageScore = 40;
+constexpr int32_t DepthPageAcceptable = 2;
+constexpr int32_t DepthPagePenalty = 15;
+
+/**
+    Positive ranking
+*/
+// * Extensions (+30%)
+const std::unordered_set<std::string> GoodExtensionList = {"asp", "html", "htm", "php", "asp", ""};
+constexpr int32_t ExtensionBoost = 30;
+
+/**
+     Negative ranking
+*/
+// * Subdomain count (-50%)
+// Penalty is per subdomain that is not `www`
+// www.example.com has 1 subdomains (example)
+// www.eecs.example.com has 2 subdomain (eecs, example)
+constexpr int32_t SubdomainAcceptable = 1;
+constexpr int32_t SubdomainPenalty = 15;
+
+// * Extensions (-100%)
+const std::unordered_set<std::string> BadExtensionList = {
+    "pdf", "doc", "docx", "ppt",  "pptx", "xls",  "xlsx", "odt", "ods",    "odp",    "zip", "rar", "7z",
+    "tar", "gz",  "bz2",  "exe",  "dmg",  "pkg",  "deb",  "rpm", "iso",    "img",    "msi", "apk", "bin",
+    "dat", "csv", "tsv",  "json", "xml",  "sql",  "db",   "mdb", "sqlite", "log",    "bak", "tmp", "swp",
+    "gif", "svg", "webp", "ico",  "bmp",  "tiff", "psd",  "ai",  "eps",    "mp3",    "wav", "ogg", "flac",
+    "aac", "wma", "mid",  "mp4",  "avi",  "mov",  "wmv",  "flv", "mkv",    "webm",   "m4v", "3gp", "mpeg",
+    "mpg", "m4a", "aiff", "au",   "raw",  "cr2",  "nef",  "orf", "sr2",    "torrent"};
+constexpr int32_t ExtensionDebuff = 100;
 
 struct CrawlerRankingsStruct {
     std::string tld;
     std::string domainName;
-    uint32_t urlLength;
-    uint32_t parameterCount;
-    uint32_t pageDepth;
+    std::string extension;
+    int32_t urlLength;
+    int32_t parameterCount;
+    int32_t pageDepth;
+    int32_t subdomainCount;
     bool isHttps;
 };
 
-uint32_t GetUrlRank(std::string_view url);
+int32_t GetUrlRank(std::string_view url);
 
 const std::unordered_set<std::string> WhitelistTld = {
     "com",  // Commercial (most trusted and widely used)
