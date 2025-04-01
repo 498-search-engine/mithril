@@ -32,8 +32,8 @@ bool IsValidUrl(std::string_view url) {
     return url.length() >= http::MinUrlLength && url.length() <= http::MaxUrlLength && !HasInvalidChars(url);
 }
 
-constexpr unsigned int URLHighScoreCutoff = 80;
-constexpr unsigned int URLHighScoreQueuePercent = 75;
+constexpr unsigned int URLHighScoreCutoff = 90;        // Score >= 90 is "high"
+constexpr unsigned int URLHighScoreQueuePercent = 90;  // Take from "high" scoring urls 90% of the time
 
 }  //  namespace
 
