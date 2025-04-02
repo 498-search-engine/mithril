@@ -51,7 +51,7 @@ constexpr int32_t ExtensionBoost = 30;
 constexpr int32_t SubdomainAcceptable = 1;
 constexpr int32_t SubdomainPenalty = 15;
 
-// * Extensions (-100%)
+// * Extensions (Does not crawl if found)
 const std::unordered_set<std::string> BadExtensionList = {
     "pdf", "doc", "docx", "ppt",  "pptx", "xls",  "xlsx", "odt", "ods",    "odp",    "zip", "rar", "7z",
     "tar", "gz",  "bz2",  "exe",  "dmg",  "pkg",  "deb",  "rpm", "iso",    "img",    "msi", "apk", "bin",
@@ -59,7 +59,12 @@ const std::unordered_set<std::string> BadExtensionList = {
     "gif", "svg", "webp", "ico",  "bmp",  "tiff", "psd",  "ai",  "eps",    "mp3",    "wav", "ogg", "flac",
     "aac", "wma", "mid",  "mp4",  "avi",  "mov",  "wmv",  "flv", "mkv",    "webm",   "m4v", "3gp", "mpeg",
     "mpg", "m4a", "aiff", "au",   "raw",  "cr2",  "nef",  "orf", "sr2",    "torrent"};
-constexpr int32_t ExtensionDebuff = 100;
+
+// * Any number in domain name (-20%)
+constexpr int32_t DomainNameNumberPenalty = 20;
+
+// * Numbers of length > 4 (e.g not years) in URL (-35%) (this is after the domain name)
+constexpr int32_t URLNumberPenalty = 35;
 
 struct CrawlerRankingsStruct {
     std::string tld;
@@ -69,6 +74,8 @@ struct CrawlerRankingsStruct {
     int32_t parameterCount;
     int32_t pageDepth;
     int32_t subdomainCount;
+    bool numberInDomainName;
+    bool numberInURL;
     bool isHttps;
 };
 

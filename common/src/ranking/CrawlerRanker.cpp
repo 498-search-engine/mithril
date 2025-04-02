@@ -1,6 +1,7 @@
 #include "ranking/CrawlerRanker.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -15,6 +16,8 @@ int32_t GetUrlRank(std::string_view url) {
                                  .parameterCount = 0,
                                  .pageDepth = 0,
                                  .subdomainCount = 0,
+                                 .numberInDomainName = false,
+                                 .numberInURL = false,
                                  .isHttps = false};
 
     GetStringRankings(url, ranker);
@@ -72,15 +75,26 @@ int32_t GetUrlRank(std::string_view url) {
     if (GoodExtensionList.contains(ranker.extension)) {
         score += ExtensionBoost;
     } else if (BadExtensionList.contains(ranker.extension)) {
-        score -= ExtensionDebuff;
+        return -100;
     }
 
-    // Subdomain count
+    // * Subdomain count
     if (ranker.subdomainCount > SubdomainAcceptable) {
         score -= SubdomainPenalty * (ranker.subdomainCount - SubdomainAcceptable);
     }
 
-    return score;
+    // * Number in domain name
+    if (ranker.numberInDomainName) {
+        score -= DomainNameNumberPenalty;
+    }
+
+    // * Number in URL
+    if (ranker.numberInURL) {
+        score -= URLNumberPenalty;
+    }
+
+    // Make sure score is not negative
+    return std::max(score, 0);
 }
 
 void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
@@ -111,6 +125,10 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
             ranker.subdomainCount++;
         }
 
+        if (std::isdigit(*c)) {
+            ranker.numberInDomainName = true;
+        }
+
         ranker.domainName.push_back(*c);
         c++;
     }
@@ -122,6 +140,7 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
 
     // Read until the URL is over
     bool readExtension = false;
+    int currentNumberLength = 0;
     while (c < end) {
         if (*c == '?' || *c == '&') {
             ranker.parameterCount++;
@@ -137,8 +156,17 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
             readExtension = true;
         } else if (readExtension) {
             ranker.extension += *c;
-        }
+        } 
 
+        if (isdigit(*c)) {
+            currentNumberLength++;
+            if (currentNumberLength > 4) {
+                ranker.numberInURL = true;
+            }
+        } else {
+            currentNumberLength = 0;
+        }
+        
         ranker.urlLength++;
         c++;
     }

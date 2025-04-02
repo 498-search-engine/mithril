@@ -27,6 +27,8 @@ int main() {
             .parameterCount = 0,
             .pageDepth = 0, 
             .subdomainCount = 0,
+            .numberInDomainName = false,
+            .numberInURL = false,
             .isHttps = false
         };
     
@@ -40,6 +42,8 @@ int main() {
                 << "Param Count: " << ranker.parameterCount << "\n"
                 << "Page depth: " << ranker.pageDepth << "\n"
                 << "Subdomain Count: " << ranker.subdomainCount << "\n"
+                << "Number in domain name: " << ranker.numberInDomainName << "\n"
+                << "Number in URL: " << ranker.numberInURL << "\n"
                 << "IsHttps: " << ranker.isHttps << "\n\n";
     }
 }
