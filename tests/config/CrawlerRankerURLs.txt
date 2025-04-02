@@ -23,10 +23,13 @@ https://example.net/products/list?category=electronics&sort=price
 https://example.com/user/dashboard/settings/notifications
 https://example.org/about/team/department/management
 https://example.edu/library/books/science/physics/quantum
+https://sub.example.com/2025-04-22
 
 // Mixed ranking URLs
 
 http://sub.example.com/download.pdf (no HTTPS + bad extension)
+https://sub.22example.com/2025-04-222 (number length)
+https://sub.example.com/2025-04-22222222 (number length)
 https://verylongdomainnamethatkeepsongoing.com/ (long domain)
 https://example.com/very/long/url/path/that/exceeds/the/acceptable/length/limit/by/a/wide/margin
 https://example.org/page?param1=1&param2=2&param3=3&param4=4
