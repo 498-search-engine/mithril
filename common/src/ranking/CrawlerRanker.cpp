@@ -158,7 +158,7 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
             ranker.extension += *c;
         } 
 
-        if (isdigit(*c)) {
+        if (std::isdigit(*c)) {
             currentNumberLength++;
             if (currentNumberLength > 4) {
                 ranker.numberInURL = true;
@@ -166,7 +166,7 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
         } else {
             currentNumberLength = 0;
         }
-        
+
         ranker.urlLength++;
         c++;
     }
