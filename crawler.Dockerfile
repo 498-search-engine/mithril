@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     cmake \
     libssl-dev \
     zlib1g-dev \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up working directory
@@ -28,6 +29,7 @@ FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y \
     libssl3 \
     zlib1g \
+    libgomp1 \
     ca-certificates \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
