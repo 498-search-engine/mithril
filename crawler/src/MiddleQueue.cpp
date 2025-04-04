@@ -53,9 +53,8 @@ MiddleQueue::MiddleQueue(UrlFrontier* frontier,
 }
 
 void MiddleQueue::RestoreFrom(std::vector<std::string>& urls) {
-    long now = MonotonicTimeMs();
     for (auto& url : urls) {
-        AcceptURL(now, std::move(url));
+        AcceptURL(std::move(url));
     }
 }
 
@@ -70,8 +69,6 @@ void MiddleQueue::DumpQueuedURLs(std::vector<std::string>& out) {
 }
 
 void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne) {
-    long now;
-
     auto totalTargetQueuedURLs = n_ * urlBatchSize_;
     auto utilization = QueueUtilization();
     if (totalQueuedURLs_ < totalTargetQueuedURLs || utilization < queueUtilizationTarget_) {
@@ -94,13 +91,12 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
         }
 
         // Push all obtained URLs into the middle queue
-        now = MonotonicTimeMs();
         for (auto url : r) {
-            AcceptURL(now, std::move(url));
+            AcceptURL(std::move(url));
         }
     }
 
-    now = MonotonicTimeMs();
+    auto now = MonotonicTimeMs();
 
     // Try to return up to max URLs by going round-robin through the active
     // queue set. A queue is only popped from if the time since the last crawl
@@ -164,7 +160,7 @@ double MiddleQueue::QueueUtilization() const {
     return static_cast<double>(ActiveQueueCount()) / static_cast<double>(n_);
 }
 
-void MiddleQueue::AcceptURL(long now, std::string url) {
+void MiddleQueue::AcceptURL(std::string url) {
     auto parsed = http::ParseURL(url);
     if (!parsed) {
         return;
@@ -175,7 +171,7 @@ void MiddleQueue::AcceptURL(long now, std::string url) {
     if (recordIt != hosts_.end()) {
         PushURLForHost(std::move(url), recordIt->second.Get());
     } else {
-        PushURLForNewHost(now, std::move(url), canonicalHost);
+        PushURLForNewHost(std::move(url), canonicalHost);
     }
 }
 
