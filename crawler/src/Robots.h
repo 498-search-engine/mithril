@@ -212,6 +212,7 @@ private:
 
     size_t waitingRobotsURLsCount_{0};
     std::vector<http::CanonicalHost> completedFetches_;
+    long nextQueueCheck_{0};
 };
 
 }  // namespace mithril

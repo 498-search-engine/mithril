@@ -32,7 +32,9 @@ std::string_view GetBaseHost(std::string_view host) {
 
 }  // namespace
 
-HostRateLimiter::HostRateLimiter(unsigned long defaultDelayMs) : defaultDelayMs_(defaultDelayMs), m_(50000) {}
+HostRateLimiter::HostRateLimiter(unsigned long defaultDelayMs) : defaultDelayMs_(defaultDelayMs), m_(50000) {
+    assert(defaultDelayMs > 0);
+}
 
 long HostRateLimiter::TryLeaseHost(std::string_view host) {
     core::LockGuard lock(mu_);
@@ -104,14 +106,14 @@ long HostRateLimiter::TryUseHostImpl(std::string_view host, long now) {
     auto* it = m_.Find(baseHost);
     if (it == nullptr) {
         auto p = m_.Insert({
-            baseHost, Entry{.earliest = 0, .delayMs = defaultDelayMs_}
+            baseHost, Entry{.leased = false, .earliest = 0, .delayMs = defaultDelayMs_}
         });
         assert(p.second);
         it = p.first;
     }
 
     if (it->second.leased) {
-        return 5;  // 5 ms, idk
+        return now < it->second.earliest ? it->second.earliest - now : 10;  // 10 ms, idk
     } else if (now < it->second.earliest) {
         // Need to wait
         return it->second.earliest - now;
@@ -129,7 +131,7 @@ long HostRateLimiter::EarliestForHost(std::string_view host) {
     auto* it = m_.Find(baseHost);
     if (it == nullptr) {
         auto p = m_.Insert({
-            baseHost, Entry{.earliest = 0, .delayMs = defaultDelayMs_}
+            baseHost, Entry{.leased = false, .earliest = 0, .delayMs = defaultDelayMs_}
         });
         assert(p.second);
         it = p.first;
@@ -139,12 +141,12 @@ long HostRateLimiter::EarliestForHost(std::string_view host) {
 
 void HostRateLimiter::SetHostDelayMs(std::string_view host, unsigned long delayMs) {
     core::LockGuard lock(mu_);
-
+    assert(delayMs > 0);
     auto baseHost = std::string{GetBaseHost(host)};
     auto* it = m_.Find(baseHost);
     if (it == nullptr) {
         auto p = m_.Insert({
-            baseHost, Entry{.earliest = 0, .delayMs = delayMs}
+            baseHost, Entry{.leased = false, .earliest = 0, .delayMs = defaultDelayMs_}
         });
         return;
     } else {
