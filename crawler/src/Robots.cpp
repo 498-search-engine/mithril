@@ -417,7 +417,7 @@ void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost) {
 }
 
 void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
-    SPDLOG_TRACE("starting robots.txt request: {}", canonicalHost.host);
+    SPDLOG_DEBUG("starting robots.txt request: {}", canonicalHost.host);
     executor_.Add(http::Request::GET(
         http::URL{
             .url = canonicalHost.url + "/robots.txt",
@@ -438,12 +438,44 @@ size_t RobotRulesCache::PendingRequests() const {
     return executor_.InFlightRequests() + queuedFetches_.size();
 }
 
-void RobotRulesCache::FillFromQueue() {
-    while (!queuedFetches_.empty() && executor_.InFlightRequests() < maxInFlightRequests_) {
-        Fetch(queuedFetches_.front());
-        queuedFetches_.pop();
+long RobotRulesCache::FillFromQueue() {
+    auto now = MonotonicTimeMs();
+    if (now < nextQueueCheck_) {
+        return nextQueueCheck_ - now;
+    }
+
+    if (queuedFetches_.empty() || executor_.InFlightRequests() >= maxInFlightRequests_) {
+        return 0;
+    }
+
+    auto waitDuration = std::numeric_limits<long>::max();
+    bool anyReady = false;
+
+    auto it = queuedFetches_.begin();
+    while (it != queuedFetches_.end()) {
+        auto hostWait = limiter_->TryUseHost(it->host, it->NonEmptyPort(), now);
+        if (hostWait > 0) {
+            waitDuration = std::min(waitDuration, hostWait);
+            ++it;
+            continue;
+        }
+
+        Fetch(*it);
+        it = queuedFetches_.erase(it);
+        anyReady = true;
+
+        if (executor_.InFlightRequests() >= maxInFlightRequests_) {
+            break;
+        }
     }
     InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
+    if (anyReady) {
+        nextQueueCheck_ = 0;
+        return 0;
+    }
+
+    nextQueueCheck_ = now + waitDuration;
+    return waitDuration;
 }
 
 void RobotRulesCache::ProcessPendingRequests() {

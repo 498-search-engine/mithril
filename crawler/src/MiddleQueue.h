@@ -59,7 +59,6 @@ private:
         http::CanonicalHost host;
         bool waitingDelayLookup{true};
         unsigned long crawlDelayMs{};
-        long earliestNextCrawl{};
         std::queue<std::string> queue;
         core::Optional<size_t> activeQueue;
     };
@@ -85,10 +84,9 @@ private:
     /**
      * @brief Add a URL into the middle queue.
      *
-     * @param now Current timestamp (milliseconds)
      * @param url URL to add
      */
-    void AcceptURL(long now, std::string url);
+    void AcceptURL(std::string url);
 
     /**
      * @brief Adds a URL to a HostRecord

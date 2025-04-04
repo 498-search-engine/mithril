@@ -5,6 +5,7 @@
 #include "CrawlerMetrics.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
+#include "core/algorithm.h"
 #include "core/memory.h"
 #include "core/optional.h"
 #include "http/URL.h"
@@ -49,9 +50,8 @@ MiddleQueue::MiddleQueue(UrlFrontier* frontier,
 }
 
 void MiddleQueue::RestoreFrom(std::vector<std::string>& urls) {
-    long now = MonotonicTimeMs();
     for (auto& url : urls) {
-        AcceptURL(now, std::move(url));
+        AcceptURL(std::move(url));
     }
 }
 
@@ -66,8 +66,6 @@ void MiddleQueue::DumpQueuedURLs(std::vector<std::string>& out) {
 }
 
 void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne) {
-    long now;
-
     auto totalTargetQueuedURLs = n_ * urlBatchSize_;
     auto utilization = QueueUtilization();
     if (totalQueuedURLs_ < totalTargetQueuedURLs || utilization < queueUtilizationTarget_) {
@@ -90,13 +88,12 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
         }
 
         // Push all obtained URLs into the middle queue
-        now = MonotonicTimeMs();
         for (auto url : r) {
-            AcceptURL(now, std::move(url));
+            AcceptURL(std::move(url));
         }
     }
 
-    now = MonotonicTimeMs();
+    auto now = MonotonicTimeMs();
 
     // Try to return up to max URLs by going round-robin through the active
     // queue set. A queue is only popped from if the time since the last crawl
@@ -125,8 +122,11 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
                 }
             }
 
-            if (now < record->earliestNextCrawl) {
-                waitDuration = std::min(waitDuration, record->earliestNextCrawl - now);
+            auto hostWait =
+                limiter_->TryLeaseHost(record->host.host, record->host.NonEmptyPort(), now, record->crawlDelayMs);
+            if (hostWait != 0) {
+                // Need to wait for host
+                waitDuration = std::min(waitDuration, hostWait);
                 continue;
             }
 
@@ -158,7 +158,7 @@ double MiddleQueue::QueueUtilization() const {
     return static_cast<double>(ActiveQueueCount()) / static_cast<double>(n_);
 }
 
-void MiddleQueue::AcceptURL(long now, std::string url) {
+void MiddleQueue::AcceptURL(std::string url) {
     auto parsed = http::ParseURL(url);
     if (!parsed) {
         return;
@@ -169,7 +169,7 @@ void MiddleQueue::AcceptURL(long now, std::string url) {
     if (recordIt != hosts_.end()) {
         PushURLForHost(std::move(url), recordIt->second.Get());
     } else {
-        PushURLForNewHost(now, std::move(url), canonicalHost);
+        PushURLForNewHost(std::move(url), canonicalHost);
     }
 }
 
@@ -280,8 +280,8 @@ bool MiddleQueue::WantURL(std::string_view url) const {
 
 
 unsigned long MiddleQueue::CrawlDelayFromDirective(unsigned long directive) const {
-    // Clamp between default and 60 seconds
-    return std::clamp(directive * 1000L, defaultCrawlDelayMs_, 60UL * 1000UL);
+    // Clamp between default and 30 seconds
+    return core::clamp(directive * 1000UL, defaultCrawlDelayMs_, 30UL * 1000UL);
 }
 
 }  // namespace mithril
