@@ -129,7 +129,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
                 }
             }
 
-            auto hostWait = limiter_->TryUseHost(record->host.host, now);
+            auto hostWait = limiter_->TryLeaseHost(record->host.host, now);
             if (hostWait != 0) {
                 // Need to wait for host
                 waitDuration = std::min(waitDuration, hostWait);
@@ -189,7 +189,7 @@ void MiddleQueue::PushURLForHost(std::string url, HostRecord* record) {
     }
 }
 
-void MiddleQueue::PushURLForNewHost(long now, std::string url, const http::CanonicalHost& host) {
+void MiddleQueue::PushURLForNewHost(std::string url, const http::CanonicalHost& host) {
     auto record = core::MakeUnique<HostRecord>(HostRecord{
         .host = host,
         .waitingDelayLookup = true,

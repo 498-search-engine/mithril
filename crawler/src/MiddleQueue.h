@@ -101,11 +101,10 @@ private:
     /**
      * @brief Adds a URL for a host, creating the associated HostRecord.
      *
-     * @param now Current timestamp (milliseconds)
      * @param url URL to add
      * @param host Host of URL
      */
-    void PushURLForNewHost(long now, std::string url, const http::CanonicalHost& host);
+    void PushURLForNewHost(std::string url, const http::CanonicalHost& host);
 
     /**
      * @brief Pops a URL from the queue of a host. Requires the host to have a

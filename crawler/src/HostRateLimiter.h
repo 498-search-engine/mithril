@@ -13,6 +13,12 @@ class HostRateLimiter {
 public:
     HostRateLimiter(unsigned long defaultDelayMs);
 
+    long TryLeaseHost(std::string_view host);
+    long TryLeaseHost(std::string_view host, long now);
+
+    void UnleaseHost(std::string_view host);
+    void UnleaseHost(std::string_view host, long now);
+
     long TryUseHost(std::string_view host);
     long TryUseHost(std::string_view host, long now);
 
@@ -21,11 +27,14 @@ public:
 
 private:
     struct Entry {
+        bool leased{};
         long earliest{};
         unsigned long delayMs{};
     };
 
+    long TryLeaseHostImpl(std::string_view host, long now);
     long TryUseHostImpl(std::string_view host, long now);
+    void UnleaseHostImpl(std::string_view host, long now);
 
     mutable core::Mutex mu_;
     unsigned long defaultDelayMs_;

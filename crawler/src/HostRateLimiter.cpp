@@ -34,6 +34,61 @@ std::string_view GetBaseHost(std::string_view host) {
 
 HostRateLimiter::HostRateLimiter(unsigned long defaultDelayMs) : defaultDelayMs_(defaultDelayMs), m_(50000) {}
 
+long HostRateLimiter::TryLeaseHost(std::string_view host) {
+    core::LockGuard lock(mu_);
+    return TryLeaseHostImpl(host, MonotonicTimeMs());
+}
+
+long HostRateLimiter::TryLeaseHost(std::string_view host, long now) {
+    core::LockGuard lock(mu_);
+    return TryLeaseHostImpl(host, now);
+}
+
+void HostRateLimiter::UnleaseHost(std::string_view host) {
+    core::LockGuard lock(mu_);
+    UnleaseHostImpl(host, MonotonicTimeMs());
+}
+
+void HostRateLimiter::UnleaseHost(std::string_view host, long now) {
+    core::LockGuard lock(mu_);
+    UnleaseHostImpl(host, now);
+}
+
+void HostRateLimiter::UnleaseHostImpl(std::string_view host, long now) {
+    auto baseHost = std::string{GetBaseHost(host)};
+    auto* it = m_.Find(baseHost);
+    if (it == nullptr) {
+        return;
+    }
+
+    assert(it->second.leased);
+    it->second.earliest = now + static_cast<long>(it->second.delayMs);
+    it->second.leased = false;
+}
+
+long HostRateLimiter::TryLeaseHostImpl(std::string_view host, long now) {
+    auto baseHost = std::string{GetBaseHost(host)};
+    auto* it = m_.Find(baseHost);
+    if (it == nullptr) {
+        auto p = m_.Insert({
+            baseHost, Entry{.earliest = 0, .delayMs = defaultDelayMs_}
+        });
+        assert(p.second);
+        it = p.first;
+    }
+
+    if (it->second.leased) {
+        return core::max(it->second.earliest - now, 5L);
+    } else if (now < it->second.earliest) {
+        // Need to wait
+        return it->second.earliest - now;
+    }
+
+    it->second.earliest = now + static_cast<long>(it->second.delayMs);
+    it->second.leased = true;
+    return 0;
+}
+
 long HostRateLimiter::TryUseHost(std::string_view host) {
     core::LockGuard lock(mu_);
     return TryUseHostImpl(host, MonotonicTimeMs());
@@ -55,12 +110,15 @@ long HostRateLimiter::TryUseHostImpl(std::string_view host, long now) {
         it = p.first;
     }
 
-    if (now >= it->second.earliest) {
-        it->second.earliest = now + static_cast<long>(it->second.delayMs);
-        return 0;
+    if (it->second.leased) {
+        return 5;  // 5 ms, idk
+    } else if (now < it->second.earliest) {
+        // Need to wait
+        return it->second.earliest - now;
     }
 
-    return it->second.earliest - now;
+    it->second.earliest = now + static_cast<long>(it->second.delayMs);
+    return 0;
 }
 
 

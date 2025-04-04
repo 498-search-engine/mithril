@@ -37,6 +37,7 @@ private:
     unsigned long requestTimeout_;
 
     MiddleQueue middleQueue_;
+    HostRateLimiter* limiter_;
     DocumentQueue* docQueue_;
     const StringTrie& blacklistedHosts_;
 
