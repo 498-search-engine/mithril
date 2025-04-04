@@ -120,14 +120,14 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
                 if (delay.HasValue()) {
                     record->waitingDelayLookup = false;
                     auto clampedDelay = core::clamp(*delay, defaultCrawlDelayMs_, 30UL * 1000UL);
-                    limiter_->SetHostDelayMs(record->host.host, clampedDelay);
+                    limiter_->SetHostDelayMs(record->host.host, record->host.NonEmptyPort(), clampedDelay);
                 } else {
                     // Still waiting
                     continue;
                 }
             }
 
-            auto hostWait = limiter_->TryLeaseHost(record->host.host, now);
+            auto hostWait = limiter_->TryLeaseHost(record->host.host, record->host.NonEmptyPort(), now);
             if (hostWait != 0) {
                 // Need to wait for host
                 waitDuration = std::min(waitDuration, hostWait);
@@ -199,7 +199,7 @@ void MiddleQueue::PushURLForNewHost(std::string url, const http::CanonicalHost& 
     if (delay.HasValue()) {
         record->waitingDelayLookup = false;
         auto clampedDelay = core::clamp(*delay, defaultCrawlDelayMs_, 30UL * 1000UL);
-        limiter_->SetHostDelayMs(host.host, clampedDelay);
+        limiter_->SetHostDelayMs(host.host, host.NonEmptyPort(), clampedDelay);
     }
 
     auto it = hosts_.insert({

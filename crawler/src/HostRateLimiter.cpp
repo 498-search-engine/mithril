@@ -3,11 +3,14 @@
 #include "Clock.h"
 #include "core/algorithm.h"
 #include "core/locks.h"
+#include "core/lru_cache.h"
+#include "http/Resolver.h"
 
 #include <cassert>
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace mithril {
 
@@ -32,126 +35,158 @@ std::string_view GetBaseHost(std::string_view host) {
 
 }  // namespace
 
-HostRateLimiter::HostRateLimiter(unsigned long defaultDelayMs) : defaultDelayMs_(defaultDelayMs), m_(50000) {
+HostRateLimiter::HostRateLimiter(unsigned long defaultDelayMs)
+    : defaultDelayMs_(defaultDelayMs), m_(50000), addrs_(50000) {
     assert(defaultDelayMs > 0);
 }
 
-long HostRateLimiter::TryLeaseHost(std::string_view host) {
+long HostRateLimiter::TryLeaseHost(const std::string& host, const std::string& port) {
     core::LockGuard lock(mu_);
-    return TryLeaseHostImpl(host, MonotonicTimeMs());
+    return TryLeaseHostImpl(host, port, MonotonicTimeMs());
 }
 
-long HostRateLimiter::TryLeaseHost(std::string_view host, long now) {
+long HostRateLimiter::TryLeaseHost(const std::string& host, const std::string& port, long now) {
     core::LockGuard lock(mu_);
-    return TryLeaseHostImpl(host, now);
+    return TryLeaseHostImpl(host, port, now);
 }
 
-void HostRateLimiter::UnleaseHost(std::string_view host) {
+void HostRateLimiter::UnleaseHost(const std::string& host, const std::string& port) {
     core::LockGuard lock(mu_);
-    UnleaseHostImpl(host, MonotonicTimeMs());
+    UnleaseHostImpl(host, port, MonotonicTimeMs());
 }
 
-void HostRateLimiter::UnleaseHost(std::string_view host, long now) {
+void HostRateLimiter::UnleaseHost(const std::string& host, const std::string& port, long now) {
     core::LockGuard lock(mu_);
-    UnleaseHostImpl(host, now);
+    UnleaseHostImpl(host, port, now);
 }
 
-void HostRateLimiter::UnleaseHostImpl(std::string_view host, long now) {
-    auto baseHost = std::string{GetBaseHost(host)};
-    auto* it = m_.Find(baseHost);
-    if (it == nullptr) {
+void HostRateLimiter::UnleaseHostImpl(const std::string& host, const std::string& port, long now) {
+    auto* entry = GetOrInsert(host, port);
+    if (entry == nullptr || entry == &fallbackEntry_) {
         return;
     }
 
-    assert(it->second.leased);
-    it->second.earliest = now + static_cast<long>(it->second.delayMs);
-    it->second.leased = false;
+    assert(entry->leased);
+    entry->earliest = now + static_cast<long>(entry->delayMs);
+    entry->leased = false;
 }
 
-long HostRateLimiter::TryLeaseHostImpl(std::string_view host, long now) {
-    auto baseHost = std::string{GetBaseHost(host)};
-    auto* it = m_.Find(baseHost);
-    if (it == nullptr) {
-        auto p = m_.Insert({
-            baseHost, Entry{.earliest = 0, .delayMs = defaultDelayMs_}
-        });
-        assert(p.second);
-        it = p.first;
+long HostRateLimiter::TryLeaseHostImpl(const std::string& host, const std::string& port, long now) {
+    auto* entry = GetOrInsert(host, port);
+    if (entry == nullptr) {
+        return 10;
+    } else if (entry == &fallbackEntry_) {
+        return 0;
     }
 
-    if (it->second.leased) {
-        return core::max(it->second.earliest - now, 5L);
-    } else if (now < it->second.earliest) {
+    if (entry->leased) {
+        return core::max(entry->earliest - now, 5L);
+    } else if (now < entry->earliest) {
         // Need to wait
-        return it->second.earliest - now;
+        return entry->earliest - now;
     }
 
-    it->second.earliest = now + static_cast<long>(it->second.delayMs);
-    it->second.leased = true;
+    entry->earliest = now + static_cast<long>(entry->delayMs);
+    entry->leased = true;
     return 0;
 }
 
-long HostRateLimiter::TryUseHost(std::string_view host) {
+long HostRateLimiter::TryUseHost(const std::string& host, const std::string& port) {
     core::LockGuard lock(mu_);
-    return TryUseHostImpl(host, MonotonicTimeMs());
+    return TryUseHostImpl(host, port, MonotonicTimeMs());
 }
 
-long HostRateLimiter::TryUseHost(std::string_view host, long now) {
+long HostRateLimiter::TryUseHost(const std::string& host, const std::string& port, long now) {
     core::LockGuard lock(mu_);
-    return TryUseHostImpl(host, now);
+    return TryUseHostImpl(host, port, now);
 }
 
-long HostRateLimiter::TryUseHostImpl(std::string_view host, long now) {
-    auto baseHost = std::string{GetBaseHost(host)};
-    auto* it = m_.Find(baseHost);
-    if (it == nullptr) {
-        auto p = m_.Insert({
-            baseHost, Entry{.leased = false, .earliest = 0, .delayMs = defaultDelayMs_}
-        });
-        assert(p.second);
-        it = p.first;
+long HostRateLimiter::TryUseHostImpl(const std::string& host, const std::string& port, long now) {
+    auto* entry = GetOrInsert(host, port);
+    if (entry == nullptr) {
+        return 10;
+    } else if (entry == &fallbackEntry_) {
+        return 0;
     }
 
-    if (it->second.leased) {
-        return now < it->second.earliest ? it->second.earliest - now : 10;  // 10 ms, idk
-    } else if (now < it->second.earliest) {
+    if (entry->leased) {
+        return now < entry->earliest ? entry->earliest - now : 10;  // 10 ms, idk
+    } else if (now < entry->earliest) {
         // Need to wait
-        return it->second.earliest - now;
+        return entry->earliest - now;
     }
 
-    it->second.earliest = now + static_cast<long>(it->second.delayMs);
+    entry->earliest = now + static_cast<long>(entry->delayMs);
     return 0;
 }
 
-
-long HostRateLimiter::EarliestForHost(std::string_view host) {
-    core::LockGuard lock(mu_);
-
-    auto baseHost = std::string{GetBaseHost(host)};
-    auto* it = m_.Find(baseHost);
-    if (it == nullptr) {
-        auto p = m_.Insert({
-            baseHost, Entry{.leased = false, .earliest = 0, .delayMs = defaultDelayMs_}
-        });
-        assert(p.second);
-        it = p.first;
-    }
-    return it->second.earliest;
-}
-
-void HostRateLimiter::SetHostDelayMs(std::string_view host, unsigned long delayMs) {
+void HostRateLimiter::SetHostDelayMs(const std::string& host, const std::string& port, unsigned long delayMs) {
     core::LockGuard lock(mu_);
     assert(delayMs > 0);
-    auto baseHost = std::string{GetBaseHost(host)};
-    auto* it = m_.Find(baseHost);
+
+    auto* entry = GetOrInsert(host, port);
+    if (entry == nullptr || entry == &fallbackEntry_) {
+        return;
+    }
+
+    entry->delayMs = delayMs;
+}
+
+HostRateLimiter::Entry* HostRateLimiter::GetOrInsert(const std::string& host, const std::string& port) {
+    assert(!host.empty());
+    assert(!port.empty());
+
+    bool ready = false;
+    const auto* resolved = GetOrResolve(host, port, ready);
+    if (!ready) {
+        // Still waiting
+        return nullptr;
+    }
+
+    if (resolved == nullptr) {
+        // Resolved to failure
+        return &fallbackEntry_;
+    }
+
+    auto* it = m_.Find(*resolved);
     if (it == nullptr) {
         auto p = m_.Insert({
-            baseHost, Entry{.leased = false, .earliest = 0, .delayMs = delayMs}
+            *resolved, Entry{.leased = false, .earliest = 0, .delayMs = defaultDelayMs_}
         });
-        return;
-    } else {
-        it->second.delayMs = delayMs;
+        assert(p.second);
+        it = p.first;
     }
+
+    return &it->second;
+}
+
+const http::ResolvedAddr* HostRateLimiter::GetOrResolve(const std::string& host, const std::string& port, bool& ready) {
+    assert(!host.empty());
+    assert(!port.empty());
+
+    auto combined = host + ':' + port;
+    auto* existing = addrs_.Find(combined);
+    if (existing != nullptr) {
+        ready = true;
+        return &existing->second;
+    }
+
+    http::Resolver::ResolutionResult res;
+    bool resolved = http::ApplicationResolver->Resolve(host, port, res);
+    if (!resolved) {
+        // Still waiting
+        ready = false;
+        return nullptr;
+    } else if (res.status != 0 || !res.addr.has_value()) {
+        // Resolved but got error response
+        ready = true;
+        return nullptr;
+    }
+
+    auto inserted = addrs_.Insert({combined, std::move(*res.addr)});
+    assert(inserted.second);
+    ready = true;
+    return &inserted.first->second;
 }
 
 }  // namespace mithril
