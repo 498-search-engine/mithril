@@ -447,7 +447,7 @@ long RobotRulesCache::FillFromQueue() {
         return nextQueueCheck_ - now;
     }
 
-    if (queuedFetches_.empty()) {
+    if (queuedFetches_.empty() || executor_.InFlightRequests() >= maxInFlightRequests_) {
         return 0;
     }
 
