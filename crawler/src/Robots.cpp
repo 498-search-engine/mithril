@@ -456,7 +456,7 @@ long RobotRulesCache::FillFromQueue() {
 
     auto it = queuedFetches_.begin();
     while (it != queuedFetches_.end()) {
-        auto hostWait = limiter_->TryUseHost(it->host, now);
+        auto hostWait = limiter_->TryUseHost(it->host, it->NonEmptyPort(), now);
         if (hostWait > 0) {
             waitDuration = std::min(waitDuration, hostWait);
             ++it;

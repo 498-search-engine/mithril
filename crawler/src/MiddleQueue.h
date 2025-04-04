@@ -60,6 +60,7 @@ private:
     struct HostRecord {
         http::CanonicalHost host;
         bool waitingDelayLookup{true};
+        unsigned long crawlDelayMs{};
         std::queue<std::string> queue;
         core::Optional<size_t> activeQueue;
     };

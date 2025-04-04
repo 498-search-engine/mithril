@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add numbers in URL factors to crawler ranking (#104)
 - last minute crawler config changes (#103)
 - global and robust host-level rate limiting (#107)
+- dns-level rate limiting over host-level (#111)
 
 ### Fixed
 - Fix copying body data from buffer (#24)

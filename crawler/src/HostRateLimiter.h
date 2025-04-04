@@ -3,9 +3,10 @@
 
 #include "core/lru_cache.h"
 #include "core/mutex.h"
+#include "http/Resolver.h"
 
+#include <cstddef>
 #include <string>
-#include <string_view>
 
 namespace mithril {
 
@@ -13,32 +14,40 @@ class HostRateLimiter {
 public:
     HostRateLimiter(unsigned long defaultDelayMs);
 
-    long TryLeaseHost(std::string_view host);
-    long TryLeaseHost(std::string_view host, long now);
+    long TryLeaseHost(const std::string& host, const std::string& port, unsigned long delayMs);
+    long TryLeaseHost(const std::string& host, const std::string& port, long now, unsigned long delayMs);
 
-    void UnleaseHost(std::string_view host);
-    void UnleaseHost(std::string_view host, long now);
+    void UnleaseHost(const std::string& host, const std::string& port);
+    void UnleaseHost(const std::string& host, const std::string& port, long now);
 
-    long TryUseHost(std::string_view host);
-    long TryUseHost(std::string_view host, long now);
-
-    long EarliestForHost(std::string_view host);
-    void SetHostDelayMs(std::string_view host, unsigned long delayMs);
+    long TryUseHost(const std::string& host, const std::string& port);
+    long TryUseHost(const std::string& host, const std::string& port, long now);
 
 private:
     struct Entry {
         bool leased{};
         long earliest{};
-        unsigned long delayMs{};
+        unsigned long delayAfterUnlease{};
+
+        long bucketStart{};
+        size_t bucketCount{};
     };
 
-    long TryLeaseHostImpl(std::string_view host, long now);
-    long TryUseHostImpl(std::string_view host, long now);
-    void UnleaseHostImpl(std::string_view host, long now);
+    long TryLeaseHostImpl(const std::string& host, const std::string& port, long now, unsigned long delayMs);
+    long TryUseHostImpl(const std::string& host, const std::string& port, long now);
+    void UnleaseHostImpl(const std::string& host, const std::string& port, long now);
+
+    Entry* GetOrInsert(const std::string& host, const std::string& port);
+    const http::ResolvedAddr* GetOrResolve(const std::string& host, const std::string& port, bool& ready);
+
+    static long TryIncrementBucket(Entry& entry, long now);
 
     mutable core::Mutex mu_;
     unsigned long defaultDelayMs_;
-    core::LRUCache<std::string, Entry> m_;
+
+    Entry fallbackEntry_;
+    core::LRUCache<http::ResolvedAddr, Entry> m_;
+    core::LRUCache<std::string, http::ResolvedAddr> addrs_;
 };
 
 }  // namespace mithril
