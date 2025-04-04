@@ -9,44 +9,50 @@
 /**
 * @brief This is different from CrawlerRanker in terms of scoring. I'm decoupling it so that we can make more specific tunes to static ranking for what we'd want for queries (but not necessarily for crawling/differences do not matter as much then).
 
-* Primary differentiating is scoring. The scoring is more granular and we scale up at different points (e.g more URL length scaling - instead of penalizing URL score after a certain length, we scale up the score for each character in the URL). This is because we want to be able to tune the score more easily and not have to worry about the penalty being too high or too low. We can also add more scoring rules if we want to.
+* Primary differentiating is scoring. The scoring is more granular and we scale up at different points. This is because we want to be able to tune the score more easily and not have to worry about the penalty being too high or too low. We can also add more scoring rules if we want to.
 
 * We no longer use a % system as well, just a points based system.
 */
 
 namespace mithril::ranking {
 // * HTTPS
-constexpr int32_t HttpsDebuffScore = 50;
-// * Site TLD (whitelist) (10%)
-constexpr int32_t WhitelistTldScore = 10;
-// * Domain whitelist (10%)
-constexpr int32_t WhitelistDomainScore = 10;
-// * Domain name length (10%)
+constexpr int32_t HttpsScore = 100;
+
+// * Site TLD (whitelist)
+constexpr int32_t WhitelistTldScore = 200;
+
+// * Domain whitelist
+constexpr int32_t WhitelistDomainScore = 500;
+
+// * Domain name length
 // note: includes TLD length
 // note: ignores www.
-constexpr int32_t DomainNameScore = 10;
+constexpr int32_t DomainNameScore = 200;
 constexpr int32_t DomainLengthAcceptable = 11;
-constexpr int32_t DomainPenaltyPerExtraLength = 5;
-// * URL length (10%)
+constexpr int32_t DomainPenaltyPerExtraLength = 50;
+
+// * URL length
 // note: URL length does not include domain name length
-constexpr int32_t UrlLengthScore = 10;
+constexpr int32_t UrlLengthScore = 400;
 constexpr int32_t UrlLengthAcceptable = 60;
-constexpr int32_t UrlPenaltyPerExtraLength = 5;
-// * Number of parameters (20%)
-constexpr int32_t NumberParamScore = 20;
+constexpr int32_t UrlPenaltyPerExtraLength = 50;
+
+// * Number of parameters
+constexpr int32_t NumberParamScore = 200;
 constexpr int32_t NumberParamAcceptable = 1;
-constexpr int32_t NumberParamPenaltyPerExtraParam = 5;
-// * Depth of page (40%)
-constexpr int32_t DepthPageScore = 40;
-constexpr int32_t DepthPageAcceptable = 2;
-constexpr int32_t DepthPagePenalty = 15;
+constexpr int32_t NumberParamPenaltyPerExtraParam = 100;
+
+// * Depth of page
+constexpr int32_t DepthPageScore = 400;
+constexpr int32_t DepthPageAcceptable = 1;
+constexpr int32_t DepthPagePenalty = 50;
 
 /**
     Positive ranking
 */
 // * Extensions (+30%)
 const std::unordered_set<std::string> GoodExtensionList = {"asp", "html", "htm", "php", "asp", ""};
-constexpr int32_t ExtensionBoost = 30;
+constexpr int32_t ExtensionBoost = 500;
 
 /**
      Negative ranking
@@ -56,22 +62,13 @@ constexpr int32_t ExtensionBoost = 30;
 // www.example.com has 1 subdomains (example)
 // www.eecs.example.com has 2 subdomain (eecs, example)
 constexpr int32_t SubdomainAcceptable = 1;
-constexpr int32_t SubdomainPenalty = 15;
-
-// * Extensions (Does not crawl if found)
-const std::unordered_set<std::string> BadExtensionList = {
-    "pdf", "doc", "docx", "ppt",  "pptx", "xls",  "xlsx", "odt", "ods",    "odp",    "zip", "rar", "7z",
-    "tar", "gz",  "bz2",  "exe",  "dmg",  "pkg",  "deb",  "rpm", "iso",    "img",    "msi", "apk", "bin",
-    "dat", "csv", "tsv",  "json", "xml",  "sql",  "db",   "mdb", "sqlite", "log",    "bak", "tmp", "swp",
-    "gif", "svg", "webp", "ico",  "bmp",  "tiff", "psd",  "ai",  "eps",    "mp3",    "wav", "ogg", "flac",
-    "aac", "wma", "mid",  "mp4",  "avi",  "mov",  "wmv",  "flv", "mkv",    "webm",   "m4v", "3gp", "mpeg",
-    "mpg", "m4a", "aiff", "au",   "raw",  "cr2",  "nef",  "orf", "sr2",    "torrent"};
+constexpr int32_t SubdomainPenalty = 200;
 
 // * Any number in domain name (-20%)
-constexpr int32_t DomainNameNumberPenalty = 20;
+constexpr int32_t DomainNameNumberPenalty = 500;
 
 // * Numbers of length > 4 (e.g not years) in URL (-35%) (this is after the domain name)
-constexpr int32_t URLNumberPenalty = 35;
+constexpr int32_t URLNumberPenalty = 500;
 
 struct CrawlerRankingsStruct {
     std::string tld;

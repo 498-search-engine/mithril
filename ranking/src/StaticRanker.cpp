@@ -67,15 +67,8 @@ int32_t GetUrlStaticRank(std::string_view url) {
     score += DepthPageScore - std::min(depthPagePenalty, DepthPageScore);
 
     // * HTTPS
-    if (!ranker.isHttps) {
-        score -= std::min(score, HttpsDebuffScore);
-    }
-
-    // * Extensions
-    if (GoodExtensionList.contains(ranker.extension)) {
-        score += ExtensionBoost;
-    } else if (BadExtensionList.contains(ranker.extension)) {
-        return -100;
+    if (ranker.isHttps) {
+        score += HttpsScore;
     }
 
     // * Subdomain count
