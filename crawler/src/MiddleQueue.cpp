@@ -6,6 +6,7 @@
 #include "HostRateLimiter.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
+#include "core/algorithm.h"
 #include "core/memory.h"
 #include "core/optional.h"
 #include "http/URL.h"
@@ -118,7 +119,8 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
                 auto delay = frontier_->LookUpCrawlDelayNonblocking(record->host, 0);
                 if (delay.HasValue()) {
                     record->waitingDelayLookup = false;
-                    limiter_->SetHostDelayMs(record->host.host, *delay);
+                    auto clampedDelay = core::clamp(*delay, defaultCrawlDelayMs_, 30UL * 1000UL);
+                    limiter_->SetHostDelayMs(record->host.host, clampedDelay);
                 } else {
                     // Still waiting
                     continue;
@@ -196,7 +198,8 @@ void MiddleQueue::PushURLForNewHost(std::string url, const http::CanonicalHost& 
     auto delay = frontier_->LookUpCrawlDelayNonblocking(host, 0);
     if (delay.HasValue()) {
         record->waitingDelayLookup = false;
-        limiter_->SetHostDelayMs(host.host, *delay);
+        auto clampedDelay = core::clamp(*delay, defaultCrawlDelayMs_, 30UL * 1000UL);
+        limiter_->SetHostDelayMs(host.host, clampedDelay);
     }
 
     auto it = hosts_.insert({

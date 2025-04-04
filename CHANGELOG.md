@@ -71,6 +71,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - have anu's page rank stuff compile on VM (#95)
 - cmake compile for apple clang + remove dupl compile warnings (#100)
 - install libgomp1 in docker container (#106)
+- clamp robots crawl delay to reasonable range (#109)
 
 ## [0.1.0] - 2025-02-07
 

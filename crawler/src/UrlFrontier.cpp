@@ -123,8 +123,7 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
         auto robotsWait = robotRulesCache_.ProcessPendingRequests();
         if (robotsWait != 0) {
             lock.Unlock();
-            spdlog::info("robots sleeping for {}", robotsWait / 2);
-            usleep(robotsWait * 1000L / 2);
+            usleep(robotsWait * 750L);  // 75% of time
             return;
         }
         if (robotRulesCache_.PendingRequests() >= before) {
