@@ -3,6 +3,7 @@ find_package(OpenSSL REQUIRED)
 add_library(crawler STATIC
     src/Coordinator.cpp
     src/DocumentQueue.cpp
+    src/HostRateLimiter.cpp
     src/MiddleQueue.cpp
     src/RequestManager.cpp
     src/Robots.cpp

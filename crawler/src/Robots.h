@@ -1,6 +1,7 @@
 #ifndef CRAWLER_ROBOTS_H
 #define CRAWLER_ROBOTS_H
 
+#include "HostRateLimiter.h"
 #include "core/lru_cache.h"
 #include "core/optional.h"
 #include "http/RequestExecutor.h"
@@ -9,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <list>
 #include <memory>
 #include <optional>
 #include <queue>
@@ -145,7 +147,7 @@ private:
 
 class RobotRulesCache {
 public:
-    RobotRulesCache(size_t maxInFlightRequests, size_t cacheSize);
+    RobotRulesCache(size_t maxInFlightRequests, HostRateLimiter* limiter, size_t cacheSize);
 
     /**
      * @brief Gets the ruleset associated with the canonical host, or queues up
@@ -164,7 +166,7 @@ public:
     /**
      * @brief Processes pending robots.txt requests.
      */
-    void ProcessPendingRequests();
+    long ProcessPendingRequests();
 
     /**
      * @brief Resets the timeout progress for all active robots requests.
@@ -179,7 +181,7 @@ private:
         long expiresAt{0L};
     };
 
-    void FillFromQueue();
+    long FillFromQueue();
 
     /**
      * @brief Enqueues a host for robots.txt fetching.
@@ -202,9 +204,10 @@ private:
     static void HandleRobotsNotFound(RobotCacheEntry& entry);
 
     size_t maxInFlightRequests_;
+    HostRateLimiter* limiter_;
 
     core::LRUCache<std::string, RobotCacheEntry> cache_;
-    std::queue<http::CanonicalHost> queuedFetches_;
+    std::list<http::CanonicalHost> queuedFetches_;
     http::RequestExecutor executor_;
 
     size_t waitingRobotsURLsCount_{0};

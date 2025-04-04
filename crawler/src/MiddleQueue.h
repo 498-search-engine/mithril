@@ -3,6 +3,7 @@
 
 
 #include "Config.h"
+#include "HostRateLimiter.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "core/memory.h"
@@ -20,9 +21,10 @@ namespace mithril {
 
 class MiddleQueue {
 public:
-    MiddleQueue(UrlFrontier* frontier, const CrawlerConfig& config);
+    MiddleQueue(UrlFrontier* frontier, HostRateLimiter* limiter, const CrawlerConfig& config);
 
     MiddleQueue(UrlFrontier* frontier,
+                HostRateLimiter* limiter,
                 size_t numQueues,
                 size_t urlBatchSize,
                 size_t hostUrlLimit,
@@ -58,8 +60,6 @@ private:
     struct HostRecord {
         http::CanonicalHost host;
         bool waitingDelayLookup{true};
-        unsigned long crawlDelayMs{};
-        long earliestNextCrawl{};
         std::queue<std::string> queue;
         core::Optional<size_t> activeQueue;
     };
@@ -101,22 +101,20 @@ private:
     /**
      * @brief Adds a URL for a host, creating the associated HostRecord.
      *
-     * @param now Current timestamp (milliseconds)
      * @param url URL to add
      * @param host Host of URL
      */
-    void PushURLForNewHost(long now, std::string url, const http::CanonicalHost& host);
+    void PushURLForNewHost(std::string url, const http::CanonicalHost& host);
 
     /**
      * @brief Pops a URL from the queue of a host. Requires the host to have a
      * URL in its queue. If the host's queue becomes empty, it is removed from
      * the active queues set and is replaced if possible.
      *
-     * @param now Current timestamp (milliseconds)
      * @param record Host to pop from
      * @return std::string Popped URL
      */
-    std::string PopFromHost(long now, HostRecord& record);
+    std::string PopFromHost(HostRecord& record);
 
     /**
      * @brief Checks for hosts with waiting URLs and adds them to the active
@@ -148,6 +146,7 @@ private:
     bool WantURL(std::string_view url) const;
 
     UrlFrontier* frontier_;
+    HostRateLimiter* limiter_;
     size_t n_;
     size_t urlBatchSize_;
     size_t hostUrlLimit_;
