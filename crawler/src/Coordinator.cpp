@@ -5,6 +5,7 @@
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "FileSystem.h"
+#include "HostRateLimiter.h"
 #include "RequestManager.h"
 #include "State.h"
 #include "UrlFrontier.h"
@@ -16,7 +17,6 @@
 #include "data/Reader.h"
 #include "data/Serialize.h"
 #include "data/Writer.h"
-#include "http/URL.h"
 #include "metrics/MetricsServer.h"
 
 #include <algorithm>
@@ -79,15 +79,16 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
         blacklistedHostsTrie_.Insert(parts);
     }
 
-    state_ = core::UniquePtr<LiveState>(new LiveState{});
+    limiter_ = core::MakeUnique<HostRateLimiter>(config.default_crawl_delay_ms);
+    state_ = core::MakeUnique<LiveState>();
 
-    docQueue_ = core::UniquePtr<DocumentQueue>(new DocumentQueue{state_->threadSync});
-    frontier_ = core::UniquePtr<UrlFrontier>(
-        new UrlFrontier{frontierDirectory_, config.concurrent_robots_requests, config.robots_cache_size});
-    requestManager_ = core::UniquePtr<RequestManager>(
-        new RequestManager{frontier_.Get(), docQueue_.Get(), config, blacklistedHostsTrie_});
+    docQueue_ = core::MakeUnique<DocumentQueue>(state_->threadSync);
+    frontier_ = core::MakeUnique<UrlFrontier>(
+        limiter_.Get(), frontierDirectory_, config.concurrent_robots_requests, config.robots_cache_size);
+    requestManager_ = core::MakeUnique<RequestManager>(
+        frontier_.Get(), limiter_.Get(), docQueue_.Get(), config, blacklistedHostsTrie_);
 
-    metricsServer_ = core::UniquePtr<metrics::MetricsServer>(new metrics::MetricsServer{config.metrics_port});
+    metricsServer_ = core::MakeUnique<metrics::MetricsServer>(config.metrics_port);
 
     frontier_->InitSync(state_->threadSync);
     RegisterCrawlerMetrics(*metricsServer_);

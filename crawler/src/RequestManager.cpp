@@ -4,6 +4,7 @@
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "Globals.h"
+#include "HostRateLimiter.h"
 #include "StringTrie.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
@@ -23,12 +24,13 @@
 namespace mithril {
 
 RequestManager::RequestManager(UrlFrontier* frontier,
+                               HostRateLimiter* limiter,
                                DocumentQueue* docQueue,
                                const CrawlerConfig& config,
                                const StringTrie& blacklistedHosts)
     : targetConcurrentReqs_(config.concurrent_requests),
       requestTimeout_(config.request_timeout),
-      middleQueue_(frontier, config),
+      middleQueue_(frontier, limiter, config),
       docQueue_(docQueue),
       blacklistedHosts_(blacklistedHosts) {}
 

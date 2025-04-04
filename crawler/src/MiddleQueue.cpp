@@ -3,6 +3,7 @@
 #include "Clock.h"
 #include "Config.h"
 #include "CrawlerMetrics.h"
+#include "HostRateLimiter.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
 #include "core/memory.h"
@@ -21,8 +22,9 @@
 
 namespace mithril {
 
-MiddleQueue::MiddleQueue(UrlFrontier* frontier, const CrawlerConfig& config)
+MiddleQueue::MiddleQueue(UrlFrontier* frontier, HostRateLimiter* limiter, const CrawlerConfig& config)
     : MiddleQueue(frontier,
+                  limiter,
                   config.middle_queue_queue_count,
                   config.middle_queue_url_batch_size,
                   config.middle_queue_host_url_limit,
@@ -30,12 +32,14 @@ MiddleQueue::MiddleQueue(UrlFrontier* frontier, const CrawlerConfig& config)
                   config.default_crawl_delay_ms) {}
 
 MiddleQueue::MiddleQueue(UrlFrontier* frontier,
+                         HostRateLimiter* limiter,
                          size_t numQueues,
                          size_t urlBatchSize,
                          size_t hostUrlLimit,
                          double queueUtilizationTarget,
                          unsigned long defaultCrawlDelayMs)
     : frontier_(frontier),
+      limiter_(limiter),
       n_(numQueues),
       urlBatchSize_(urlBatchSize),
       hostUrlLimit_(hostUrlLimit),
@@ -118,20 +122,22 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
                 auto delay = frontier_->LookUpCrawlDelayNonblocking(record->host, 0);
                 if (delay.HasValue()) {
                     record->waitingDelayLookup = false;
-                    record->crawlDelayMs = CrawlDelayFromDirective(*delay);
+                    limiter_->SetHostDelayMs(record->host.host, *delay);
                 } else {
                     // Still waiting
                     continue;
                 }
             }
 
-            if (now < record->earliestNextCrawl) {
-                waitDuration = std::min(waitDuration, record->earliestNextCrawl - now);
+            auto hostWait = limiter_->TryUseHost(record->host.host, now);
+            if (hostWait != 0) {
+                // Need to wait for host
+                waitDuration = std::min(waitDuration, hostWait);
                 continue;
             }
 
             anyReady = true;
-            out.push_back(PopFromHost(now, *record));
+            out.push_back(PopFromHost(*record));
             ++added;
             if (added >= maxPossibleReady) {
                 k_ = (k_ + 1) % n_;
@@ -187,8 +193,6 @@ void MiddleQueue::PushURLForNewHost(long now, std::string url, const http::Canon
     auto record = core::MakeUnique<HostRecord>(HostRecord{
         .host = host,
         .waitingDelayLookup = true,
-        .crawlDelayMs = defaultCrawlDelayMs_,
-        .earliestNextCrawl = now,
         .queue = {},
         .activeQueue = {},
     });
@@ -196,7 +200,7 @@ void MiddleQueue::PushURLForNewHost(long now, std::string url, const http::Canon
     auto delay = frontier_->LookUpCrawlDelayNonblocking(host, 0);
     if (delay.HasValue()) {
         record->waitingDelayLookup = false;
-        record->crawlDelayMs = CrawlDelayFromDirective(*delay);
+        limiter_->SetHostDelayMs(host.host, *delay);
     }
 
     auto it = hosts_.insert({
@@ -208,17 +212,15 @@ void MiddleQueue::PushURLForNewHost(long now, std::string url, const http::Canon
     PushURLForHost(std::move(url), it.first->second.Get());
 }
 
-std::string MiddleQueue::PopFromHost(long now, HostRecord& record) {
+std::string MiddleQueue::PopFromHost(HostRecord& record) {
     assert(!record.queue.empty());
     assert(!record.waitingDelayLookup);
-    assert(record.earliestNextCrawl <= now);
     assert(record.activeQueue.HasValue());
 
     auto url = std::move(record.queue.front());
     record.queue.pop();
     --totalQueuedURLs_;
 
-    record.earliestNextCrawl = static_cast<long>(static_cast<unsigned long>(now) + record.crawlDelayMs);
     if (record.queue.empty()) {
         // The host's queue is now empty, remove it from the active queue set
         queues_[*record.activeQueue] = nullptr;
@@ -245,9 +247,8 @@ void MiddleQueue::PopulateActiveQueues() {
 }
 
 void MiddleQueue::CleanEmptyHosts() {
-    auto now = MonotonicTimeMs();
     for (auto it = hosts_.begin(); it != hosts_.end();) {
-        if (it->second->queue.empty() && now >= it->second->earliestNextCrawl + it->second->crawlDelayMs) {
+        if (it->second->queue.empty()) {
             assert(!it->second->activeQueue.HasValue());
             it = hosts_.erase(it);
         } else {

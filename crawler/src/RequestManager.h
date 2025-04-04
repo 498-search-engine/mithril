@@ -3,6 +3,7 @@
 
 #include "Config.h"
 #include "DocumentQueue.h"
+#include "HostRateLimiter.h"
 #include "MiddleQueue.h"
 #include "StringTrie.h"
 #include "ThreadSync.h"
@@ -18,6 +19,7 @@ namespace mithril {
 class RequestManager {
 public:
     RequestManager(UrlFrontier* frontier,
+                   HostRateLimiter* limiter,
                    DocumentQueue* docQueue,
                    const CrawlerConfig& config,
                    const StringTrie& blacklistedHosts);
