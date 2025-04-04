@@ -3,6 +3,7 @@
 
 #include "Config.h"
 #include "DocumentQueue.h"
+#include "HostRateLimiter.h"
 #include "RequestManager.h"
 #include "State.h"
 #include "StringTrie.h"
@@ -35,6 +36,7 @@ private:
 
     std::string frontierDirectory_;
 
+    core::UniquePtr<HostRateLimiter> limiter_;
     core::UniquePtr<LiveState> state_;
 
     core::UniquePtr<DocumentQueue> docQueue_;

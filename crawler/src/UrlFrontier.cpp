@@ -1,6 +1,7 @@
 #include "UrlFrontier.h"
 
 #include "CrawlerMetrics.h"
+#include "HostRateLimiter.h"
 #include "Robots.h"
 #include "ThreadSync.h"
 #include "core/locks.h"
@@ -37,9 +38,12 @@ constexpr unsigned int URLHighScoreQueuePercent = 90;  // Take from "high" scori
 
 }  //  namespace
 
-UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests, size_t robotsCacheSize)
+UrlFrontier::UrlFrontier(HostRateLimiter* limiter,
+                         const std::string& frontierDirectory,
+                         size_t concurrentRobotsRequests,
+                         size_t robotsCacheSize)
     : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
-      robotRulesCache_(concurrentRobotsRequests, robotsCacheSize) {}
+      robotRulesCache_(concurrentRobotsRequests, limiter, robotsCacheSize) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);
@@ -181,7 +185,7 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
 }
 
 void UrlFrontier::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne) {
-    GetURLsFiltered(sync, max, out, [](std::string_view) { return true; });
+    GetURLsFiltered(sync, max, out, [](std::string_view) { return true; }, atLeastOne);
 }
 
 void UrlFrontier::PushURL(std::string u) {

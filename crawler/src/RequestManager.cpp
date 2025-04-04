@@ -4,6 +4,7 @@
 #include "CrawlerMetrics.h"
 #include "DocumentQueue.h"
 #include "Globals.h"
+#include "HostRateLimiter.h"
 #include "StringTrie.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
@@ -23,12 +24,14 @@
 namespace mithril {
 
 RequestManager::RequestManager(UrlFrontier* frontier,
+                               HostRateLimiter* limiter,
                                DocumentQueue* docQueue,
                                const CrawlerConfig& config,
                                const StringTrie& blacklistedHosts)
     : targetConcurrentReqs_(config.concurrent_requests),
       requestTimeout_(config.request_timeout),
-      middleQueue_(frontier, config),
+      middleQueue_(frontier, limiter, config),
+      limiter_(limiter),
       docQueue_(docQueue),
       blacklistedHosts_(blacklistedHosts) {}
 
@@ -115,14 +118,8 @@ void RequestManager::TouchRequestTimeouts() {
 }
 
 void RequestManager::DispatchFailedRequest(const http::FailedRequest& failed) {
-<<<<<<< HEAD
-||||||| ac22a20
-    limiter_->UnleaseHost(failed.req.Url().host);
-
-=======
     limiter_->UnleaseHost(failed.req.Url().host, failed.req.Url().NonEmptyPort());
 
->>>>>>> origin/main
     auto s = std::string{http::StringOfRequestError(failed.error)};
     spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, s);
 

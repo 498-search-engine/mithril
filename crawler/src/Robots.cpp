@@ -2,6 +2,7 @@
 
 #include "Clock.h"
 #include "CrawlerMetrics.h"
+#include "HostRateLimiter.h"
 #include "Util.h"
 #include "core/optional.h"
 #include "http/Request.h"
@@ -14,11 +15,13 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
@@ -386,8 +389,8 @@ const core::Optional<unsigned long>& RobotRules::CrawlDelay() const {
     return crawlDelay_;
 }
 
-RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests, size_t cacheSize)
-    : maxInFlightRequests_(maxInFlightRequests), cache_(cacheSize) {}
+RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests, HostRateLimiter* limiter, size_t cacheSize)
+    : maxInFlightRequests_(maxInFlightRequests), limiter_(limiter), cache_(cacheSize) {}
 
 const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
     auto* entry = cache_.Find(canonicalHost.url);
@@ -413,7 +416,7 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
 }
 
 void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost) {
-    queuedFetches_.push(canonicalHost);
+    queuedFetches_.push_back(canonicalHost);
 }
 
 void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
@@ -468,6 +471,7 @@ long RobotRulesCache::FillFromQueue() {
             break;
         }
     }
+
     InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
     if (anyReady) {
         nextQueueCheck_ = 0;
@@ -478,11 +482,12 @@ long RobotRulesCache::FillFromQueue() {
     return waitDuration;
 }
 
-void RobotRulesCache::ProcessPendingRequests() {
-    FillFromQueue();
+long RobotRulesCache::ProcessPendingRequests() {
+    auto wait = FillFromQueue();
 
     if (executor_.InFlightRequests() == 0) {
-        return;
+        assert(wait > 0 || queuedFetches_.empty());
+        return wait;
     }
 
     executor_.ProcessConnections();
@@ -504,6 +509,8 @@ void RobotRulesCache::ProcessPendingRequests() {
         }
         failed.clear();
     }
+
+    return 0;
 }
 
 void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
