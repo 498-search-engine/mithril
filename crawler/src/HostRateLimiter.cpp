@@ -14,6 +14,9 @@
 
 namespace mithril {
 
+constexpr long RateLimitBucketDurationMs = 60000;
+constexpr size_t RateLimitBucketMax = 60;
+
 namespace {
 
 std::string_view GetBaseHost(std::string_view host) {
@@ -40,14 +43,14 @@ HostRateLimiter::HostRateLimiter(unsigned long defaultDelayMs)
     assert(defaultDelayMs > 0);
 }
 
-long HostRateLimiter::TryLeaseHost(const std::string& host, const std::string& port) {
+long HostRateLimiter::TryLeaseHost(const std::string& host, const std::string& port, unsigned long delayMs) {
     core::LockGuard lock(mu_);
-    return TryLeaseHostImpl(host, port, MonotonicTimeMs());
+    return TryLeaseHostImpl(host, port, MonotonicTimeMs(), delayMs);
 }
 
-long HostRateLimiter::TryLeaseHost(const std::string& host, const std::string& port, long now) {
+long HostRateLimiter::TryLeaseHost(const std::string& host, const std::string& port, long now, unsigned long delayMs) {
     core::LockGuard lock(mu_);
-    return TryLeaseHostImpl(host, port, now);
+    return TryLeaseHostImpl(host, port, now, delayMs);
 }
 
 void HostRateLimiter::UnleaseHost(const std::string& host, const std::string& port) {
@@ -67,11 +70,14 @@ void HostRateLimiter::UnleaseHostImpl(const std::string& host, const std::string
     }
 
     assert(entry->leased);
-    entry->earliest = now + static_cast<long>(entry->delayMs);
+    entry->earliest = now + static_cast<long>(entry->delayAfterUnlease);
     entry->leased = false;
 }
 
-long HostRateLimiter::TryLeaseHostImpl(const std::string& host, const std::string& port, long now) {
+long HostRateLimiter::TryLeaseHostImpl(const std::string& host,
+                                       const std::string& port,
+                                       long now,
+                                       unsigned long delayMs) {
     auto* entry = GetOrInsert(host, port);
     if (entry == nullptr) {
         return 10;
@@ -86,8 +92,15 @@ long HostRateLimiter::TryLeaseHostImpl(const std::string& host, const std::strin
         return entry->earliest - now;
     }
 
-    entry->earliest = now + static_cast<long>(entry->delayMs);
+    auto bucketWait = TryIncrementBucket(*entry, now);
+    if (bucketWait > 0) {
+        return bucketWait;
+    }
+
+    entry->earliest = now + static_cast<long>(defaultDelayMs_);
     entry->leased = true;
+    entry->delayAfterUnlease = delayMs;
+
     return 0;
 }
 
@@ -116,20 +129,13 @@ long HostRateLimiter::TryUseHostImpl(const std::string& host, const std::string&
         return entry->earliest - now;
     }
 
-    entry->earliest = now + static_cast<long>(entry->delayMs);
-    return 0;
-}
-
-void HostRateLimiter::SetHostDelayMs(const std::string& host, const std::string& port, unsigned long delayMs) {
-    core::LockGuard lock(mu_);
-    assert(delayMs > 0);
-
-    auto* entry = GetOrInsert(host, port);
-    if (entry == nullptr || entry == &fallbackEntry_) {
-        return;
+    auto bucketWait = TryIncrementBucket(*entry, now);
+    if (bucketWait > 0) {
+        return bucketWait;
     }
 
-    entry->delayMs = delayMs;
+    entry->earliest = now + static_cast<long>(defaultDelayMs_);
+    return 0;
 }
 
 HostRateLimiter::Entry* HostRateLimiter::GetOrInsert(const std::string& host, const std::string& port) {
@@ -151,7 +157,7 @@ HostRateLimiter::Entry* HostRateLimiter::GetOrInsert(const std::string& host, co
     auto* it = m_.Find(*resolved);
     if (it == nullptr) {
         auto p = m_.Insert({
-            *resolved, Entry{.leased = false, .earliest = 0, .delayMs = defaultDelayMs_}
+            *resolved, Entry{.leased = false, .earliest = 0}
         });
         assert(p.second);
         it = p.first;
@@ -187,6 +193,20 @@ const http::ResolvedAddr* HostRateLimiter::GetOrResolve(const std::string& host,
     assert(inserted.second);
     ready = true;
     return &inserted.first->second;
+}
+
+long HostRateLimiter::TryIncrementBucket(Entry& entry, long now) {
+    if (now - entry.bucketStart >= RateLimitBucketDurationMs) {
+        // reset bucket
+        entry.bucketStart = now;
+        entry.bucketCount = 0;
+    }
+    if (entry.bucketCount >= RateLimitBucketMax) {
+        // exceeded 60 requests in a minute, wait til bucket resets
+        return RateLimitBucketDurationMs - (now - entry.bucketStart);
+    }
+    ++entry.bucketCount;
+    return 0;
 }
 
 }  // namespace mithril

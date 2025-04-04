@@ -5,6 +5,7 @@
 #include "core/mutex.h"
 #include "http/Resolver.h"
 
+#include <cstddef>
 #include <string>
 
 namespace mithril {
@@ -13,8 +14,8 @@ class HostRateLimiter {
 public:
     HostRateLimiter(unsigned long defaultDelayMs);
 
-    long TryLeaseHost(const std::string& host, const std::string& port);
-    long TryLeaseHost(const std::string& host, const std::string& port, long now);
+    long TryLeaseHost(const std::string& host, const std::string& port, unsigned long delayMs);
+    long TryLeaseHost(const std::string& host, const std::string& port, long now, unsigned long delayMs);
 
     void UnleaseHost(const std::string& host, const std::string& port);
     void UnleaseHost(const std::string& host, const std::string& port, long now);
@@ -22,21 +23,24 @@ public:
     long TryUseHost(const std::string& host, const std::string& port);
     long TryUseHost(const std::string& host, const std::string& port, long now);
 
-    void SetHostDelayMs(const std::string& host, const std::string& port, unsigned long delayMs);
-
 private:
     struct Entry {
         bool leased{};
         long earliest{};
-        unsigned long delayMs{};
+        unsigned long delayAfterUnlease{};
+
+        long bucketStart{};
+        size_t bucketCount{};
     };
 
-    long TryLeaseHostImpl(const std::string& host, const std::string& port, long now);
+    long TryLeaseHostImpl(const std::string& host, const std::string& port, long now, unsigned long delayMs);
     long TryUseHostImpl(const std::string& host, const std::string& port, long now);
     void UnleaseHostImpl(const std::string& host, const std::string& port, long now);
 
     Entry* GetOrInsert(const std::string& host, const std::string& port);
     const http::ResolvedAddr* GetOrResolve(const std::string& host, const std::string& port, bool& ready);
+
+    static long TryIncrementBucket(Entry& entry, long now);
 
     mutable core::Mutex mu_;
     unsigned long defaultDelayMs_;

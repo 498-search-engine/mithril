@@ -119,15 +119,15 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
                 auto delay = frontier_->LookUpCrawlDelayNonblocking(record->host, 0);
                 if (delay.HasValue()) {
                     record->waitingDelayLookup = false;
-                    auto clampedDelay = core::clamp(*delay, defaultCrawlDelayMs_, 30UL * 1000UL);
-                    limiter_->SetHostDelayMs(record->host.host, record->host.NonEmptyPort(), clampedDelay);
+                    record->crawlDelayMs = CrawlDelayFromDirective(*delay);
                 } else {
                     // Still waiting
                     continue;
                 }
             }
 
-            auto hostWait = limiter_->TryLeaseHost(record->host.host, record->host.NonEmptyPort(), now);
+            auto hostWait =
+                limiter_->TryLeaseHost(record->host.host, record->host.NonEmptyPort(), now, record->crawlDelayMs);
             if (hostWait != 0) {
                 // Need to wait for host
                 waitDuration = std::min(waitDuration, hostWait);
@@ -198,8 +198,7 @@ void MiddleQueue::PushURLForNewHost(std::string url, const http::CanonicalHost& 
     auto delay = frontier_->LookUpCrawlDelayNonblocking(host, 0);
     if (delay.HasValue()) {
         record->waitingDelayLookup = false;
-        auto clampedDelay = core::clamp(*delay, defaultCrawlDelayMs_, 30UL * 1000UL);
-        limiter_->SetHostDelayMs(host.host, host.NonEmptyPort(), clampedDelay);
+        record->crawlDelayMs = CrawlDelayFromDirective(*delay);
     }
 
     auto it = hosts_.insert({
@@ -280,8 +279,8 @@ bool MiddleQueue::WantURL(std::string_view url) const {
 
 
 unsigned long MiddleQueue::CrawlDelayFromDirective(unsigned long directive) const {
-    // Clamp between default and 60 seconds
-    return std::clamp(directive * 1000L, defaultCrawlDelayMs_, 60UL * 1000UL);
+    // Clamp between default and 30 seconds
+    return core::clamp(directive * 1000UL, defaultCrawlDelayMs_, 30UL * 1000UL);
 }
 
 }  // namespace mithril
