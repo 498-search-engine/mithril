@@ -146,7 +146,7 @@ void HostRateLimiter::SetHostDelayMs(std::string_view host, unsigned long delayM
     auto* it = m_.Find(baseHost);
     if (it == nullptr) {
         auto p = m_.Insert({
-            baseHost, Entry{.leased = false, .earliest = 0, .delayMs = defaultDelayMs_}
+            baseHost, Entry{.leased = false, .earliest = 0, .delayMs = delayMs}
         });
         return;
     } else {
