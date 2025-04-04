@@ -83,8 +83,6 @@ struct CrawlerRankingsStruct {
     bool isHttps;
 };
 
-int32_t GetUrlStaticRank(std::string_view url);
-
 const std::unordered_set<std::string> WhitelistTld = {
     "com",  // Commercial (most trusted and widely used)
     "co",
@@ -193,7 +191,7 @@ const std::unordered_set<std::string> WhitelistDomain = {
  * Gets all relevant ranking info in one pass of the URL string.
  */
 void GetStringStaticRankings(std::string_view url, CrawlerRankingsStruct& ranker);
-
+int32_t GetUrlStaticRank(std::string_view url);
 }  // namespace mithril::ranking
 
 #endif
