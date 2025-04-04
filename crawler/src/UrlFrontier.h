@@ -1,7 +1,6 @@
 #ifndef CRAWLER_URLFRONTIER_H
 #define CRAWLER_URLFRONTIER_H
 
-#include "HostRateLimiter.h"
 #include "PriorityURLQueue.h"
 #include "Robots.h"
 #include "ThreadSync.h"
@@ -22,10 +21,7 @@ namespace mithril {
 
 class UrlFrontier {
 public:
-    UrlFrontier(HostRateLimiter* limiter,
-                const std::string& frontierDirectory,
-                size_t concurrentRobotsRequests,
-                size_t robotsCacheSize);
+    UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests, size_t robotsCacheSize);
 
     /**
      * @brief Initializes notifications on cv instances for ThreadSync.

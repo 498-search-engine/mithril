@@ -1,7 +1,6 @@
 #include "UrlFrontier.h"
 
 #include "CrawlerMetrics.h"
-#include "HostRateLimiter.h"
 #include "Robots.h"
 #include "ThreadSync.h"
 #include "core/locks.h"
@@ -38,12 +37,9 @@ constexpr unsigned int URLHighScoreQueuePercent = 90;  // Take from "high" scori
 
 }  //  namespace
 
-UrlFrontier::UrlFrontier(HostRateLimiter* limiter,
-                         const std::string& frontierDirectory,
-                         size_t concurrentRobotsRequests,
-                         size_t robotsCacheSize)
+UrlFrontier::UrlFrontier(const std::string& frontierDirectory, size_t concurrentRobotsRequests, size_t robotsCacheSize)
     : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
-      robotRulesCache_(concurrentRobotsRequests, limiter, robotsCacheSize) {}
+      robotRulesCache_(concurrentRobotsRequests, robotsCacheSize) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);
@@ -120,13 +116,7 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
         }
 
         size_t before = robotRulesCache_.PendingRequests();
-        auto robotsWait = robotRulesCache_.ProcessPendingRequests();
-        if (robotsWait != 0) {
-            lock.Unlock();
-            spdlog::info("robots sleeping for {}", robotsWait / 2);
-            usleep(robotsWait * 1000L / 2);
-            return;
-        }
+        robotRulesCache_.ProcessPendingRequests();
         if (robotRulesCache_.PendingRequests() >= before) {
             // No requests finished on call to ProcessPendingRequests
             return;
@@ -186,7 +176,7 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
 }
 
 void UrlFrontier::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>& out, bool atLeastOne) {
-    GetURLsFiltered(sync, max, out, [](std::string_view) { return true; }, atLeastOne);
+    GetURLsFiltered(sync, max, out, [](std::string_view) { return true; });
 }
 
 void UrlFrontier::PushURL(std::string u) {

@@ -2,7 +2,6 @@
 
 #include "Clock.h"
 #include "CrawlerMetrics.h"
-#include "HostRateLimiter.h"
 #include "Util.h"
 #include "core/optional.h"
 #include "http/Request.h"
@@ -15,13 +14,11 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <unistd.h>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
@@ -389,8 +386,8 @@ const core::Optional<unsigned long>& RobotRules::CrawlDelay() const {
     return crawlDelay_;
 }
 
-RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests, HostRateLimiter* limiter, size_t cacheSize)
-    : maxInFlightRequests_(maxInFlightRequests), limiter_(limiter), cache_(cacheSize) {}
+RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests, size_t cacheSize)
+    : maxInFlightRequests_(maxInFlightRequests), cache_(cacheSize) {}
 
 const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
     auto* entry = cache_.Find(canonicalHost.url);
@@ -416,7 +413,7 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
 }
 
 void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost) {
-    queuedFetches_.push_back(canonicalHost);
+    queuedFetches_.push(canonicalHost);
 }
 
 void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
@@ -441,36 +438,19 @@ size_t RobotRulesCache::PendingRequests() const {
     return executor_.InFlightRequests() + queuedFetches_.size();
 }
 
-long RobotRulesCache::FillFromQueue() {
-    auto waitDuration = std::numeric_limits<long>::max();
-    auto now = MonotonicTimeMs();
-    bool anyReady = false;
-
-    auto it = queuedFetches_.begin();
-    while (it != queuedFetches_.end() && executor_.InFlightRequests() < maxInFlightRequests_) {
-        auto hostWait = limiter_->TryUseHost(it->host, now);
-        if (hostWait == 0) {
-            Fetch(*it);
-            it = queuedFetches_.erase(it);
-        } else {
-            waitDuration = std::min(waitDuration, hostWait);
-            ++it;
-        }
+void RobotRulesCache::FillFromQueue() {
+    while (!queuedFetches_.empty() && executor_.InFlightRequests() < maxInFlightRequests_) {
+        Fetch(queuedFetches_.front());
+        queuedFetches_.pop();
     }
-
     InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
-    if (anyReady) {
-        return 0;
-    }
-    return waitDuration;
 }
 
-long RobotRulesCache::ProcessPendingRequests() {
-    auto wait = FillFromQueue();
+void RobotRulesCache::ProcessPendingRequests() {
+    FillFromQueue();
 
     if (executor_.InFlightRequests() == 0) {
-        assert(wait > 0 || queuedFetches_.empty());
-        return wait;
+        return;
     }
 
     executor_.ProcessConnections();
@@ -492,8 +472,6 @@ long RobotRulesCache::ProcessPendingRequests() {
         }
         failed.clear();
     }
-
-    return 0;
 }
 
 void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {

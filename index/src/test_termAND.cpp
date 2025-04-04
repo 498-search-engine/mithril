@@ -17,7 +17,7 @@ bool check_phrase_positions(const std::vector<std::unique_ptr<mithril::TermReade
     if (!readers[0]->hasPositions())
         return false;
 
-    std::vector<uint32_t> positions = readers[0]->currentPositions();
+    std::vector<uint16_t> positions = readers[0]->currentPositions();
 
     // Debug output
     std::cout << "Term '" << readers[0]->getTerm() << "' has " << positions.size() << " positions in doc " << doc_id
@@ -37,7 +37,7 @@ bool check_phrase_positions(const std::vector<std::unique_ptr<mithril::TermReade
             }
 
             // Get positions for this term
-            std::vector<uint32_t> term_positions = readers[i]->currentPositions();
+            std::vector<uint16_t> term_positions = readers[i]->currentPositions();
 
             std::cout << "  Term '" << readers[i]->getTerm() << "' has " << term_positions.size()
                       << " positions in doc " << doc_id << std::endl;

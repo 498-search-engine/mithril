@@ -7,17 +7,90 @@
 #include "data/Gzip.h"
 #include "data/Reader.h"
 
+#include <algorithm>
 #include <fcntl.h>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <vector>
 #include <spdlog/spdlog.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
 namespace mithril {
 
-IndexBuilder::IndexBuilder(const std::string& output_dir, size_t num_threads) : output_dir_(output_dir) {
+class MappedFileReader {
+    int fd_ = -1;
+    void* mapped_data_ = MAP_FAILED;
+    size_t size_ = 0;
+
+public:
+    MappedFileReader(const std::string& path) {
+        fd_ = open(path.c_str(), O_RDONLY);
+        if (fd_ == -1) {
+            spdlog::error("MappedFileReader: Failed to open file '{}': {}", path, strerror(errno));
+            throw std::runtime_error("Failed to open file: " + path);
+        }
+
+        struct stat sb;
+        if (fstat(fd_, &sb) == -1) {
+            int err = errno;
+            close(fd_);
+            spdlog::error("MappedFileReader: Failed to fstat file '{}': {}", path, strerror(err));
+            throw std::runtime_error("Failed to get file size: " + path);
+        }
+        size_ = sb.st_size;
+
+        if (size_ > 0) {
+            mapped_data_ = mmap(nullptr, size_, PROT_READ, MAP_PRIVATE, fd_, 0);
+            if (mapped_data_ == MAP_FAILED) {
+                int err = errno;
+                close(fd_);
+                spdlog::error("MappedFileReader: Failed to mmap file '{}': {}", path, strerror(err));
+                throw std::runtime_error("Failed to memory map file: " + path);
+            }
+        } else {
+            mapped_data_ = nullptr;
+            // Don't close fd_ here, destructor will handle it. mmap wasn't called.
+        }
+    }
+
+    ~MappedFileReader() {
+        if (mapped_data_ != MAP_FAILED && mapped_data_ != nullptr) {
+            if (munmap(mapped_data_, size_) == -1) {
+                spdlog::error("MappedFileReader: Failed to munmap: {}", strerror(errno));
+                // Continue to close fd
+            }
+        }
+        if (fd_ != -1) {
+            if (close(fd_) == -1) {
+                spdlog::error("MappedFileReader: Failed to close fd: {}", strerror(errno));
+            }
+        }
+    }
+
+    // Disable copy/move semantics
+    MappedFileReader(const MappedFileReader&) = delete;
+    MappedFileReader& operator=(const MappedFileReader&) = delete;
+    MappedFileReader(MappedFileReader&&) = delete;
+    MappedFileReader& operator=(MappedFileReader&&) = delete;
+
+    const char* data() const { return static_cast<const char*>(mapped_data_); }
+    size_t size() const { return size_; }
+    bool isValid() const { return fd_ != -1 && (size_ == 0 || mapped_data_ != MAP_FAILED); }
+};
+
+
+IndexBuilder::IndexBuilder(const std::string& output_dir, size_t num_threads, size_t max_terms_per_block)
+    : output_dir_(output_dir),
+      max_terms_per_block_(max_terms_per_block == 0 ? DEFAULT_MAX_TERMS_PER_BLOCK : max_terms_per_block) {
+    spdlog::info("Initializing IndexBuilder: Output='{}', Threads={}, MaxTermsPerBlock={}",
+                 output_dir_,
+                 num_threads,
+                 max_terms_per_block_);
     std::filesystem::create_directories(output_dir);
     std::filesystem::create_directories(output_dir + "/blocks");
     for (size_t i = 0; i < num_threads; ++i) {
@@ -32,7 +105,9 @@ IndexBuilder::~IndexBuilder() {
     }
     condition_.notify_all();
     for (std::thread& worker : workers_) {
-        worker.join();
+        if (worker.joinable()) {
+            worker.join();
+        }
     }
 }
 
@@ -48,230 +123,241 @@ void IndexBuilder::worker_thread() {
             task = std::move(tasks_.front());
             tasks_.pop();
         }
-        task();
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            active_tasks_--;
+
+        try {
+            task();
+        } catch (const std::exception& e) {
+            spdlog::error("Exception caught in worker thread task: {}", e.what());
+        } catch (...) {
+            spdlog::error("Unknown exception caught in worker thread task.");
         }
-        condition_.notify_all();
+
+        active_tasks_--;
+        condition_.notify_all();  // Notify finalize() thread potentially waiting
     }
 }
 
-bool IndexBuilder::parse_link_line(const std::string& line, std::string& url, std::string& title) {
-    size_t paren_start = line.find('(');
-    size_t paren_end = line.find(')');
-    if (paren_start == std::string::npos || paren_end == std::string::npos) {
-        return false;
-    }
-
-    url = line.substr(0, paren_start - 1);
-    title = line.substr(paren_start + 2, paren_end - paren_start - 3);
-    return true;
+bool IndexBuilder::should_flush() {
+    // Flush based on number of unique terms added to the block's dictionary instead of previous mem size estimate
+    // approach flush_block will re-verify state under lock.
+    return current_block_term_count_ >= max_terms_per_block_;
 }
 
-std::vector<std::string> IndexBuilder::read_words(const std::string& path) {
-    std::vector<std::string> words;
-    std::ifstream file(path);
-    std::string word;
-    while (std::getline(file, word)) {
-        std::string normalized = TokenNormalizer::normalize(word);
+namespace {  // anon namespace for helpers
+
+std::vector<std::string> tokenizeUrl(std::string_view url) {
+    std::vector<std::string> tokens;
+    const char* delims = "/.-_?&=";
+    size_t start = 0;
+    size_t end = 0;
+
+    // Trim leading delimiters often found in paths like "/path/"
+    start = url.find_first_not_of(delims);
+    if (start == std::string_view::npos) {
+        return tokens;  // URL consists only of delimiters or is empty
+    }
+
+    while (start < url.length()) {
+        end = url.find_first_of(delims, start);
+
+        // If delimiter found, extract token before it
+        if (end != std::string_view::npos) {
+            if (end > start) {
+                tokens.emplace_back(url.substr(start, end - start));
+            }
+            // Find next start position after the delimiter sequence
+            start = url.find_first_not_of(delims, end + 1);
+            if (start == std::string_view::npos)
+                break;  // No more non-delimiter characters
+        }
+        // If no more delimiters, extract the rest of the string as the last token
+        else {
+            tokens.emplace_back(url.substr(start));
+            break;  // End of URL
+        }
+    }
+    return tokens;
+}
+
+void processField(const std::vector<std::string>& words,
+                  FieldType field,
+                  std::unordered_map<std::string, uint32_t>& term_freqs,
+                  std::unordered_map<std::string, FieldPositions>& term_positions,
+                  size_t& total_term_count) {
+    uint16_t pos = 0;
+    size_t field_idx = static_cast<size_t>(field);
+    bool tracking_positions = true;
+
+    for (const auto& word : words) {
+        std::string normalized = TokenNormalizer::normalize(std::string_view(word), field);
         if (!normalized.empty()) {
-            words.push_back(normalized);
+            term_freqs[normalized]++;
+            total_term_count++;
+
+            if (tracking_positions) {
+                if (pos < UINT16_MAX) {
+                    auto& field_pos = term_positions[normalized];
+                    field_pos.positions[field_idx].push_back(pos++);
+                    field_pos.field_flags |= fieldTypeToFlag(field);
+                } else {
+                    tracking_positions = false;
+                    // spdlog::warn("Field {} position overflow for doc, stopping position tracking for this field",
+                    //              static_cast<int>(field));
+                }
+            }
         }
     }
-    return words;
 }
 
-size_t IndexBuilder::estimate_memory_usage(const Document& doc) {
-    static constexpr size_t AVG_BYTES_PER_WORD = 20;  // Includes all overhead
-    size_t total_words = doc.title.size() + doc.words.size();
-    return total_words * AVG_BYTES_PER_WORD;
-}
-
-bool IndexBuilder::should_flush(const Document& doc) {
-    return (current_block_size_ + estimate_memory_usage(doc)) >= MAX_BLOCK_SIZE;
-}
-
-void IndexBuilder::add_terms(data::docid_t doc_id, const std::unordered_map<std::string, uint32_t>& term_freqs) {
-    for (const auto& [term, freq] : term_freqs) {
-        auto& postings = dictionary_.get_or_create(term);
-        postings.add({doc_id, freq});
-        current_block_size_ += sizeof(Posting) + term.size();
-    }
-}
-
-std::string IndexBuilder::StringVecToString(const std::vector<std::string>& vec) {
-    std::string result;
-    for (size_t i = 0; i < vec.size(); ++i) {
-        result += vec[i];
-        if (i < vec.size() - 1) {
-            result += " ";
-        }
-    }
-    return result;
-}
+}  // namespace
 
 void IndexBuilder::process_document(Document doc) {
-    // Check if we need to flush the current block
-    if (should_flush(doc)) {
+    if (should_flush()) {
         auto future = flush_block();
-        future.wait();
+        if (future.valid()) {
+            future.wait();
+        }
     }
 
     auto task = [this, doc = std::move(doc)]() {
-        const size_t estimated_unique_terms = doc.words.size() / 4;  // ~25% unique term ratio
+        const size_t estimated_unique_terms =
+            doc.words.size() / 4 + doc.title.size() + doc.description.size() + doc.url.size() / 5 + 10;
         std::unordered_map<std::string, uint32_t> term_freqs;
+        std::unordered_map<std::string, FieldPositions> term_positions;
         term_freqs.reserve(estimated_unique_terms);
-        std::unordered_map<std::string, std::vector<uint32_t>> term_positions;
         term_positions.reserve(estimated_unique_terms);
 
-        // Global position counter across all fields
-        uint32_t position = 0;
-        size_t total_term_count = 0;  // For calculating frequency ratios
+        size_t total_term_count = 0;
 
-        // Process URL - tokenize and normalize
-        std::string url_copy = doc.url;
-        // Replace common delimiters with spaces for tokenization
-        std::replace(url_copy.begin(), url_copy.end(), '/', ' ');
-        std::replace(url_copy.begin(), url_copy.end(), '.', ' ');
-        std::replace(url_copy.begin(), url_copy.end(), '-', ' ');
-        std::replace(url_copy.begin(), url_copy.end(), '_', ' ');
-        std::replace(url_copy.begin(), url_copy.end(), '?', ' ');
-        std::replace(url_copy.begin(), url_copy.end(), '&', ' ');
-        std::replace(url_copy.begin(), url_copy.end(), '=', ' ');
+        processField(tokenizeUrl(doc.url), FieldType::URL, term_freqs, term_positions, total_term_count);
+        processField(doc.title, FieldType::TITLE, term_freqs, term_positions, total_term_count);
+        processField(doc.description, FieldType::DESC, term_freqs, term_positions, total_term_count);
+        processField(doc.words, FieldType::BODY, term_freqs, term_positions, total_term_count);
 
-        std::istringstream url_stream(url_copy);
-        std::string url_part;
-        while (url_stream >> url_part) {
-            std::string normalized = TokenNormalizer::normalize(url_part, FieldType::URL);
-            if (!normalized.empty()) {
-                term_freqs[normalized]++;
-                term_positions[normalized].push_back(position++);
-                total_term_count++;
-            }
-        }
-
-        // Process title words with TITLE field type
-        for (const auto& word : doc.title) {
-            std::string normalized = TokenNormalizer::normalize(word, FieldType::TITLE);
-            if (!normalized.empty()) {
-                term_freqs[normalized]++;
-                term_positions[normalized].push_back(position++);
-                total_term_count++;
-            }
-        }
-
-        // Process description words with DESC field type
-        for (const auto& word : doc.description) {
-            std::string normalized = TokenNormalizer::normalize(word, FieldType::DESC);
-            if (!normalized.empty()) {
-                term_freqs[normalized]++;
-                term_positions[normalized].push_back(position++);
-            }
-        }
-
-        // Process body words with default BODY field type
-        for (const auto& word : doc.words) {
-            std::string normalized = TokenNormalizer::normalize(word, FieldType::BODY);
-            if (!normalized.empty()) {
-                term_freqs[normalized]++;
-                term_positions[normalized].push_back(position++);
-                total_term_count++;
-            }
-        }
-
-        // Assign into document map
         {
             std::unique_lock<std::mutex> lock(document_mutex_);
             url_to_id_[doc.url] = doc.id;
             document_metadata_.push_back({doc.id, doc.url, doc.title});
         }
 
-        // Prepare batch for position index with selective indexing
-        std::vector<std::pair<std::string, std::vector<uint32_t>>> position_batch;
-        position_batch.reserve(term_positions.size() / 2);  // maybe ~50% of terms will qualify
-
-        for (const auto& [term, freq] : term_freqs) {
-            if (PositionIndex::shouldStorePositions(term, freq, total_term_count)) {
-                auto it = term_positions.find(term);
-                if (it != term_positions.end()) {
+        // position indexing batching
+        std::vector<std::pair<std::string, FieldPositions>> position_batch;
+        position_batch.reserve(term_positions.size());
+        for (auto it = term_positions.begin(); it != term_positions.end(); /* no increment */) {
+            const std::string& term = it->first;
+            try {
+                uint32_t freq = term_freqs.at(term);
+                if (PositionIndex::shouldStorePositions(term, freq, total_term_count)) {
                     position_batch.emplace_back(term, std::move(it->second));
                 }
+                it = term_positions.erase(it);
+            } catch (const std::out_of_range& oor) {
+                spdlog::critical(
+                    "INVARIANT VIOLATION: Term '{}' in term_positions but not term_freqs for doc {}. OOR: {}",
+                    term,
+                    doc.id,
+                    oor.what());
+                it = term_positions.erase(it);
             }
         }
 
-        // Write positions to position index in a single batch
         if (!position_batch.empty()) {
-            PositionIndex::addPositionsBatch(output_dir_, doc.id, position_batch);
+            PositionIndex::addPositionsBatch(output_dir_, doc.id, std::move(position_batch));  // Move the batch
         }
 
-        // Add terms to the main inverted index with freqs
         {
             std::lock_guard<std::mutex> lock(block_mutex_);
             for (const auto& [term, freq] : term_freqs) {
                 auto& postings = dictionary_.get_or_create(term);
+                bool term_was_new_to_block = postings.empty();
                 postings.add(doc.id, freq);
-                current_block_size_ += sizeof(Posting);
+                if (term_was_new_to_block) {
+                    current_block_term_count_++;
+                }
             }
         }
-    };
+    };  // End of lambda task
 
-    // Queue the task
+    // Enqueue the processing task
     {
         std::unique_lock<std::mutex> lock(queue_mutex_);
-        tasks_.emplace(task);
+        tasks_.emplace(std::move(task));
     }
     condition_.notify_one();
 }
 
+
 std::string IndexBuilder::join_title(const std::vector<std::string>& title_words) {
-    std::string result;
-    for (size_t i = 0; i < title_words.size(); ++i) {
+    if (title_words.empty())
+        return "";
+    std::string result = title_words[0];
+    for (size_t i = 1; i < title_words.size(); ++i) {
+        result += " ";
         result += title_words[i];
-        if (i < title_words.size() - 1) {
-            result += " ";
-        }
     }
     return result;
 }
 
 void IndexBuilder::add_document(const std::string& doc_path) {
     Document doc;
-    {
+    try {
         data::FileReader file{doc_path.c_str()};
         data::GzipReader gzip{file};
         if (!data::DeserializeValue(doc, gzip)) {
-            throw std::runtime_error("Failed to deserialize document: " + doc_path);
+            spdlog::error("Failed to deserialize document: {}", doc_path);
+            return;
         }
+    } catch (const std::exception& e) {
+        spdlog::error("Error reading document {}: {}", doc_path, e.what());
+        return;
     }
 
     process_document(std::move(doc));
 }
 
 std::future<void> IndexBuilder::flush_block() {
-    if (current_block_size_ == 0) {
-        return std::async(std::launch::deferred, []() {});
+    if (current_block_term_count_ == 0) {
+        return std::future<void>();
     }
 
-    // Get sorted terms and their postings
     std::vector<std::tuple<std::string, std::vector<Posting>>> sorted_terms;
-    dictionary_.iterate_terms([&](const std::string& term, const PostingList& postings) {
-        if (!postings.empty())
-            sorted_terms.emplace_back(term, postings.postings());
-    });
+    sorted_terms.reserve(current_block_term_count_);
 
-    if (sorted_terms.empty()) {
-        return std::async(std::launch::deferred, []() {});
+    bool dictionary_was_empty = false;
+    {
+        std::lock_guard<std::mutex> lock(block_mutex_);
+        if (current_block_term_count_ == 0) {
+            dictionary_was_empty = true;
+        } else {
+            dictionary_.iterate_terms([&](const std::string& term, const PostingList& postings) {
+                if (!postings.empty()) {
+                    sorted_terms.emplace_back(term, postings.postings());
+                }
+            });
+
+            dictionary_.clear_postings();
+            current_block_term_count_ = 0;
+        }
     }
 
-    // Reset block state
-    current_block_size_ = 0;
-    dictionary_.clear_postings();
+    // If dictionary was actually empty when lock was acquired, or no terms with postings found
+    if (dictionary_was_empty || sorted_terms.empty()) {
+        // Reset block count just in case if we thought we were flushing but weren't
+        // increment block_count_ only when successfully launching the async task
+        return std::future<void>();
+    }
 
-    // Write block asynchronously
+    // Prepare path and launch async write task
     std::string block_path = this->block_path(block_count_++);
+
     return std::async(std::launch::async, [sorted_terms = std::move(sorted_terms), block_path]() {
-        std::ofstream out(block_path, std::ios::binary);
+        // Use ofstream for RAII file handling
+        std::ofstream out(block_path, std::ios::binary | std::ios::trunc);
+        if (!out) {
+            spdlog::error("Failed to open block file for writing: {}", block_path);
+            return;
+        }
+
         uint32_t num_terms = sorted_terms.size();
         out.write(reinterpret_cast<const char*>(&num_terms), sizeof(num_terms));
 
@@ -285,11 +371,10 @@ std::future<void> IndexBuilder::flush_block() {
 
             // Calculate and write sync points
             std::vector<SyncPoint> sync_points;
+            sync_points.reserve(postings_size / PostingList::SYNC_INTERVAL + 1);
             for (uint32_t i = 0; i < postings.size(); i += PostingList::SYNC_INTERVAL) {
-                if (i < postings.size()) {
-                    SyncPoint sp{postings[i].doc_id, i};
-                    sync_points.push_back(sp);
-                }
+                SyncPoint sp{postings[i].doc_id, i};
+                sync_points.push_back(sp);
             }
 
             uint32_t sync_points_size = sync_points.size();
@@ -299,25 +384,28 @@ std::future<void> IndexBuilder::flush_block() {
             }
 
             // Write the actual postings
-            out.write(reinterpret_cast<const char*>(postings.data()), postings_size * sizeof(Posting));
+            if (postings_size > 0) {
+                out.write(reinterpret_cast<const char*>(postings.data()), postings_size * sizeof(Posting));
+            }
         }
+        // ofstream destructor handles closing
     });
 }
 
-std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& block_paths,
-                                             size_t start_idx,
-                                             size_t end_idx,
-                                             bool is_final_output) {
+std::string IndexBuilder::merge_block_subset(
+    const std::vector<std::string>& block_paths, size_t start_idx, size_t end_idx, int tier_num, bool is_final_output) {
     std::string output_path;
     if (is_final_output) {
         output_path = output_dir_ + "/final_index.data";
     } else {
-        output_path =
-            output_dir_ + "/blocks/intermediate_" + std::to_string(start_idx) + "_" + std::to_string(end_idx) + ".data";
+        output_path = output_dir_ + "/blocks/intermediate_t" + std::to_string(tier_num) + "_" +
+                      std::to_string(start_idx) + "_" + std::to_string(end_idx) + ".data";
     }
 
-    std::ofstream out(output_path, std::ios::binary);
+    // Use ofstream for RAII
+    std::ofstream out(output_path, std::ios::binary | std::ios::trunc);
     if (!out) {
+        spdlog::error("Failed to create output file: {}", output_path);
         throw std::runtime_error("Failed to create output file: " + output_path);
     }
 
@@ -325,7 +413,13 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
     out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
 
     using BlockReaderPtr = std::unique_ptr<BlockReader>;
-    auto cmp = [](const BlockReaderPtr& a, const BlockReaderPtr& b) { return a->current_term > b->current_term; };
+    auto cmp = [](const BlockReaderPtr& a, const BlockReaderPtr& b) {
+        if (!a)
+            return false;
+        if (!b)
+            return true;
+        return a->current_term > b->current_term;
+    };
     std::priority_queue<BlockReaderPtr, std::vector<BlockReaderPtr>, decltype(cmp)> pq(cmp);
 
     // Open only the subset of blocks
@@ -334,38 +428,43 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
             auto reader = std::make_unique<BlockReader>(block_paths[i]);
             if (reader->has_next) {
                 pq.push(std::move(reader));
+            } else {
+                spdlog::warn("Block reader for {} reported no data upon opening.", block_paths[i]);
+                std::error_code ec;
+                std::filesystem::remove(block_paths[i], ec);
+                if (ec)
+                    spdlog::warn("Failed to remove empty block {}: {}", block_paths[i], ec.message());
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error opening block " << block_paths[i] << ": " << e.what() << "\n";
+            spdlog::error("Error opening block {}: {}", block_paths[i], e.what());
         }
     }
 
-    // Merge blocks using the same logic as merge_blocks
+    std::vector<Posting> merged_postings;
     while (!pq.empty()) {
         std::string current_term = pq.top()->current_term;
-        std::vector<Posting> merged_postings;
+        merged_postings.clear();
 
         // Merge all postings for the current term
         while (!pq.empty() && pq.top()->current_term == current_term) {
             BlockReaderPtr reader = std::move(const_cast<BlockReaderPtr&>(pq.top()));
             pq.pop();
 
-            // Simply add the postings
-            for (auto& posting : reader->current_postings) {
-                merged_postings.push_back(posting);
-            }
-
+            // Efficiently move or append postings
+            merged_postings.insert(merged_postings.end(),
+                                   std::make_move_iterator(reader->current_postings.begin()),
+                                   std::make_move_iterator(reader->current_postings.end()));
+            reader->current_postings.clear();
             try {
                 reader->read_next();
                 if (reader->has_next) {
                     pq.push(std::move(reader));
                 }
             } catch (const std::exception& e) {
-                std::cerr << "Error reading block: " << e.what() << "\n";
+                spdlog::error("Error reading from block during merge for term '{}': {}", current_term, e.what());
             }
         }
 
-        // Sort merged postings by doc_id
         std::sort(merged_postings.begin(), merged_postings.end(), [](const Posting& a, const Posting& b) {
             return a.doc_id < b.doc_id;
         });
@@ -381,8 +480,9 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
 
         // Calculate and write sync points for postings
         std::vector<SyncPoint> sync_points;
-        for (uint32_t i = 0; i < postings_size; i += PostingList::SYNC_INTERVAL) {
-            if (i < postings_size) {
+        if (postings_size > 0) {
+            sync_points.reserve(postings_size / PostingList::SYNC_INTERVAL + 1);
+            for (uint32_t i = 0; i < postings_size; i += PostingList::SYNC_INTERVAL) {
                 SyncPoint sp{merged_postings[i].doc_id, i};
                 sync_points.push_back(sp);
             }
@@ -394,22 +494,25 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
             out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(SyncPoint));
         }
 
-        if (is_final_output) {
-            // Use VByte encoding for doc_id deltas and frequencies (final format)
-            uint32_t last_doc_id = 0;
-            std::vector<uint32_t> doc_id_deltas;
-            std::vector<uint32_t> freqs;
+        if (!merged_postings.empty()) {
+            if (is_final_output) {
+                // Use VByte encoding for doc_id deltas and frequencies (final format)
+                uint32_t last_doc_id = 0;
+                std::vector<uint32_t> doc_id_deltas;
+                std::vector<uint32_t> freqs;
+                doc_id_deltas.reserve(postings_size);
+                freqs.reserve(postings_size);
 
-            for (const auto& posting : merged_postings) {
-                doc_id_deltas.push_back(posting.doc_id - last_doc_id);
-                freqs.push_back(posting.freq);
-                last_doc_id = posting.doc_id;
+                for (const auto& posting : merged_postings) {
+                    doc_id_deltas.push_back(posting.doc_id - last_doc_id);
+                    freqs.push_back(posting.freq);
+                    last_doc_id = posting.doc_id;
+                }
+                VByteCodec::encodeBatch(doc_id_deltas, out);
+                VByteCodec::encodeBatch(freqs, out);
+            } else {
+                out.write(reinterpret_cast<const char*>(merged_postings.data()), postings_size * sizeof(Posting));
             }
-            VByteCodec::encodeBatch(doc_id_deltas, out);
-            VByteCodec::encodeBatch(freqs, out);
-        } else {
-            // Use raw Posting structs for intermediate blocks
-            out.write(reinterpret_cast<const char*>(merged_postings.data()), postings_size * sizeof(Posting));
         }
 
         total_terms++;
@@ -418,26 +521,32 @@ std::string IndexBuilder::merge_block_subset(const std::vector<std::string>& blo
     // Update total terms count at the beginning of the file
     out.seekp(0);
     out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
+    out.close();
 
-    // Remove the merged blocks to save space
     for (size_t i = start_idx; i < end_idx && i < block_paths.size(); i++) {
-        std::filesystem::remove(block_paths[i]);
+        std::error_code ec;
+        std::filesystem::remove(block_paths[i], ec);
+        if (ec) {
+            spdlog::warn("Failed to remove intermediate block {}: {}", block_paths[i], ec.message());
+        }
     }
 
     return output_path;
 }
 
 void IndexBuilder::merge_blocks_tiered() {
-    if (block_count_ <= 1) {
-        if (block_count_ == 1) {
-            spdlog::info("Single block detected, processing to create final index");
-            std::vector<std::string> single_block = {block_path(0)};
-            merge_block_subset(single_block, 0, 1, true);
+    if (block_count_ <= 0) {
+        spdlog::info("No blocks generated, skipping merge.");
+        std::ofstream out(output_dir_ + "/final_index.data", std::ios::binary | std::ios::trunc);
+        uint32_t zero = 0;
+        if (out) {
+            out.write(reinterpret_cast<char*>(&zero), sizeof(zero));
         }
         return;
     }
 
     std::vector<std::string> current_tier;
+    current_tier.reserve(block_count_);
     for (int i = 0; i < block_count_; ++i) {
         current_tier.push_back(block_path(i));
     }
@@ -445,225 +554,339 @@ void IndexBuilder::merge_blocks_tiered() {
     int tier_number = 0;
     while (current_tier.size() > 1) {
         tier_number++;
-        spdlog::info(
-            "Processing tier {}: merging {} blocks with factor {}", tier_number, current_tier.size(), MERGE_FACTOR);
+        spdlog::info("Processing merge tier {}: merging {} blocks with factor {}",
+                     tier_number,
+                     current_tier.size(),
+                     MERGE_FACTOR);
 
         std::vector<std::string> next_tier;
+        const size_t num_groups = (current_tier.size() + MERGE_FACTOR - 1) / MERGE_FACTOR;
+        next_tier.reserve(num_groups);
+
         for (size_t i = 0; i < current_tier.size(); i += MERGE_FACTOR) {
-            size_t end_idx = std::min(i + MERGE_FACTOR, current_tier.size());
-            spdlog::debug("Merging blocks {}-{} of {}", i, end_idx - 1, current_tier.size());
-            std::string merged_block = merge_block_subset(current_tier, i, end_idx, false);
-            next_tier.push_back(merged_block);
+            const size_t end_idx = std::min(i + MERGE_FACTOR, current_tier.size());
+            std::string merged_block = merge_block_subset(current_tier,
+                                                          i,
+                                                          end_idx,
+                                                          tier_number,
+                                                          /*is_final_output=*/false);
+            next_tier.emplace_back(std::move(merged_block));
         }
+
         current_tier = std::move(next_tier);
         spdlog::info("Tier {} complete, produced {} blocks", tier_number, current_tier.size());
     }
 
     if (current_tier.size() == 1) {
-        spdlog::info("Creating final index from last block");
-        merge_block_subset(current_tier, 0, 1, true);
+        spdlog::info("Finalizing index format...");
+        merge_block_subset(current_tier,
+                           0,
+                           1,
+                           tier_number + 1,  // Final tier number
+                           /*is_final_output=*/true);
     }
 }
 
 void IndexBuilder::save_document_map() {
-    std::ofstream out(output_dir_ + "/document_map.data", std::ios::binary);
-
-    uint32_t num_docs = document_metadata_.size();
-    out.write(reinterpret_cast<const char*>(&num_docs), sizeof(num_docs));
-
-    for (const auto& meta : document_metadata_) {
-        out.write(reinterpret_cast<const char*>(&meta.id), sizeof(meta.id));
-
-        uint32_t url_len = meta.url.size();
-        out.write(reinterpret_cast<const char*>(&url_len), sizeof(url_len));
-        out.write(meta.url.c_str(), url_len);
-
-        std::string joined_title;
-        for (size_t i = 0; i < meta.title.size(); ++i) {
-            joined_title += meta.title[i];
-            if (i < meta.title.size() - 1)
-                joined_title += " ";
-        }
-
-        uint32_t title_len = joined_title.size();
-        out.write(reinterpret_cast<const char*>(&title_len), sizeof(title_len));
-        out.write(joined_title.c_str(), title_len);
+    std::string map_path = output_dir_ + "/document_map.data";
+    std::ofstream out(map_path, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        spdlog::error("Failed to open document map file for writing: {}", map_path);
+        return;
     }
+
+    uint32_t num_docs = 0;
+    {
+        std::lock_guard<std::mutex> lock(document_mutex_);
+        num_docs = document_metadata_.size();
+        out.write(reinterpret_cast<const char*>(&num_docs), sizeof(num_docs));
+
+        for (const auto& meta : document_metadata_) {
+            out.write(reinterpret_cast<const char*>(&meta.id), sizeof(meta.id));
+
+            uint32_t url_len = meta.url.size();
+            out.write(reinterpret_cast<const char*>(&url_len), sizeof(url_len));
+            out.write(meta.url.c_str(), url_len);
+
+            std::string joined_title = join_title(meta.title);
+
+            uint32_t title_len = joined_title.size();
+            out.write(reinterpret_cast<const char*>(&title_len), sizeof(title_len));
+            out.write(joined_title.c_str(), title_len);
+        }
+    }
+    spdlog::info("Saved document map with {} entries to {}", num_docs, map_path);
 }
 
 void IndexBuilder::create_term_dictionary() {
     std::string index_path = output_dir_ + "/final_index.data";
     std::string dict_path = output_dir_ + "/term_dictionary.data";
 
-    int fd = open(index_path.c_str(), O_RDONLY);
-    if (fd == -1) {
-        std::cerr << "Failed to open index file for dictionary creation" << std::endl;
+    // Use RAII for mmap'ed file access
+    std::unique_ptr<MappedFileReader> index_reader;
+    try {
+        index_reader = std::make_unique<MappedFileReader>(index_path);
+    } catch (const std::exception& e) {
         return;
     }
 
-    struct stat sb;
-    if (fstat(fd, &sb) == -1) {
-        std::cerr << "Failed to get index file size" << std::endl;
-        close(fd);
+    if (!index_reader->isValid() || index_reader->size() < sizeof(uint32_t)) {
+        spdlog::error("Index file '{}' is invalid or too small (size: {}) for dictionary creation.",
+                      index_path,
+                      index_reader->size());
         return;
     }
+    const char* data = index_reader->data();
+    size_t index_size = index_reader->size();
 
-    const char* data = static_cast<const char*>(mmap(nullptr, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
-    if (data == MAP_FAILED) {
-        std::cerr << "Failed to memory map index file" << std::endl;
-        close(fd);
+
+    // Use ofstream for RAII dictionary file writing
+    std::ofstream dict_stream(dict_path, std::ios::binary | std::ios::trunc);
+    if (!dict_stream) {
+        spdlog::error("Failed to create dictionary file: {}", dict_path);
         return;
     }
-
-    FILE* dict_file = fopen(dict_path.c_str(), "wb");
-    if (!dict_file) {
-        std::cerr << "Failed to create dictionary file" << std::endl;
-        munmap(const_cast<char*>(data), sb.st_size);
-        close(fd);
-        return;
-    }
-
-    std::vector<char> write_buffer(16 * 1024 * 1024);
-    setvbuf(dict_file, write_buffer.data(), _IOFBF, write_buffer.size());
 
     const char* ptr = data;
-    uint32_t term_count = *reinterpret_cast<const uint32_t*>(ptr);
-    ptr += sizeof(uint32_t);
+    const char* end_ptr = data + index_size;
 
-    std::cout << "Creating dictionary for " << term_count << " terms" << std::endl;
+    uint32_t term_count = 0;
+    if (ptr + sizeof(uint32_t) <= end_ptr) {
+        term_count = *reinterpret_cast<const uint32_t*>(ptr);
+        ptr += sizeof(uint32_t);
+    } else {
+        spdlog::error("Index file too small to read term count.");
+        return;
+    }
+
+
+    spdlog::info("Creating dictionary for {} terms from index file size {}", term_count, index_size);
 
     std::vector<std::pair<std::string, uint64_t>> term_entries;
-    term_entries.reserve(term_count);
+    if (term_count > 0) {
+        try {
+            term_entries.reserve(term_count);
+        } catch (const std::bad_alloc& e) {
+            spdlog::error("Failed to reserve memory for {} term entries: {}", term_count, e.what());
+            return;
+        }
+    }
 
-    const char* term_start_ptr = ptr;
+    const char* term_data_start_ptr = ptr;
+    uint64_t current_entry_start_offset = 0;
+
     for (uint32_t i = 0; i < term_count; i++) {
-        // Calculate relative offset from start of terms section
-        uint64_t term_offset = ptr - term_start_ptr;
+        const char* current_read_ptr = term_data_start_ptr + current_entry_start_offset;
+        if (current_read_ptr + sizeof(uint32_t) > end_ptr) {
+            spdlog::error("Index file ended unexpectedly while reading term length at term index {}", i);
+            return;
+        }
+        uint32_t term_len = *reinterpret_cast<const uint32_t*>(current_read_ptr);
+        current_read_ptr += sizeof(uint32_t);
+        if (current_read_ptr + term_len > end_ptr) {
+            spdlog::error(
+                "Index file ended unexpectedly while reading term string (len {}) at term index {}", term_len, i);
+            return;
+        }
+        std::string term(current_read_ptr, term_len);
+        current_read_ptr += term_len;
 
-        // Read term length and term
-        uint32_t term_len = *reinterpret_cast<const uint32_t*>(ptr);
-        ptr += sizeof(term_len);
+        if (current_read_ptr + sizeof(uint32_t) > end_ptr) {
+            spdlog::error(
+                "Index file ended unexpectedly while reading postings size for term '{}' at term index {}", term, i);
+            return;
+        }
+        uint32_t postings_size = *reinterpret_cast<const uint32_t*>(current_read_ptr);
+        current_read_ptr += sizeof(uint32_t);
 
-        // Create actual string (needed for sorting and compression)
-        std::string term(ptr, term_len);
-        ptr += term_len;
+        if (current_read_ptr + sizeof(uint32_t) > end_ptr) {
+            spdlog::error(
+                "Index file ended unexpectedly while reading sync points size for term '{}' at term index {}", term, i);
+            return;
+        }
+        uint32_t sync_points_size = *reinterpret_cast<const uint32_t*>(current_read_ptr);
+        current_read_ptr += sizeof(uint32_t);
 
-        // Read postings info (needed for skipping to next term)
-        uint32_t postings_size = *reinterpret_cast<const uint32_t*>(ptr);
-        ptr += sizeof(uint32_t);
-
-        // Skip sync points size and data
-        uint32_t sync_points_size = *reinterpret_cast<const uint32_t*>(ptr);
-        ptr += sizeof(uint32_t);
-        ptr += sync_points_size * sizeof(SyncPoint);
+        size_t sync_points_bytes = static_cast<size_t>(sync_points_size) * sizeof(SyncPoint);
+        if (current_read_ptr + sync_points_bytes > end_ptr) {
+            spdlog::error("Index file ended unexpectedly while reading sync points data ({} bytes) for term '{}' at "
+                          "term index {}",
+                          sync_points_bytes,
+                          term,
+                          i);
+            return;
+        }
+        current_read_ptr += sync_points_bytes;  // Skip sync points data
 
         // Skip VByte-encoded postings
+        const char* postings_start_ptr = current_read_ptr;
         for (uint32_t j = 0; j < postings_size; j++) {
             // Skip doc_id delta
-            while (*ptr & 0x80)
-                ptr++;
-            ptr++;
+            while (current_read_ptr < end_ptr && (*current_read_ptr & 0x80))
+                current_read_ptr++;
+            if (current_read_ptr >= end_ptr) {
+                spdlog::error("Index file ended unexpectedly skipping docID delta (term {}, posting {})", i, j);
+                return;
+            }
+            current_read_ptr++;
 
             // Skip frequency
-            while (*ptr & 0x80)
-                ptr++;
-            ptr++;
+            while (current_read_ptr < end_ptr && (*current_read_ptr & 0x80))
+                current_read_ptr++;
+            if (current_read_ptr >= end_ptr) {
+                spdlog::error("Index file ended unexpectedly skipping freq (term {}, posting {})", i, j);
+                return;
+            }
+            current_read_ptr++;                // Skip final byte of freq
+            if (current_read_ptr > end_ptr) {  // Should be caught by checks above, but good safety net
+                spdlog::error("Index file pointer went past end after skipping postings (term {}, posting {})", i, j);
+                return;
+            }
         }
+        // const char* postings_end_ptr = current_read_ptr; // Mark end if needed
 
-        // Store term with offset
-        term_entries.emplace_back(term, term_offset);
+        // Store term with its offset relative to the start of the term data section
+        term_entries.emplace_back(term, current_entry_start_offset);
 
-        if (i % 100000 == 0 || i == term_count - 1) {
-            std::cout << "\rCollecting terms: " << i + 1 << "/" << term_count << " (" << (i + 1) * 100 / term_count
-                      << "%)" << std::flush;
+        // Update the offset for the *start* of the next term's entry
+        current_entry_start_offset = current_read_ptr - term_data_start_ptr;
+        if (i > 0 && (i % 500000 == 0 || i == term_count - 1)) {
+            spdlog::info("Collected {}/{} terms for dictionary...", i + 1, term_count);
         }
     }
 
-    std::cout << "\nSorting terms..." << std::endl;
+    if (term_data_start_ptr + current_entry_start_offset > end_ptr) {
+        spdlog::error("Error: Calculated end offset ({}) went past end of mapped data ({}) after processing terms.",
+                      current_entry_start_offset,
+                      index_size - (term_data_start_ptr - data));
+        return;
+    }
+
+    spdlog::info("Sorting {} term entries...", term_entries.size());
     std::sort(term_entries.begin(), term_entries.end());
 
-    // Write dict header
+    // Write dict heade
     uint32_t magic = 0x4D495448;  // "MITH"
     uint32_t version = 1;
-    fwrite(&magic, sizeof(magic), 1, dict_file);
-    fwrite(&version, sizeof(version), 1, dict_file);
-    fwrite(&term_count, sizeof(term_count), 1, dict_file);
+    dict_stream.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+    dict_stream.write(reinterpret_cast<const char*>(&version), sizeof(version));
+    // Write the actual number of entries we sorted (might differ from header if file was truncated)
+    uint32_t actual_term_count = term_entries.size();
+    dict_stream.write(reinterpret_cast<const char*>(&actual_term_count), sizeof(actual_term_count));
 
-    // Write compressed dict entries using front coding
-    std::string prev_term;
-    uint64_t prev_offset = 0;
+    spdlog::info("Writing dictionary with {} entries...", actual_term_count);
 
-    for (uint32_t i = 0; i < term_entries.size(); i++) {
+    // Write dictionary entries (simple format: len, term, offset, postings_count)
+    uint64_t last_logged_count = 0;
+    for (uint32_t i = 0; i < actual_term_count; ++i) {
         const auto& [term, offset] = term_entries[i];
 
-        // Calculate delta offset (better compression)
-        uint64_t delta_offset = offset - prev_offset;
-        prev_offset = offset;
-
-        // Calculate postings count (needed for query planning)
+        // Read postings count directly from the mapped index data using the stored offset
         uint32_t postings_count = 0;
-        if (i < term_count) {
-            // Read postings size directly from mapped index
-            const char* pos_ptr = term_start_ptr + offset + sizeof(uint32_t) + term.length();
-            postings_count = *reinterpret_cast<const uint32_t*>(pos_ptr);
+        const char* entry_ptr = term_data_start_ptr + offset;
+        // Bounds check before reading postings count
+        // Need offset + term_len_bytes + term_bytes to get to postings count field
+        const char* count_ptr = entry_ptr + sizeof(uint32_t) + term.length();
+        if (count_ptr + sizeof(uint32_t) <= end_ptr) {
+            postings_count = *reinterpret_cast<const uint32_t*>(count_ptr);
+        } else {
+            spdlog::warn(
+                "Could not read postings count for term '{}' at offset {}: index bounds exceeded.", term, offset);
         }
 
-        // Write term length and data directly
+
+        // Write term length and data
         uint32_t term_len = term.length();
-        fwrite(&term_len, sizeof(term_len), 1, dict_file);
-        fwrite(term.data(), 1, term_len, dict_file);
+        dict_stream.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
+        dict_stream.write(term.data(), term_len);
 
-        // Write offset and postings count
-        fwrite(&offset, sizeof(offset), 1, dict_file);
-        fwrite(&postings_count, sizeof(postings_count), 1, dict_file);
-
-        // Show progress
-        if (i % 100000 == 0 || i == term_entries.size() - 1) {
-            std::cout << "\rWriting dictionary: " << i + 1 << "/" << term_entries.size() << " ("
-                      << (i + 1) * 100 / term_entries.size() << "%)" << std::flush;
+        // Write offset (absolute offset within the term data section of final_index.data)
+        dict_stream.write(reinterpret_cast<const char*>(&offset), sizeof(offset));
+        // Write postings count
+        dict_stream.write(reinterpret_cast<const char*>(&postings_count), sizeof(postings_count));
+        if (i > 0 && (i % 500000 == 0 || i == actual_term_count - 1)) {
+            spdlog::info("Wrote {}/{} dictionary entries...", i + 1, actual_term_count);
         }
     }
 
-    // Clean up resources
-    fclose(dict_file);
-    munmap(const_cast<char*>(data), sb.st_size);
-    close(fd);
-
-    std::cout << "\nTerm dictionary creation complete" << std::endl;
+    spdlog::info("Term dictionary creation complete: {}", dict_path);
 }
+
 
 std::string IndexBuilder::block_path(int block_num) const {
     return output_dir_ + "/blocks/block_" + std::to_string(block_num) + ".data";
 }
 
 void IndexBuilder::finalize() {
+    spdlog::info("Finalizing index build...");
+    // Wait for doc processing tasks to complete
     {
         std::unique_lock<std::mutex> lock(queue_mutex_);
-        condition_.wait(lock, [this] { return tasks_.empty() && active_tasks_ == 0; });
+        spdlog::info("Waiting for {} active tasks and task queue to empty...", active_tasks_.load());
+        condition_.wait(lock, [this] { return tasks_.empty() && active_tasks_.load() == 0; });
     }
-    spdlog::info("All document processing tasks completed");
+    spdlog::info("All document processing tasks completed.");
 
-    if (current_block_size_ > 0) {
-        spdlog::info("Flushing final block...");
+    // Flush any remaining terms in the last block
+    if (current_block_term_count_ > 0) {
+        spdlog::info("Flushing final block ({} unique terms)...", current_block_term_count_);
         auto flush_future = flush_block();
-        flush_future.wait();
+        if (flush_future.valid()) {
+            try {
+                flush_future.wait();
+                spdlog::info("Final block flush completed.");
+            } catch (const std::exception& e) {
+                spdlog::error("Exception waiting for final block flush: {}", e.what());
+            }
+        }
+    } else {
+        spdlog::info("No final block to flush (term count was 0).");
     }
 
-    spdlog::info("Starting block merge with {} blocks...", block_count_);
-    merge_blocks_tiered();
+    spdlog::info("Starting block merge process with {} blocks...", block_count_);
+    merge_blocks_tiered();  // Handles 0, 1, or N blocks
 
-    spdlog::info("Saving document map ({} documents)...", document_metadata_.size());
-    save_document_map();
+    spdlog::info("Saving document map (approx {} documents)...", document_metadata_.size());
+    save_document_map();  // Handles its own locking now
 
-    spdlog::info("Finalizing position index...");
+    spdlog::info("Finalizing position index (if applicable)...");
     PositionIndex::finalizeIndex(output_dir_);
 
-    spdlog::info("Creating term dictionary...");
-    create_term_dictionary();
+    // Only create dictionary if a final index was actually created
+    std::string final_index_path = output_dir_ + "/final_index.data";
+    std::error_code fs_ec;
+    bool index_exists = std::filesystem::exists(final_index_path, fs_ec);
+    uintmax_t index_size = 0;
+    if (index_exists && !fs_ec) {
+        index_size = std::filesystem::file_size(final_index_path, fs_ec);
+    }
 
-    spdlog::info("Cleaning up temporary files...");
-    std::filesystem::remove_all(output_dir_ + "/blocks");
-    spdlog::info("Index finalization complete");
+    if (index_exists && !fs_ec && index_size > sizeof(uint32_t)) {
+        spdlog::info("Creating term dictionary from final index (size {} bytes)...", index_size);
+        create_term_dictionary();
+    } else {
+        if (!index_exists) {
+            spdlog::warn("Skipping term dictionary creation: Final index file {} not found.", final_index_path);
+        } else if (fs_ec) {
+            spdlog::warn("Skipping term dictionary creation: Error checking final index file {}: {}",
+                         final_index_path,
+                         fs_ec.message());
+        } else {  // Exists but size is too small
+            spdlog::warn("Skipping term dictionary creation: Final index file {} is too small ({} bytes).",
+                         final_index_path,
+                         index_size);
+        }
+    }
+
+
+    spdlog::info("Cleaning up temporary block files...");
+    std::error_code rm_ec;
+    std::filesystem::remove_all(output_dir_ + "/blocks", rm_ec);
+    if (rm_ec) {
+        spdlog::error("Failed to remove temporary block directory '{}': {}", output_dir_ + "/blocks", rm_ec.message());
+    }
+
+    spdlog::info("Index finalization complete.");
 }
 
 }  // namespace mithril

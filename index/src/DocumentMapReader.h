@@ -33,6 +33,8 @@ private:
         uint32_t url_length;
         uint32_t title_offset;
         uint32_t title_length;
+        uint32_t body_length;
+        float pagerank_score;
     };
 
     std::vector<DocInfo> doc_infos_;
