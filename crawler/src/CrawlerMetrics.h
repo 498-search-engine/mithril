@@ -152,6 +152,18 @@ inline auto FrontierFreshURLs = Metric{
     "Number of fresh URLs waiting to be pushed onto the frontier",
 };
 
+inline auto CrawlDelayLookupLockFailures = Metric{
+    "crawler_delay_lookup_lock_failures",
+    MetricTypeCounter,
+    "Number of times acquiring the robots cache lock failed when looking up crawl delay",
+};
+
+inline auto CrawlDelayLookupLockSuccesses = Metric{
+    "crawler_delay_lookup_lock_successes",
+    MetricTypeCounter,
+    "Number of times acquiring the robots cache lock succeeded when looking up crawl delay",
+};
+
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&TotalDocumentCorpusSizeMetric);
     server.Register(&DocumentsProcessedMetric);
@@ -177,6 +189,8 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&FrontierSize);
     server.Register(&FrontierQueueSize);
     server.Register(&FrontierFreshURLs);
+    server.Register(&CrawlDelayLookupLockFailures);
+    server.Register(&CrawlDelayLookupLockSuccesses);
 }
 
 }  // namespace mithril

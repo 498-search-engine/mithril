@@ -38,6 +38,10 @@ inline bool operator==(const CanonicalHost& a, const CanonicalHost& b) {
     return a.url == b.url;
 }
 
+inline bool operator<(const CanonicalHost& lhs, const CanonicalHost& rhs) {
+    return lhs.url < rhs.url;
+}
+
 /**
  * @brief Attempts to parse a URL to an http/https resource.
  *
