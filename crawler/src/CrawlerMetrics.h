@@ -104,6 +104,12 @@ inline auto MiddleQueueRateLimitedCount = Metric{
     "Number of active hosts in middle queue that are currently rate limited",
 };
 
+inline auto MiddleQueueWaitingDelayLookupCount = Metric{
+    "crawler_middle_queue_waiting_delay_lookup_count",
+    MetricTypeGauge,
+    "Number of active hosts in middle queue that are waiting for a delay lookup",
+};
+
 inline auto FrontierSize = Metric{
     "crawler_frontier_size",
     MetricTypeGauge,
@@ -139,6 +145,7 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&MiddleQueueTotalQueuedURLs);
     server.Register(&MiddleQueueTotalHosts);
     server.Register(&MiddleQueueRateLimitedCount);
+    server.Register(&MiddleQueueWaitingDelayLookupCount);
     server.Register(&FrontierSize);
     server.Register(&FrontierQueueSize);
     server.Register(&FrontierFreshURLs);
