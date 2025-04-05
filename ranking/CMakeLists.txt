@@ -10,15 +10,7 @@ else()
     endif()
 endif()
 
-add_library(pagerank STATIC
-    src/pagerank.cpp
-)
-
-add_library(ranking STATIC
-    src/pagerank.cpp
-    src/BM25F.cpp
-)
-
+add_library(pagerank STATIC src/PageRank.cpp)
 target_link_libraries(pagerank PUBLIC
     spdlog::spdlog
     lib::core
@@ -40,36 +32,26 @@ if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME MATCHES "Dar
     target_compile_options(ranking PRIVATE -fopenmp)
 endif()
 
-add_executable(pagerank_bench
-    src/pagerank_bench.cpp
-)
+# Handle tests folder
 
-add_executable(pagerank_forwardlinks
-    src/pagerank_forwardlinks.cpp
-)
+# PageRank related
+add_executable(pagerank_bench tests/PageRank_Bench.cpp)
+target_include_directories(pagerank_bench PRIVATE src)
+target_link_libraries(pagerank_bench PRIVATE pagerank)
 
-add_executable(domainrank_forwardlinks
-    src/domainrank_forwardlinks.cpp
-)
+add_executable(pagerank_sim tests/PageRank_Sim.cpp)
+target_include_directories(pagerank_sim PRIVATE src)
+target_link_libraries(pagerank_sim PRIVATE pagerank)
 
-add_executable(bm25f_demo
-    src/bm25f_demo.cpp
-)
+add_executable(domainrank_sim tests/DomainRank_Sim.cpp)
+target_include_directories(domainrank_sim PRIVATE src)
+target_link_libraries(domainrank_sim PRIVATE pagerank)
+
+# Crawler ranker related
+add_executable(crawler_rank_test tests/CrawlerURLRanker_Sim.cpp)
+target_link_libraries(crawler_rank_test PRIVATE common)
+
+add_executable(crawler_rank_struct_test tests/CrawlerURLRanker_StructSim.cpp)
+target_link_libraries(crawler_rank_struct_test PRIVATE common)
 
 file(COPY config DESTINATION ${CMAKE_BINARY_DIR}/ranking)
-
-target_link_libraries(pagerank_bench PRIVATE
-    pagerank
-)
-
-target_link_libraries(pagerank_forwardlinks PRIVATE
-    pagerank
-)
-
-target_link_libraries(domainrank_forwardlinks PRIVATE
-    pagerank
-)
-
-target_link_libraries(bm25f_demo PRIVATE
-    ranking
-)

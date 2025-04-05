@@ -1,23 +1,24 @@
+#include "PageRank.h"
 #include "data/Deserialize.h"
 #include "data/Document.h"
 #include "data/Gzip.h"
 #include "data/Reader.h"
-#include "pagerank.h"
 
 #include <filesystem>
 #include <fstream>
 #include <numeric>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 #include <spdlog/spdlog.h>
 
-static const std::string input_dir = "pages";
-static const std::string output_file = "domainranks_out.txt";
-static inline std::unordered_map<std::string, int> linkToNode;
-static inline std::unordered_map<int, std::string> nodeToLink;
-static inline std::unordered_map<int, std::vector<int>> nodeConnections;
-static inline int nodes = 0;
+namespace {
+core::Config Config = core::Config("tests.conf");
+const std::string InputDirectory = std::string(Config.GetString("simulation_input_index_data_folder").Cstr());
+const std::string OutputFile = std::string(Config.GetString("domainrank_sim_out").Cstr());
+std::unordered_map<std::string, int> LinkToNode;
+std::unordered_map<int, std::string> NodeToLink;
+std::unordered_map<int, std::vector<int>> NodeConnections;
+int Nodes = 0;
 
 using namespace mithril;
 
@@ -42,13 +43,13 @@ std::string GetLinkDomain(const std::string& link) {
 
 int GetLinkNode(const std::string& link) {
     std::string domain = GetLinkDomain(link);
-    auto it = linkToNode.find(domain);
+    auto it = LinkToNode.find(domain);
     int nodeNo;
-    if (it == linkToNode.end()) {
-        nodeNo = nodes;
-        linkToNode[domain] = nodeNo;
-        nodeToLink[nodeNo] = domain;
-        nodes++;
+    if (it == LinkToNode.end()) {
+        nodeNo = Nodes;
+        LinkToNode[domain] = nodeNo;
+        NodeToLink[nodeNo] = domain;
+        Nodes++;
     } else {
         nodeNo = it->second;
     }
@@ -57,7 +58,7 @@ int GetLinkNode(const std::string& link) {
 }
 
 void Process() {
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(input_dir)) {
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(InputDirectory)) {
         if (!entry.is_regular_file()) {
             continue;  // skip chunk dir
         }
@@ -73,7 +74,7 @@ void Process() {
             }
 
             int fromNode = GetLinkNode(doc.url);
-            auto& vec = nodeConnections[fromNode];
+            auto& vec = NodeConnections[fromNode];
 
             for (const std::string& link : doc.forwardLinks) {
                 vec.push_back(GetLinkNode(link));
@@ -83,8 +84,9 @@ void Process() {
         }
     }
 }
+}  // namespace
 
-int main(int argc, char* argv[]) {
+int main(int /*argc*/, char* /*argv*/[]) {
 #if !defined(NDEBUG)
     spdlog::set_level(spdlog::level::debug);
 #else
@@ -93,29 +95,29 @@ int main(int argc, char* argv[]) {
 
     auto start = std::chrono::steady_clock::now();
 
-    spdlog::info("Starting page rank forward links test...");
+    spdlog::info("Starting domain rank forward links simulation...");
 
     Process();
-    const double tol = 1.0 / nodes;
+    const double tol = 1.0 / Nodes;
 
     auto end = std::chrono::steady_clock::now();
-    auto duration = std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    auto processDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    spdlog::info("Finished processing documents. Time taken: " + duration + "ms Links found: " + std::to_string(nodes));
+    spdlog::info("Finished processing documents. Found {} links. Time taken: {} ms.", Nodes, processDuration);
 
-    spdlog::info("Building CSR Matrix with tolerance " + std::to_string(tol));
+    spdlog::info("Building CSR Matrix with tolerance {:e}", tol);
 
     start = std::chrono::steady_clock::now();
 
-    core::CSRMatrix m(nodes);
-    std::vector<double> outDegree(nodes, 0.0);
+    core::CSRMatrix m(Nodes);
+    std::vector<double> outDegree(Nodes, 0.0);
 
-    for (auto& [node, value] : nodeConnections) {
+    for (auto& [node, value] : NodeConnections) {
         for (auto target : value) {
             m.AddEdge(target, node, 1.0);
         }
 
-        outDegree[node] = value.size();
+        outDegree[node] = static_cast<double>(value.size());
     }
 
     m.Finalize();
@@ -126,23 +128,23 @@ int main(int argc, char* argv[]) {
         }
     }
 
-
     end = std::chrono::steady_clock::now();
-    duration = std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    auto csrMatrixDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
-    spdlog::info("Finished CSR matrix building process. Time taken: " + duration + "ms");
-    spdlog::info("Performing page rank....");
+    spdlog::info("Finished CSR matrix building process. Time taken: {} ms", csrMatrixDuration);
+    spdlog::info("Performing domain rank....");
 
     start = std::chrono::steady_clock::now();
 
-    PageRank algo(m, nodes);
+    PageRank algo(m, Nodes);
 
     end = std::chrono::steady_clock::now();
-    duration = std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
-    spdlog::info("Finished pagerank in: " + duration + "ms");
+    auto duration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    spdlog::info("Finished domainrank in: {} ms", duration);
+    spdlog::info("Total time taken: {} ms", (duration + csrMatrixDuration + processDuration));
 
-    std::ofstream out_file;
-    out_file.open(output_file);
+    std::ofstream outFile;
+    outFile.open(OutputFile);
 
     std::vector<double> scores = algo.GetPageRanks();
     std::vector<size_t> idx(scores.size());
@@ -150,15 +152,12 @@ int main(int argc, char* argv[]) {
 
     stable_sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) { return scores[i1] < scores[i2]; });
 
-    for (int i = 0; i < idx.size(); ++i) {
-        out_file << nodeToLink[idx[i]] << ": " << scores[idx[i]] << std::endl;
+    for (size_t i = 0; i < idx.size(); ++i) {
+        outFile << NodeToLink[static_cast<int>(idx[i])] << ": " << scores[idx[i]] << std::endl;
     }
 
-    out_file.close();
-    // cout << "PageRank scores:\n";
-    // for (double score : algo.GetPageRanks()) {
-    //     cout << score << " ";
-    // }
-    // cout << endl;
+    outFile.close();
+
+    spdlog::info("Finished writing to file: {}", OutputFile);
     return 0;
 }
