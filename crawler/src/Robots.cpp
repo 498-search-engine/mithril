@@ -450,6 +450,9 @@ long RobotRulesCache::FillFromQueue() {
     }
 
     if (queuedFetches_.empty() || executor_.InFlightRequests() >= maxInFlightRequests_) {
+        RobotRulesCacheQueuedFetchesCount.Set(queuedFetches_.size());
+        RobotRulesCacheQueuedFetchesWaitingCount.Set(0UL);
+        InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
         return 0;
     }
 
