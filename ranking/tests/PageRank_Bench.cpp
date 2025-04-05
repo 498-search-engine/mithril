@@ -1,8 +1,9 @@
-#include "pagerank.h"
+#include "PageRank.h"
 
 #include <chrono>
 #include <unordered_set>
 #include <vector>
+#include <spdlog/spdlog.h>
 
 using namespace std;
 

@@ -11,7 +11,7 @@ else()
 endif()
 
 add_library(pagerank STATIC
-    src/pagerank.cpp
+    src/PageRank.cpp
 )
 
 target_link_libraries(pagerank PUBLIC
@@ -27,15 +27,15 @@ if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME MATCHES "Dar
 endif()
 
 add_executable(pagerank_bench
-    src/pagerank_bench.cpp
+    tests/PageRank_Bench.cpp
 )
 
-add_executable(pagerank_forwardlinks
-    src/pagerank_forwardlinks.cpp
+add_executable(pagerank_sim
+    tests/PageRank_Sim.cpp
 )
 
-add_executable(domainrank_forwardlinks
-    src/domainrank_forwardlinks.cpp
+add_executable(domainrank_sim
+    tests/DomainRank_Sim.cpp
 )
 
 file(COPY config DESTINATION ${CMAKE_BINARY_DIR}/ranking)
@@ -44,10 +44,10 @@ target_link_libraries(pagerank_bench PRIVATE
     pagerank
 )
 
-target_link_libraries(pagerank_forwardlinks PRIVATE
+target_link_libraries(pagerank_sim PRIVATE
     pagerank
 )
 
-target_link_libraries(domainrank_forwardlinks PRIVATE
+target_link_libraries(domainrank_sim PRIVATE
     pagerank
 )
