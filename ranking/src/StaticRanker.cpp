@@ -1,53 +1,71 @@
-#include "ranking/CrawlerRanker.h"
+#include "StaticRanker.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <spdlog/spdlog.h>
 
 namespace mithril::ranking {
 
-int32_t GetUrlRank(std::string_view url) {
-    CrawlerRankingsStruct ranker{};
+int32_t GetUrlStaticRank(std::string_view url) {
+    spdlog::debug("Getting static rank for URL: {}", url);
 
+    StaticRankingsStruct ranker{};
     GetStringRankings(url, ranker);
 
-    int32_t score = 0;
-
-    // * Extensions
-    if (GoodExtensionList.contains(ranker.extension)) {
-        score += ExtensionBoost;
-    } else if (BadExtensionList.contains(ranker.extension)) {
-        return -100;
-    }
+    int32_t score = 1000;
 
     // * Site TLD (whitelist)
     if (WhitelistTld.contains(ranker.tld)) {
         score += WhitelistTldScore;
+        spdlog::debug(
+            "New score: {} | Score added: {} | Reason: Whitelist TLD ({})", score, WhitelistTldScore, ranker.tld);
     }
 
     // * Domain whitelist
     if (WhitelistDomain.contains(ranker.domainName)) {
         score += WhitelistDomainScore;
+        spdlog::debug("New score: {} | Score added: {} | Reason: Whitelist Domain ({})",
+                     score,
+                     WhitelistDomainScore,
+                     ranker.domainName);
     } else {
+
+        // * Subdomain count
+        if (ranker.subdomainCount > SubdomainAcceptable) {
+            score -= SubdomainPenalty * (ranker.subdomainCount - SubdomainAcceptable);
+
+            spdlog::debug("New score: {} | Score removed: {} | Reason: Subdomain Count (Count: {} | Excess: {})",
+                         score,
+                         SubdomainPenalty * (ranker.subdomainCount - SubdomainAcceptable),
+                         ranker.subdomainCount,
+                         ranker.subdomainCount - SubdomainAcceptable);
+        }
+
+        // * Number in domain name
+        if (ranker.numberInDomainName) {
+            score -= DomainNameNumberPenalty;
+
+            spdlog::debug(
+                "New score: {} | Score removed: {} | Reason: Number in domain name", score, DomainNameNumberPenalty);
+        }
+
         // * Domain name length
         int32_t domainNamePenalty = 0;
         if (ranker.domainName.length() > DomainLengthAcceptable) {
             // NOLINTNEXTLINE(bugprone-narrowing-conversions)
             domainNamePenalty = DomainPenaltyPerExtraLength * (ranker.domainName.length() - DomainLengthAcceptable);
         }
+
         score += DomainNameScore - std::min(domainNamePenalty, DomainNameScore);
 
-        // * Subdomain count
-        if (ranker.subdomainCount > SubdomainAcceptable) {
-            score -= SubdomainPenalty * (ranker.subdomainCount - SubdomainAcceptable);
-        }
-
-        // * Number in domain name
-        if (ranker.numberInDomainName) {
-            score -= DomainNameNumberPenalty;
-        }
+        spdlog::debug("New score: {} | Score added: {} | Reason: Domain Name Length (Length: {} | Excess: {})",
+                     score,
+                     DomainNameScore - std::min(domainNamePenalty, DomainNameScore),
+                     ranker.domainName.length(),
+                     ranker.domainName.length() - DomainLengthAcceptable);
     }
 
     // * URL length
@@ -58,6 +76,12 @@ int32_t GetUrlRank(std::string_view url) {
     }
     score += UrlLengthScore - std::min(urlPenalty, UrlLengthScore);
 
+    spdlog::debug("New score: {} | Score added: {} | Reason: URL Length (Length: {} | Excess: {})",
+                 score,
+                 UrlLengthScore - std::min(urlPenalty, UrlLengthScore),
+                 ranker.urlLength,
+                 ranker.urlLength - UrlLengthAcceptable);
+
     // * Number of parameters
     int32_t numParamPenalty = 0;
     if (ranker.parameterCount > NumberParamAcceptable) {
@@ -65,6 +89,11 @@ int32_t GetUrlRank(std::string_view url) {
         numParamPenalty = NumberParamPenaltyPerExtraParam * (ranker.parameterCount - NumberParamAcceptable);
     }
     score += NumberParamScore - std::min(numParamPenalty, NumberParamScore);
+    spdlog::debug("New score: {} | Score added: {} | Reason: Param Count (Length: {} | Excess: {})",
+        score,
+        NumberParamScore - std::min(numParamPenalty, NumberParamScore),
+        ranker.parameterCount,
+        ranker.parameterCount - NumberParamAcceptable);
 
     // Depth of page
     int32_t depthPagePenalty = 0;
@@ -73,22 +102,33 @@ int32_t GetUrlRank(std::string_view url) {
         depthPagePenalty = DepthPagePenalty * (ranker.pageDepth - DepthPageAcceptable);
     }
     score += DepthPageScore - std::min(depthPagePenalty, DepthPageScore);
-
+    spdlog::debug("New score: {} | Score added: {} | Reason: Page Depth (Length: {} | Excess: {})",
+        score,
+        DepthPageScore - std::min(depthPagePenalty, DepthPageScore),
+        ranker.pageDepth,
+        ranker.pageDepth - DepthPageAcceptable);
+    
     // * HTTPS
-    if (!ranker.isHttps) {
-        score -= std::min(score, HttpsDebuffScore);
+    if (ranker.isHttps) {
+        score += HttpsScore;
+
+        spdlog::debug("New score: {} | Score added: {} | Reason: HTTPS", score, HttpsScore);
     }
 
     // * Number in URL
     if (ranker.numberInURL) {
         score -= URLNumberPenalty;
+
+        spdlog::debug("New score: {} | Score removed: {} | Reason: >4 length Number in URL", score, URLNumberPenalty);
     }
+
+    spdlog::debug("Final score: {}\n", score);
 
     // Make sure score is not negative
     return std::max(score, 0);
 }
 
-void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
+void GetStringRankings(std::string_view url, StaticRankingsStruct& ranker) {
     const char* c = url.data();
     const char* end = url.data() + url.size();
 
