@@ -80,7 +80,7 @@ int32_t GetUrlRank(std::string_view url) {
     }
 
     // * Number in URL
-    if (!ranker.numberInURL) {
+    if (ranker.numberInURL) {
         score -= URLNumberPenalty;
     }
 
