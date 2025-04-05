@@ -38,4 +38,11 @@ add_executable(domainrank_sim tests/DomainRank_Sim.cpp)
 target_include_directories(domainrank_sim PRIVATE src)
 target_link_libraries(domainrank_sim PRIVATE pagerank)
 
+# Crawler ranker related
+add_executable(crawler_rank_test tests/CrawlerURLRanker_Sim.cpp)
+target_link_libraries(crawler_rank_test PRIVATE common)
+
+add_executable(crawler_rank_struct_test tests/CrawlerURLRanker_StructSim.cpp)
+target_link_libraries(crawler_rank_struct_test PRIVATE common)
+
 file(COPY config DESTINATION ${CMAKE_BINARY_DIR}/ranking)

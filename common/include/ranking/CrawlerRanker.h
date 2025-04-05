@@ -70,13 +70,13 @@ struct CrawlerRankingsStruct {
     std::string tld;
     std::string domainName;
     std::string extension;
-    int32_t urlLength;
-    int32_t parameterCount;
-    int32_t pageDepth;
-    int32_t subdomainCount;
-    bool numberInDomainName;
-    bool numberInURL;
-    bool isHttps;
+    int32_t urlLength = 0;
+    int32_t parameterCount = 0;
+    int32_t pageDepth = 0;
+    int32_t subdomainCount = 0;
+    bool numberInDomainName = false;
+    bool numberInURL = false;
+    bool isHttps = false;
 };
 
 int32_t GetUrlRank(std::string_view url);
