@@ -104,16 +104,23 @@ inline auto DocumentQueueSizeMetric = Metric{
     "Number of documents in document queue waiting to be processed by a worker",
 };
 
-inline auto MiddleQueueActiveQueueCount = Metric{
-    "crawler_middle_queue_active_queue_count",
-    MetricTypeGauge,
-    "Number of active, in-use queues within the middle queue",
-};
 
 inline auto MiddleQueueTotalQueuedURLs = Metric{
     "crawler_middle_queue_total_queued_urls",
     MetricTypeGauge,
     "Number of queued URLs across all queues in the middle queue",
+};
+
+inline auto MiddleQueueTotalQueues = Metric{
+    "crawler_middle_queue_total_queues",
+    MetricTypeGauge,
+    "Number of configured total queues in the middle queue",
+};
+
+inline auto MiddleQueueActiveQueueCount = Metric{
+    "crawler_middle_queue_active_count",
+    MetricTypeGauge,
+    "Number of active, in-use queues within the middle queue",
 };
 
 inline auto MiddleQueueTotalHosts = Metric{
@@ -122,8 +129,14 @@ inline auto MiddleQueueTotalHosts = Metric{
     "Number of tracked hosts in the middle queue",
 };
 
+inline auto MiddleQueueHostCooldownCount = Metric{
+    "crawler_middle_queue_host_cooldown_count",
+    MetricTypeGauge,
+    "Number of active hosts in middle queue that are currently under cooldown",
+};
+
 inline auto MiddleQueueRateLimitedCount = Metric{
-    "crawler_middle_queue_rate_limited_active_hosts_count",
+    "crawler_middle_queue_rate_limited_count",
     MetricTypeGauge,
     "Number of active hosts in middle queue that are currently rate limited",
 };
@@ -181,9 +194,11 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&RobotRulesCacheHits);
     server.Register(&RobotRulesCacheMisses);
     server.Register(&DocumentQueueSizeMetric);
-    server.Register(&MiddleQueueActiveQueueCount);
     server.Register(&MiddleQueueTotalQueuedURLs);
+    server.Register(&MiddleQueueTotalQueues);
+    server.Register(&MiddleQueueActiveQueueCount);
     server.Register(&MiddleQueueTotalHosts);
+    server.Register(&MiddleQueueHostCooldownCount);
     server.Register(&MiddleQueueRateLimitedCount);
     server.Register(&MiddleQueueWaitingDelayLookupCount);
     server.Register(&FrontierSize);

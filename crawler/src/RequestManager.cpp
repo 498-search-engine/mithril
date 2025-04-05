@@ -93,9 +93,6 @@ void RequestManager::Run(ThreadSync& sync) {
         // Process ready responses
         auto& ready = requestExecutor_.ReadyResponses();
         if (!ready.empty()) {
-            for (const auto& r : ready) {
-                limiter_->UnleaseHost(r.req.Url().host, r.req.Url().NonEmptyPort());
-            }
             docQueue_->PushAll(ready);
             ready.clear();
         }
@@ -118,8 +115,6 @@ void RequestManager::TouchRequestTimeouts() {
 }
 
 void RequestManager::DispatchFailedRequest(const http::FailedRequest& failed) {
-    limiter_->UnleaseHost(failed.req.Url().host, failed.req.Url().NonEmptyPort());
-
     auto s = std::string{http::StringOfRequestError(failed.error)};
     spdlog::warn("failed crawl request: {} {}", failed.req.Url().url, s);
 
