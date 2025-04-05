@@ -419,10 +419,16 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
 }
 
 void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost, bool priority) {
+    if (alreadyQueued_.contains(canonicalHost)) {
+        return;
+    }
+
+    alreadyQueued_.insert(canonicalHost);
     if (priority) {
-        priorityQueuedFetches_.push_back(canonicalHost);
+        queuedFetches_.erase(canonicalHost);
+        priorityQueuedFetches_.insert(canonicalHost);
     } else {
-        queuedFetches_.push_back(canonicalHost);
+        queuedFetches_.insert(canonicalHost);
     }
 }
 
@@ -550,6 +556,7 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
 
     auto canonicalHost = CanonicalizeHost(r.req.Url());
     SPDLOG_TRACE("successful robots.txt request: {}", canonicalHost.host);
+    alreadyQueued_.erase(canonicalHost);
 
     auto& entry = cache_[canonicalHost.url];
     try {
@@ -589,6 +596,7 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
 void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& failed) {
     auto canonicalHost = CanonicalizeHost(failed.req.Url());
     SPDLOG_TRACE("failed robots.txt request: {} {}", canonicalHost.host, http::StringOfRequestError(failed.error));
+    alreadyQueued_.erase(canonicalHost);
 
     cache_[canonicalHost.url] = RobotCacheEntry{
         .rules = RobotRules::DisallowAll(),

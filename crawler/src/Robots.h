@@ -10,12 +10,12 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <list>
 #include <memory>
 #include <optional>
-#include <queue>
+#include <set>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -208,8 +208,9 @@ private:
     HostRateLimiter* limiter_;
 
     core::LRUCache<std::string, RobotCacheEntry> cache_;
-    std::list<http::CanonicalHost> queuedFetches_;
-    std::list<http::CanonicalHost> priorityQueuedFetches_;
+    std::unordered_set<http::CanonicalHost> queuedFetches_;
+    std::unordered_set<http::CanonicalHost> priorityQueuedFetches_;
+    std::set<http::CanonicalHost> alreadyQueued_;
     http::RequestExecutor executor_;
 
     size_t waitingRobotsURLsCount_{0};
