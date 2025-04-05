@@ -229,15 +229,34 @@ void IndexBuilder::process_document(Document doc) {
 
         size_t total_term_count = 0;
 
-        processField(tokenizeUrl(doc.url), FieldType::URL, term_freqs, term_positions, total_term_count);
+        auto url_tokens = tokenizeUrl(doc.url);
+        processField(url_tokens, FieldType::URL, term_freqs, term_positions, total_term_count);
         processField(doc.title, FieldType::TITLE, term_freqs, term_positions, total_term_count);
         processField(doc.description, FieldType::DESC, term_freqs, term_positions, total_term_count);
         processField(doc.words, FieldType::BODY, term_freqs, term_positions, total_term_count);
 
         {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            stats_.doc_count++;
+            stats_.total_title_length += doc.title.size();
+            stats_.total_body_length += doc.words.size();
+            stats_.total_url_length += url_tokens.size();
+            stats_.total_desc_length += doc.description.size();
+        }
+
+        {
             std::unique_lock<std::mutex> lock(document_mutex_);
             url_to_id_[doc.url] = doc.id;
-            document_metadata_.push_back({doc.id, doc.url, doc.title});
+            document_metadata_.push_back({
+                doc.id,
+                doc.url,
+                doc.title,
+                static_cast<uint32_t>(doc.words.size()),
+                static_cast<uint32_t>(doc.title.size()),
+                static_cast<uint32_t>(url_tokens.size()),
+                static_cast<uint32_t>(doc.description.size()),
+                0.0f  // def pagerank
+            });
         }
 
         // position indexing batching
@@ -285,7 +304,6 @@ void IndexBuilder::process_document(Document doc) {
     }
     condition_.notify_one();
 }
-
 
 std::string IndexBuilder::join_title(const std::vector<std::string>& title_words) {
     if (title_words.empty())
@@ -609,13 +627,40 @@ void IndexBuilder::save_document_map() {
             out.write(meta.url.c_str(), url_len);
 
             std::string joined_title = join_title(meta.title);
-
             uint32_t title_len = joined_title.size();
             out.write(reinterpret_cast<const char*>(&title_len), sizeof(title_len));
             out.write(joined_title.c_str(), title_len);
+
+            // bm25f
+            out.write(reinterpret_cast<const char*>(&meta.body_length), sizeof(meta.body_length));
+            out.write(reinterpret_cast<const char*>(&meta.title_length), sizeof(meta.title_length));
+            out.write(reinterpret_cast<const char*>(&meta.url_length), sizeof(meta.url_length));
+            out.write(reinterpret_cast<const char*>(&meta.desc_length), sizeof(meta.desc_length));
+            out.write(reinterpret_cast<const char*>(&meta.pagerank_score), sizeof(meta.pagerank_score));
         }
     }
     spdlog::info("Saved document map with {} entries to {}", num_docs, map_path);
+}
+
+void IndexBuilder::save_index_stats() {
+    std::string stats_path = output_dir_ + "/index_stats.data";
+    std::ofstream stats_file(stats_path, std::ios::binary);
+
+    if (!stats_file) {
+        spdlog::error("Failed to create index stats file: {}", stats_path);
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(stats_mutex_);
+
+    stats_file.write(reinterpret_cast<const char*>(&stats_.doc_count), sizeof(stats_.doc_count));
+
+    stats_file.write(reinterpret_cast<const char*>(&stats_.total_body_length), sizeof(stats_.total_body_length));
+    stats_file.write(reinterpret_cast<const char*>(&stats_.total_title_length), sizeof(stats_.total_title_length));
+    stats_file.write(reinterpret_cast<const char*>(&stats_.total_url_length), sizeof(stats_.total_url_length));
+    stats_file.write(reinterpret_cast<const char*>(&stats_.total_desc_length), sizeof(stats_.total_desc_length));
+
+    spdlog::info("Saved index statistics to {}", stats_path);
 }
 
 void IndexBuilder::create_term_dictionary() {
@@ -658,9 +703,6 @@ void IndexBuilder::create_term_dictionary() {
         spdlog::error("Index file too small to read term count.");
         return;
     }
-
-
-    spdlog::info("Creating dictionary for {} terms from index file size {}", term_count, index_size);
 
     std::vector<std::pair<std::string, uint64_t>> term_entries;
     if (term_count > 0) {
@@ -849,7 +891,11 @@ void IndexBuilder::finalize() {
     spdlog::info("Saving document map (approx {} documents)...", document_metadata_.size());
     save_document_map();  // Handles its own locking now
 
-    spdlog::info("Finalizing position index (if applicable)...");
+    spdlog::info("Saving index statistics for static ranking...");
+    save_index_stats();
+    // quick_stats_check(output_dir_ + "/index_stats.data");
+
+    spdlog::info("Finalizing position index...");
     PositionIndex::finalizeIndex(output_dir_);
 
     // Only create dictionary if a final index was actually created
@@ -862,7 +908,7 @@ void IndexBuilder::finalize() {
     }
 
     if (index_exists && !fs_ec && index_size > sizeof(uint32_t)) {
-        spdlog::info("Creating term dictionary from final index (size {} bytes)...", index_size);
+        spdlog::info("Creating term dictionary from final index...");
         create_term_dictionary();
     } else {
         if (!index_exists) {

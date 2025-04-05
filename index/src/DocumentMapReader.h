@@ -1,6 +1,7 @@
 #ifndef INDEX_DOCUMENTMAPREADER_H
 #define INDEX_DOCUMENTMAPREADER_H
 
+#include "TextPreprocessor.h"
 #include "data/Document.h"
 
 #include <optional>
@@ -9,6 +10,32 @@
 #include <vector>
 
 namespace mithril {
+
+struct DocInfo {
+    data::docid_t id;
+    uint32_t url_offset;
+    uint32_t url_length;
+    uint32_t title_offset;
+    uint32_t title_length;
+    uint32_t body_length;
+    uint32_t desc_length;
+    float pagerank_score;
+
+    uint32_t getFieldLength(FieldType field) const {
+        switch (field) {
+        case FieldType::BODY:
+            return body_length;
+        case FieldType::TITLE:
+            return title_length;
+        case FieldType::URL:
+            return url_length;
+        case FieldType::DESC:
+            return desc_length;
+        default:
+            return 0;
+        }
+    }
+};
 
 class DocumentMapReader {
 public:
@@ -25,18 +52,9 @@ public:
 
     // utils func
     size_t documentCount() const { return doc_count_; }
+    const std::vector<DocInfo>& getDocInfos() const { return doc_infos_; }
 
 private:
-    struct DocInfo {
-        data::docid_t id;
-        uint32_t url_offset;
-        uint32_t url_length;
-        uint32_t title_offset;
-        uint32_t title_length;
-        uint32_t body_length;
-        float pagerank_score;
-    };
-
     std::vector<DocInfo> doc_infos_;
     std::string urls_;
     std::string titles_;

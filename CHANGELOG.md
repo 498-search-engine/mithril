@@ -48,6 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - last minute crawler config changes (#103)
 - global and robust host-level rate limiting (#107)
 - dns-level rate limiting over host-level (#111)
+- add bm25 stats support in index for stastic ranking and dev POC, actually fix tired merge, improve position (add field tags) and core indexing (performance, cleanup) (#112)
+   - anubhav will finish this!
 
 ### Fixed
 - Fix copying body data from buffer (#24)
@@ -74,7 +76,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - install libgomp1 in docker container (#106)
 - clamp robots crawl delay to reasonable range (#109)
 - check in flight robot requests at start of fill (#110)
-- actually fix tired merge, improve position (add field tags) and core indexing (performance, cleanup) (#112)
 
 ## [0.1.0] - 2025-02-07
 

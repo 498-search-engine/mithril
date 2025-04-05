@@ -9,6 +9,7 @@ build_perf/
 bench/
 tags
 *.swp
+*.txt
 
 # crawler data
 /data/

@@ -2,6 +2,7 @@
 #define INDEX_INVERTEDINDEX_H
 
 #include "TermStore.h"
+#include "TextPreprocessor.h"
 #include "data/Document.h"
 
 #include <atomic>
@@ -29,6 +30,40 @@ struct DocumentMetadata {
     data::docid_t id;
     std::string url;
     std::vector<std::string> title;
+    uint32_t body_length{0};
+    uint32_t title_length{0};
+    uint32_t url_length{0};
+    uint32_t desc_length{0};
+    float pagerank_score{0.0f};
+};
+
+struct IndexStatistics {
+    uint32_t doc_count{0};
+    uint64_t total_title_length{0};
+    uint64_t total_body_length{0};
+    uint64_t total_url_length{0};
+    uint64_t total_desc_length{0};
+
+    uint64_t getFieldTotalLength(FieldType field) const {
+        switch (field) {
+        case FieldType::BODY:
+            return total_body_length;
+        case FieldType::TITLE:
+            return total_title_length;
+        case FieldType::URL:
+            return total_url_length;
+        case FieldType::DESC:
+            return total_desc_length;
+        default:
+            return 0;
+        }
+    }
+
+    double getFieldAvgLength(FieldType field) const {
+        if (doc_count == 0)
+            return 0.0;
+        return static_cast<double>(getFieldTotalLength(field)) / doc_count;
+    }
 };
 
 class IndexBuilder {
@@ -41,6 +76,7 @@ public:
 
     void add_document(const std::string& doc_path);
     void finalize();
+    void save_index_stats();
 
 private:
     // Doc Metadata Storage
@@ -85,8 +121,8 @@ private:
     void worker_thread();
 
     // size_t current_block_size_{0};
-    // IndexStats stats_;
-    // std::mutex stats_mutex_;
+    IndexStatistics stats_;
+    std::mutex stats_mutex_;
 };
 
 }  // namespace mithril
