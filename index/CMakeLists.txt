@@ -24,12 +24,12 @@ target_link_libraries(mithril_indexer PRIVATE
     index
 )
 
-add_executable(index_debug
-    src/debugPrintIndex.cpp
-)
-target_link_libraries(index_debug PRIVATE
-    index
-)
+# add_executable(index_debug
+#     src/debugPrintIndex.cpp
+# )
+# target_link_libraries(index_debug PRIVATE
+#     index
+# )
 
 add_executable(test_docReader
     src/test_docReader.cpp

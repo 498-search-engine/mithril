@@ -9,7 +9,14 @@ namespace mithril {
 
 struct Posting {
     uint32_t doc_id;
-    uint32_t freq;
+    union {
+        uint32_t freq;
+        struct {
+            uint8_t title_freq;
+            uint8_t url_freq;
+            uint16_t body_freq;
+        } fields;
+    };
 };
 
 struct SyncPoint {

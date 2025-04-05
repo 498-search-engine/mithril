@@ -6,25 +6,18 @@ namespace mithril {
 
 void PostingList::add(const Posting& posting) {
     postings_.push_back(posting);
-    size_bytes_ += sizeof(Posting);
 }
 
 void PostingList::add(uint32_t doc_id, uint32_t freq) {
     postings_.push_back({doc_id, freq});
-    size_bytes_ += sizeof(Posting);
 }
 
 const std::vector<Posting>& PostingList::postings() const {
     return postings_;
 }
 
-size_t PostingList::size_bytes() const {
-    return size_bytes_;
-}
-
 void PostingList::clear() {
     postings_.clear();
-    size_bytes_ = 0;
 }
 
 bool PostingList::empty() const {

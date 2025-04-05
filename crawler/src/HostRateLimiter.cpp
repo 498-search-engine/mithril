@@ -46,69 +46,6 @@ HostRateLimiter::HostRateLimiter(unsigned long defaultDelayMs,
     assert(defaultDelayMs > 0);
 }
 
-long HostRateLimiter::TryLeaseHost(const std::string& host, const std::string& port, unsigned long delayMs) {
-    core::LockGuard lock(mu_);
-    return TryLeaseHostImpl(host, port, MonotonicTimeMs(), delayMs);
-}
-
-long HostRateLimiter::TryLeaseHost(const std::string& host, const std::string& port, long now, unsigned long delayMs) {
-    core::LockGuard lock(mu_);
-    return TryLeaseHostImpl(host, port, now, delayMs);
-}
-
-void HostRateLimiter::UnleaseHost(const std::string& host, const std::string& port) {
-    core::LockGuard lock(mu_);
-    UnleaseHostImpl(host, port, MonotonicTimeMs());
-}
-
-void HostRateLimiter::UnleaseHost(const std::string& host, const std::string& port, long now) {
-    core::LockGuard lock(mu_);
-    UnleaseHostImpl(host, port, now);
-}
-
-void HostRateLimiter::UnleaseHostImpl(const std::string& host, const std::string& port, long now) {
-    auto* entry = GetOrInsert(host, port);
-    if (entry == nullptr || entry == &fallbackEntry_) {
-        return;
-    }
-
-    assert(entry->leased);
-    entry->earliest = now + static_cast<long>(entry->delayAfterUnlease);
-    entry->leased = false;
-    --leasedCount_;
-}
-
-long HostRateLimiter::TryLeaseHostImpl(const std::string& host,
-                                       const std::string& port,
-                                       long now,
-                                       unsigned long delayMs) {
-    auto* entry = GetOrInsert(host, port);
-    if (entry == nullptr) {
-        return 10;
-    } else if (entry == &fallbackEntry_) {
-        return 0;
-    }
-
-    if (entry->leased) {
-        return core::max(entry->earliest - now, 5L);
-    } else if (now < entry->earliest) {
-        // Need to wait
-        return entry->earliest - now;
-    }
-
-    auto bucketWait = TryIncrementBucket(*entry, now);
-    if (bucketWait > 0) {
-        return bucketWait;
-    }
-
-    entry->earliest = now + static_cast<long>(defaultDelayMs_);
-    entry->leased = true;
-    entry->delayAfterUnlease = delayMs;
-    ++leasedCount_;
-
-    return 0;
-}
-
 long HostRateLimiter::TryUseHost(const std::string& host, const std::string& port) {
     core::LockGuard lock(mu_);
     return TryUseHostImpl(host, port, MonotonicTimeMs());
@@ -127,20 +64,7 @@ long HostRateLimiter::TryUseHostImpl(const std::string& host, const std::string&
         return 0;
     }
 
-    if (entry->leased) {
-        return now < entry->earliest ? entry->earliest - now : 10;  // 10 ms, idk
-    } else if (now < entry->earliest) {
-        // Need to wait
-        return entry->earliest - now;
-    }
-
-    auto bucketWait = TryIncrementBucket(*entry, now);
-    if (bucketWait > 0) {
-        return bucketWait;
-    }
-
-    entry->earliest = now + static_cast<long>(defaultDelayMs_);
-    return 0;
+    return TryIncrementBucket(*entry, now);
 }
 
 HostRateLimiter::Entry* HostRateLimiter::GetOrInsert(const std::string& host, const std::string& port) {
@@ -162,7 +86,7 @@ HostRateLimiter::Entry* HostRateLimiter::GetOrInsert(const std::string& host, co
     auto* it = m_.Find(*resolved);
     if (it == nullptr) {
         auto p = m_.Insert({
-            *resolved, Entry{.leased = false, .earliest = 0}
+            *resolved, Entry{.bucketStart = 0, .bucketCount = 0}
         });
         assert(p.second);
         it = p.first;

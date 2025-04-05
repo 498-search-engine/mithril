@@ -31,7 +31,7 @@ public:
 
     // postion specific funcs
     bool hasPositions() const;
-    std::vector<uint32_t> currentPositions() const;
+    std::vector<uint16_t> currentPositions() const;
 
 private:
     std::string term_;

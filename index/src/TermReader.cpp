@@ -194,7 +194,7 @@ bool TermReader::hasPositions() const {
     return position_index_->hasPositions(term_, currentDocID());
 }
 
-std::vector<uint32_t> TermReader::currentPositions() const {
+std::vector<uint16_t> TermReader::currentPositions() const {
     if (!found_term_ || at_end_) {
         return {};
     }

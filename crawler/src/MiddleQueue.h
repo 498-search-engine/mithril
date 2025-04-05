@@ -61,6 +61,7 @@ private:
         http::CanonicalHost host;
         bool waitingDelayLookup{true};
         unsigned long crawlDelayMs{};
+        long earliestNextCrawl{};
         std::queue<std::string> queue;
         core::Optional<size_t> activeQueue;
     };
@@ -87,8 +88,9 @@ private:
      * @brief Add a URL into the middle queue.
      *
      * @param url URL to add
+     * @param now Current timestamp
      */
-    void AcceptURL(std::string url);
+    void AcceptURL(std::string url, long now);
 
     /**
      * @brief Adds a URL to a HostRecord
@@ -103,8 +105,9 @@ private:
      *
      * @param url URL to add
      * @param host Host of URL
+     * @param now Current timestamp
      */
-    void PushURLForNewHost(std::string url, const http::CanonicalHost& host);
+    void PushURLForNewHost(std::string url, const http::CanonicalHost& host, long now);
 
     /**
      * @brief Pops a URL from the queue of a host. Requires the host to have a
@@ -113,8 +116,9 @@ private:
      *
      * @param record Host to pop from
      * @return std::string Popped URL
+     * @param now Current timestamp
      */
-    std::string PopFromHost(HostRecord& record);
+    std::string PopFromHost(HostRecord& record, long now);
 
     /**
      * @brief Checks for hosts with waiting URLs and adds them to the active
