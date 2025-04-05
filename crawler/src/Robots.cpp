@@ -472,6 +472,7 @@ long RobotRulesCache::FillFromQueue() {
         }
     }
 
+    RobotRulesCacheQueuedFetchesCount.Set(queuedFetches_.size());
     InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
     if (anyReady) {
         nextQueueCheck_ = 0;
