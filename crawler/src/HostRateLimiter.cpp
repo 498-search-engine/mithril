@@ -14,9 +14,6 @@
 
 namespace mithril {
 
-constexpr long RateLimitBucketDurationMs = 60000;
-constexpr size_t RateLimitBucketMax = 60;
-
 namespace {
 
 std::string_view GetBaseHost(std::string_view host) {
@@ -38,8 +35,14 @@ std::string_view GetBaseHost(std::string_view host) {
 
 }  // namespace
 
-HostRateLimiter::HostRateLimiter(unsigned long defaultDelayMs)
-    : defaultDelayMs_(defaultDelayMs), m_(50000), addrs_(50000) {
+HostRateLimiter::HostRateLimiter(unsigned long defaultDelayMs,
+                                 long rateLimitBucketDurationMs,
+                                 unsigned long rateLimitBucketRequestCount)
+    : defaultDelayMs_(defaultDelayMs),
+      rateLimitBucketDurationMs_(rateLimitBucketDurationMs),
+      rateLimitBucketRequestCount_(rateLimitBucketRequestCount),
+      m_(50000),
+      addrs_(50000) {
     assert(defaultDelayMs > 0);
 }
 
@@ -72,6 +75,7 @@ void HostRateLimiter::UnleaseHostImpl(const std::string& host, const std::string
     assert(entry->leased);
     entry->earliest = now + static_cast<long>(entry->delayAfterUnlease);
     entry->leased = false;
+    --leasedCount_;
 }
 
 long HostRateLimiter::TryLeaseHostImpl(const std::string& host,
@@ -100,6 +104,7 @@ long HostRateLimiter::TryLeaseHostImpl(const std::string& host,
     entry->earliest = now + static_cast<long>(defaultDelayMs_);
     entry->leased = true;
     entry->delayAfterUnlease = delayMs;
+    ++leasedCount_;
 
     return 0;
 }
@@ -195,15 +200,15 @@ const http::ResolvedAddr* HostRateLimiter::GetOrResolve(const std::string& host,
     return &inserted.first->second;
 }
 
-long HostRateLimiter::TryIncrementBucket(Entry& entry, long now) {
-    if (now - entry.bucketStart >= RateLimitBucketDurationMs) {
+long HostRateLimiter::TryIncrementBucket(Entry& entry, long now) const {
+    if (now - entry.bucketStart >= rateLimitBucketDurationMs_) {
         // reset bucket
         entry.bucketStart = now;
         entry.bucketCount = 0;
     }
-    if (entry.bucketCount >= RateLimitBucketMax) {
+    if (entry.bucketCount >= rateLimitBucketRequestCount_) {
         // exceeded 60 requests in a minute, wait til bucket resets
-        return RateLimitBucketDurationMs - (now - entry.bucketStart);
+        return rateLimitBucketDurationMs_ - (now - entry.bucketStart);
     }
     ++entry.bucketCount;
     return 0;

@@ -409,9 +409,11 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
     if (now >= entry->second.expiresAt) {
         entry->second.expiresAt = 0;  // Mark as already fetching
         QueueFetch(canonicalHost);
+        RobotRulesCacheMisses.Inc();
         return nullptr;
     }
 
+    RobotRulesCacheHits.Inc();
     return &entry->second.rules;
 }
 
@@ -448,11 +450,15 @@ long RobotRulesCache::FillFromQueue() {
     }
 
     if (queuedFetches_.empty() || executor_.InFlightRequests() >= maxInFlightRequests_) {
+        RobotRulesCacheQueuedFetchesCount.Set(queuedFetches_.size());
+        RobotRulesCacheQueuedFetchesWaitingCount.Set(0UL);
+        InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
         return 0;
     }
 
     auto waitDuration = std::numeric_limits<long>::max();
     bool anyReady = false;
+    size_t waitingCount = 0;
 
     auto it = queuedFetches_.begin();
     while (it != queuedFetches_.end()) {
@@ -460,6 +466,7 @@ long RobotRulesCache::FillFromQueue() {
         if (hostWait > 0) {
             waitDuration = std::min(waitDuration, hostWait);
             ++it;
+            ++waitingCount;
             continue;
         }
 
@@ -472,6 +479,8 @@ long RobotRulesCache::FillFromQueue() {
         }
     }
 
+    RobotRulesCacheQueuedFetchesCount.Set(queuedFetches_.size());
+    RobotRulesCacheQueuedFetchesWaitingCount.Set(waitingCount);
     InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
     if (anyReady) {
         nextQueueCheck_ = 0;

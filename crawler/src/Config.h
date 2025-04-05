@@ -26,6 +26,9 @@ struct CrawlerConfig {
     std::set<std::string> blacklist_hosts;
 
     long default_crawl_delay_ms = 200;  // milliseconds
+    long ratelimit_bucket_ms = 60000;
+    unsigned ratelimit_bucket_count = 60;
+
     size_t middle_queue_queue_count = 100;
     size_t middle_queue_url_batch_size = 10;
     size_t middle_queue_host_url_limit = 25;
