@@ -4,10 +4,13 @@
 #include <fstream>
 #include <iostream>
 #include <set>
+#include <spdlog/spdlog.h>
 
 using namespace mithril;
 
 int main() {
+    spdlog::set_level(spdlog::level::level_enum::debug); 
+
     core::Config config = core::Config("tests.conf");
     std::string inFilePath = std::string(config.GetString("static_ranker_in_file").Cstr());
     std::ifstream inFile(inFilePath);
