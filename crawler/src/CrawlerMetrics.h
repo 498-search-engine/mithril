@@ -86,6 +86,18 @@ inline auto RobotRulesCacheQueuedFetchesWaitingCount = Metric{
     "Number of queued robots fetches in the robot rules cache that are currently rate limited",
 };
 
+inline auto RobotRulesCacheHits = Metric{
+    "crawler_robot_rules_cache_hits",
+    MetricTypeCounter,
+    "Number of cache hits for robot rules lookup",
+};
+
+inline auto RobotRulesCacheMisses = Metric{
+    "crawler_robot_rules_cache_misses",
+    MetricTypeCounter,
+    "Number of cache misses for robot rules lookup",
+};
+
 inline auto DocumentQueueSizeMetric = Metric{
     "crawler_document_queue_size",
     MetricTypeGauge,
@@ -154,6 +166,8 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&WaitingRobotsURLs);
     server.Register(&RobotRulesCacheQueuedFetchesCount);
     server.Register(&RobotRulesCacheQueuedFetchesWaitingCount);
+    server.Register(&RobotRulesCacheHits);
+    server.Register(&RobotRulesCacheMisses);
     server.Register(&DocumentQueueSizeMetric);
     server.Register(&MiddleQueueActiveQueueCount);
     server.Register(&MiddleQueueTotalQueuedURLs);

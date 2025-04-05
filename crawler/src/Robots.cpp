@@ -409,9 +409,11 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
     if (now >= entry->second.expiresAt) {
         entry->second.expiresAt = 0;  // Mark as already fetching
         QueueFetch(canonicalHost);
+        RobotRulesCacheMisses.Inc();
         return nullptr;
     }
 
+    RobotRulesCacheHits.Inc();
     return &entry->second.rules;
 }
 
