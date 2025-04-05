@@ -392,11 +392,12 @@ const core::Optional<unsigned long>& RobotRules::CrawlDelay() const {
 RobotRulesCache::RobotRulesCache(size_t maxInFlightRequests, HostRateLimiter* limiter, size_t cacheSize)
     : maxInFlightRequests_(maxInFlightRequests), limiter_(limiter), cache_(cacheSize) {}
 
-const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost) {
+const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonicalHost, bool priority) {
     auto* entry = cache_.Find(canonicalHost.url);
     if (entry == nullptr) {
         cache_.Insert({canonicalHost.url, RobotCacheEntry{}});
-        QueueFetch(canonicalHost);
+        QueueFetch(canonicalHost, priority);
+        RobotRulesCacheMisses.Inc();
         return nullptr;
     }
 
@@ -408,7 +409,7 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
     auto now = MonotonicTime();
     if (now >= entry->second.expiresAt) {
         entry->second.expiresAt = 0;  // Mark as already fetching
-        QueueFetch(canonicalHost);
+        QueueFetch(canonicalHost, priority);
         RobotRulesCacheMisses.Inc();
         return nullptr;
     }
@@ -417,8 +418,18 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
     return &entry->second.rules;
 }
 
-void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost) {
-    queuedFetches_.push_back(canonicalHost);
+void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost, bool priority) {
+    if (alreadyQueued_.contains(canonicalHost)) {
+        return;
+    }
+
+    alreadyQueued_.insert(canonicalHost);
+    if (priority) {
+        queuedFetches_.erase(canonicalHost);
+        priorityQueuedFetches_.insert(canonicalHost);
+    } else {
+        queuedFetches_.insert(canonicalHost);
+    }
 }
 
 void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
@@ -440,7 +451,7 @@ void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
 }
 
 size_t RobotRulesCache::PendingRequests() const {
-    return executor_.InFlightRequests() + queuedFetches_.size();
+    return executor_.InFlightRequests() + queuedFetches_.size() + priorityQueuedFetches_.size();
 }
 
 long RobotRulesCache::FillFromQueue() {
@@ -449,8 +460,9 @@ long RobotRulesCache::FillFromQueue() {
         return nextQueueCheck_ - now;
     }
 
-    if (queuedFetches_.empty() || executor_.InFlightRequests() >= maxInFlightRequests_) {
-        RobotRulesCacheQueuedFetchesCount.Set(queuedFetches_.size());
+    if ((priorityQueuedFetches_.empty() && queuedFetches_.empty()) ||
+        executor_.InFlightRequests() >= maxInFlightRequests_) {
+        RobotRulesCacheQueuedFetchesCount.Set(queuedFetches_.size() + priorityQueuedFetches_.size());
         RobotRulesCacheQueuedFetchesWaitingCount.Set(0UL);
         InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
         return 0;
@@ -460,8 +472,25 @@ long RobotRulesCache::FillFromQueue() {
     bool anyReady = false;
     size_t waitingCount = 0;
 
-    auto it = queuedFetches_.begin();
-    while (it != queuedFetches_.end()) {
+    // First, use priority queue
+    auto it = priorityQueuedFetches_.begin();
+    while (it != priorityQueuedFetches_.end() && executor_.InFlightRequests() < maxInFlightRequests_) {
+        auto hostWait = limiter_->TryUseHost(it->host, it->NonEmptyPort(), now);
+        if (hostWait > 0) {
+            waitDuration = std::min(waitDuration, hostWait);
+            ++it;
+            ++waitingCount;
+            continue;
+        }
+
+        Fetch(*it);
+        it = priorityQueuedFetches_.erase(it);
+        anyReady = true;
+    }
+
+    // Then, try regular queue
+    it = queuedFetches_.begin();
+    while (it != queuedFetches_.end() && executor_.InFlightRequests() < maxInFlightRequests_) {
         auto hostWait = limiter_->TryUseHost(it->host, it->NonEmptyPort(), now);
         if (hostWait > 0) {
             waitDuration = std::min(waitDuration, hostWait);
@@ -473,13 +502,9 @@ long RobotRulesCache::FillFromQueue() {
         Fetch(*it);
         it = queuedFetches_.erase(it);
         anyReady = true;
-
-        if (executor_.InFlightRequests() >= maxInFlightRequests_) {
-            break;
-        }
     }
 
-    RobotRulesCacheQueuedFetchesCount.Set(queuedFetches_.size());
+    RobotRulesCacheQueuedFetchesCount.Set(queuedFetches_.size() + priorityQueuedFetches_.size());
     RobotRulesCacheQueuedFetchesWaitingCount.Set(waitingCount);
     InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
     if (anyReady) {
@@ -495,7 +520,7 @@ long RobotRulesCache::ProcessPendingRequests() {
     auto wait = FillFromQueue();
 
     if (executor_.InFlightRequests() == 0) {
-        assert(wait > 0 || queuedFetches_.empty());
+        assert(wait > 0 || (priorityQueuedFetches_.empty() && queuedFetches_.empty()));
         return wait;
     }
 
@@ -531,6 +556,7 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
 
     auto canonicalHost = CanonicalizeHost(r.req.Url());
     SPDLOG_TRACE("successful robots.txt request: {}", canonicalHost.host);
+    alreadyQueued_.erase(canonicalHost);
 
     auto& entry = cache_[canonicalHost.url];
     try {
@@ -570,6 +596,7 @@ void RobotRulesCache::HandleRobotsResponse(http::CompleteResponse r) {
 void RobotRulesCache::HandleRobotsResponseFailed(const http::FailedRequest& failed) {
     auto canonicalHost = CanonicalizeHost(failed.req.Url());
     SPDLOG_TRACE("failed robots.txt request: {} {}", canonicalHost.host, http::StringOfRequestError(failed.error));
+    alreadyQueued_.erase(canonicalHost);
 
     cache_[canonicalHost.url] = RobotCacheEntry{
         .rules = RobotRules::DisallowAll(),

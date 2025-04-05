@@ -10,12 +10,12 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <list>
 #include <memory>
 #include <optional>
-#include <queue>
+#include <set>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -154,9 +154,10 @@ public:
      * a request to fetch the robots.txt ruleset.
      *
      * @param canonicalHost Canonical host URL to get the ruleset for
+     * @param priority Whether this request is a priority
      * @return RobotRules* The ruleset, or nullptr if not yet in the cache.
      */
-    const RobotRules* GetOrFetch(const http::CanonicalHost& canonicalHost);
+    const RobotRules* GetOrFetch(const http::CanonicalHost& canonicalHost, bool priority = false);
 
     /**
      * @brief Returns the number of pending robots.txt requests.
@@ -188,7 +189,7 @@ private:
      *
      * @param canonicalHost Canonical host to fetch for
      */
-    void QueueFetch(const http::CanonicalHost& canonicalHost);
+    void QueueFetch(const http::CanonicalHost& canonicalHost, bool priority);
 
     /**
      * @brief Triggers a fetch for the robots.txt page of a host.
@@ -207,7 +208,9 @@ private:
     HostRateLimiter* limiter_;
 
     core::LRUCache<std::string, RobotCacheEntry> cache_;
-    std::list<http::CanonicalHost> queuedFetches_;
+    std::unordered_set<http::CanonicalHost> queuedFetches_;
+    std::unordered_set<http::CanonicalHost> priorityQueuedFetches_;
+    std::set<http::CanonicalHost> alreadyQueued_;
     http::RequestExecutor executor_;
 
     size_t waitingRobotsURLsCount_{0};

@@ -49,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - global and robust host-level rate limiting (#107)
 - dns-level rate limiting over host-level (#111)
 - more config and metrics for rate limits and caching (#113)
+- more metrics and attempts at improvements (#114)
 
 ### Fixed
 - Fix copying body data from buffer (#24)

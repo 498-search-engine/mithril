@@ -1,9 +1,11 @@
 #include "UrlFrontier.h"
 
+#include "Clock.h"
 #include "CrawlerMetrics.h"
 #include "HostRateLimiter.h"
 #include "Robots.h"
 #include "ThreadSync.h"
+#include "core/algorithm.h"
 #include "core/locks.h"
 #include "core/optional.h"
 #include "http/URL.h"
@@ -43,7 +45,8 @@ UrlFrontier::UrlFrontier(HostRateLimiter* limiter,
                          size_t concurrentRobotsRequests,
                          size_t robotsCacheSize)
     : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
-      robotRulesCache_(concurrentRobotsRequests, limiter, robotsCacheSize) {}
+      robotRulesCache_(concurrentRobotsRequests, limiter, robotsCacheSize),
+      delayCache_(robotsCacheSize) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);
@@ -78,8 +81,17 @@ bool UrlFrontier::CopyStateToDirectory(const std::string& directory) const {
 }
 
 void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
+    long last = 0;
+
     while (true) {
-        ProcessRobotsRequests(sync);
+        long now = MonotonicTime();
+        bool tryAll = false;
+        if (now - last >= 10) {
+            tryAll = true;
+            last = now;
+        }
+
+        ProcessRobotsRequests(sync, tryAll);
         if (sync.ShouldShutdown()) {
             break;
         }
@@ -109,7 +121,7 @@ void UrlFrontier::FreshURLsThread(ThreadSync& sync) {
     spdlog::info("frontier fresh urls thread terminating");
 }
 
-void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
+void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync, bool tryAll) {
     {
         core::LockGuard lock(robotsCacheMu_);
         // Wait until we have requests to execute. We only ever get new requests
@@ -122,7 +134,7 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
         auto robotsWait = robotRulesCache_.ProcessPendingRequests();
         if (robotsWait != 0) {
             lock.Unlock();
-            usleep(robotsWait * 750L);  // 75% of time
+            usleep(core::min(robotsWait, 5L) * 1000L);  // up to 5ms
             return;
         }
     }
@@ -131,6 +143,40 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
 
     // Process completed robots.txt fetches
     std::set<std::string> allowedURLs;
+
+    if (tryAll) {
+        core::LockGuard waitingLock(waitingUrlsMu_);
+        core::LockGuard robotsLock(robotsCacheMu_);
+
+        if (urlsWaitingForRobots_.size() > robotRulesCache_.CompletedFetchs().size()) {
+            // Something missing to check up on
+            auto it = urlsWaitingForRobots_.begin();
+            while (it != urlsWaitingForRobots_.end()) {
+                const auto* robots = robotRulesCache_.GetOrFetch(it->first);
+                if (robots == nullptr) {
+                    // Still waiting
+                    ++it;
+                    continue;
+                }
+
+                auto host = it->first;
+                auto urls = std::move(it->second);
+                urlsWaitingForRobotsCount_ -= urls.size();
+                it = urlsWaitingForRobots_.erase(it);
+
+                // The cache has fetched and resolved the robots.txt page for this
+                // canonical host. Process all queued URLs.
+                for (auto& url : urls) {
+                    if (robots->Allowed(url.path)) {
+                        allowedURLs.insert(std::move(url.url));
+                    }
+                }
+            }
+        }
+
+        usleep(1);
+    }
+
     {
         core::LockGuard waitingLock(waitingUrlsMu_);
         core::LockGuard robotsLock(robotsCacheMu_);
@@ -362,16 +408,36 @@ void UrlFrontier::TouchRobotRequestTimeouts() {
 
 core::Optional<unsigned long> UrlFrontier::LookUpCrawlDelayNonblocking(const http::CanonicalHost& host,
                                                                        unsigned long defaultDelay) {
-    core::LockGuard lock(robotsCacheMu_, core::DeferLock);
-    if (!lock.TryLock()) {
-        return core::nullopt;
+    {
+        core::LockGuard cacheLock(delayCacheMu_);
+        if (auto* it = delayCache_.Find(host); it != nullptr) {
+            return it->second.ValueOr(defaultDelay);
+        }
     }
 
-    const auto* res = robotRulesCache_.GetOrFetch(host);
-    if (res == nullptr) {
-        return core::nullopt;
+    core::Optional<unsigned long> resVal;
+    {
+        core::LockGuard lock(robotsCacheMu_, core::DeferLock);
+        if (!lock.TryLock()) {
+            CrawlDelayLookupLockFailures.Inc();
+            return core::nullopt;
+        }
+
+        CrawlDelayLookupLockSuccesses.Inc();
+
+        const auto* res = robotRulesCache_.GetOrFetch(host, true);  // with priority
+        if (res == nullptr) {
+            return core::nullopt;
+        }
+        resVal = res->CrawlDelay();
     }
-    return res->CrawlDelay().ValueOr(defaultDelay);
+
+    {
+        core::LockGuard cacheLock(delayCacheMu_);
+        delayCache_.Insert({host, resVal});
+    }
+
+    return resVal.ValueOr(defaultDelay);
 }
 
 }  // namespace mithril
