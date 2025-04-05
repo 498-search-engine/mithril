@@ -7,6 +7,7 @@
 #include "ThreadSync.h"
 #include "core/cv.h"
 #include "core/locks.h"
+#include "core/lru_cache.h"
 #include "core/mutex.h"
 #include "core/optional.h"
 #include "http/URL.h"
@@ -173,6 +174,7 @@ private:
     mutable core::Mutex robotsCacheMu_;  // Lock for robotRulesCache_
     mutable core::Mutex waitingUrlsMu_;  // Lock for urlsWaitingForRobots_
     mutable core::Mutex freshURLsMu_;    // Lock for freshURLs_
+    mutable core::Mutex delayCacheMu_;   // Lock for delayCache_
 
     core::cv urlQueueCv_;   // Notifies when URL is available in queue
     core::cv robotsCv_;     // Notifies when new request is available for processing
@@ -189,6 +191,8 @@ private:
     // List of fresh URLs to consider for placement into the frontier, pushed by
     // workers
     std::vector<std::string> freshURLs_;
+
+    core::LRUCache<http::CanonicalHost, core::Optional<unsigned long>> delayCache_;
 };
 
 }  // namespace mithril

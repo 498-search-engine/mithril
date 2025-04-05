@@ -43,7 +43,8 @@ UrlFrontier::UrlFrontier(HostRateLimiter* limiter,
                          size_t concurrentRobotsRequests,
                          size_t robotsCacheSize)
     : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
-      robotRulesCache_(concurrentRobotsRequests, limiter, robotsCacheSize) {}
+      robotRulesCache_(concurrentRobotsRequests, limiter, robotsCacheSize),
+      delayCache_(robotsCacheSize) {}
 
 void UrlFrontier::InitSync(ThreadSync& sync) {
     sync.RegisterCV(&robotsCv_);
@@ -362,19 +363,36 @@ void UrlFrontier::TouchRobotRequestTimeouts() {
 
 core::Optional<unsigned long> UrlFrontier::LookUpCrawlDelayNonblocking(const http::CanonicalHost& host,
                                                                        unsigned long defaultDelay) {
-    core::LockGuard lock(robotsCacheMu_, core::DeferLock);
-    if (!lock.TryLock()) {
-        CrawlDelayLookupLockFailures.Inc();
-        return core::nullopt;
+    {
+        core::LockGuard cacheLock(delayCacheMu_);
+        if (auto* it = delayCache_.Find(host); it != nullptr) {
+            return it->second.ValueOr(defaultDelay);
+        }
     }
 
-    CrawlDelayLookupLockSuccesses.Inc();
+    core::Optional<unsigned long> resVal;
+    {
+        core::LockGuard lock(robotsCacheMu_, core::DeferLock);
+        if (!lock.TryLock()) {
+            CrawlDelayLookupLockFailures.Inc();
+            return core::nullopt;
+        }
 
-    const auto* res = robotRulesCache_.GetOrFetch(host);
-    if (res == nullptr) {
-        return core::nullopt;
+        CrawlDelayLookupLockSuccesses.Inc();
+
+        const auto* res = robotRulesCache_.GetOrFetch(host, true);  // with priority
+        if (res == nullptr) {
+            return core::nullopt;
+        }
+        resVal = res->CrawlDelay();
     }
-    return res->CrawlDelay().ValueOr(defaultDelay);
+
+    {
+        core::LockGuard cacheLock(delayCacheMu_);
+        delayCache_.Insert({host, resVal});
+    }
+
+    return resVal.ValueOr(defaultDelay);
 }
 
 }  // namespace mithril
