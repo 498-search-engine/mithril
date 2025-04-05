@@ -14,7 +14,7 @@
 namespace {
 core::Config Config = core::Config("tests.conf");
 const std::string InputDirectory = std::string(Config.GetString("simulation_input_index_data_folder").Cstr());
-const std::string OutputFile = std::string(Config.GetString("domainrank_sim_out").Cstr());
+const std::string OutputFile = "pageranks_out2.txt";
 std::unordered_map<std::string, int> LinkToNode;
 std::unordered_map<int, std::string> NodeToLink;
 std::unordered_map<int, std::vector<int>> NodeConnections;
@@ -22,33 +22,13 @@ int Nodes = 0;
 
 using namespace mithril;
 
-std::string GetLinkDomain(const std::string& link) {
-    int c = 0;
-    std::string ret;
-
-    for (char ch : link) {
-        ret += ch;
-
-        if (ch == '/') {
-            c++;
-        }
-
-        if (c == 3) {
-            break;
-        }
-    }
-
-    return ret;
-}
-
 int GetLinkNode(const std::string& link) {
-    std::string domain = GetLinkDomain(link);
-    auto it = LinkToNode.find(domain);
+    auto it = LinkToNode.find(link);
     int nodeNo;
     if (it == LinkToNode.end()) {
         nodeNo = Nodes;
-        LinkToNode[domain] = nodeNo;
-        NodeToLink[nodeNo] = domain;
+        LinkToNode[link] = nodeNo;
+        NodeToLink[nodeNo] = link;
         Nodes++;
     } else {
         nodeNo = it->second;
@@ -95,7 +75,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
     auto start = std::chrono::steady_clock::now();
 
-    spdlog::info("Starting domain rank forward links simulation...");
+    spdlog::info("Starting page rank forward links simulation...");
 
     Process();
     const double tol = 1.0 / Nodes;
@@ -122,25 +102,27 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
     m.Finalize();
 
+    size_t danglingLinks = Nodes;
     for (int i = 0; i < m.values_.size(); ++i) {
         if (outDegree[m.col_idx_[i]] > 0) {
             m.values_[i] /= outDegree[m.col_idx_[i]];
+            danglingLinks--;
         }
     }
 
     end = std::chrono::steady_clock::now();
     auto csrMatrixDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
-    spdlog::info("Finished CSR matrix building process. Time taken: {} ms", csrMatrixDuration);
-    spdlog::info("Performing domain rank....");
+    spdlog::info("Finished CSR matrix building process. Dangling links: {}, Time taken: {} ms", danglingLinks, csrMatrixDuration);
+    spdlog::info("Performing page rank....");
 
     start = std::chrono::steady_clock::now();
 
-    mithril::pagerank::PerformPageRank(m, Nodes);
+    pagerank::PerformPageRank(m, Nodes);
 
     end = std::chrono::steady_clock::now();
     auto duration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
-    spdlog::info("Finished domainrank in: {} ms", duration);
+    spdlog::info("Finished pagerank in: {} ms", duration);
     spdlog::info("Total time taken: {} ms", (duration + csrMatrixDuration + processDuration));
 
     std::ofstream outFile;
@@ -153,11 +135,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
     stable_sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) { return scores[i1] < scores[i2]; });
 
     for (size_t i = 0; i < idx.size(); ++i) {
-        outFile << NodeToLink[static_cast<int>(idx[i])] << ": " << scores[idx[i]] << std::endl;
+        outFile << NodeToLink[idx[i]] << ": " << scores[idx[i]] << std::endl;
     }
 
     outFile.close();
 
     spdlog::info("Finished writing to file: {}", OutputFile);
+
     return 0;
 }

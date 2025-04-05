@@ -15,129 +15,27 @@ namespace {
 core::Config Config = core::Config("tests.conf");
 const std::string InputDirectory = std::string(Config.GetString("simulation_input_index_data_folder").Cstr());
 const std::string OutputFile = std::string(Config.GetString("pagerank_sim_out").Cstr());
-std::unordered_map<std::string, int> LinkToNode;
-std::unordered_map<int, std::string> NodeToLink;
-std::unordered_map<int, std::vector<int>> NodeConnections;
-int Nodes = 0;
-
-using namespace mithril;
-
-int GetLinkNode(const std::string& link) {
-    auto it = LinkToNode.find(link);
-    int nodeNo;
-    if (it == LinkToNode.end()) {
-        nodeNo = Nodes;
-        LinkToNode[link] = nodeNo;
-        NodeToLink[nodeNo] = link;
-        Nodes++;
-    } else {
-        nodeNo = it->second;
-    }
-
-    return nodeNo;
-}
-
-void Process() {
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(InputDirectory)) {
-        if (!entry.is_regular_file()) {
-            continue;  // skip chunk dir
-        }
-
-        try {
-            data::Document doc;
-            {
-                data::FileReader file{entry.path().string().c_str()};
-                data::GzipReader gzip{file};
-                if (!data::DeserializeValue(doc, gzip)) {
-                    throw std::runtime_error("Failed to deserialize document: " + entry.path().string());
-                }
-            }
-
-            int fromNode = GetLinkNode(doc.url);
-            auto& vec = NodeConnections[fromNode];
-
-            for (const std::string& link : doc.forwardLinks) {
-                vec.push_back(GetLinkNode(link));
-            }
-        } catch (const std::exception& e) {
-            spdlog::error("\nError processing {}: {}", entry.path().string(), e.what());
-        }
-    }
-}
 }  // namespace
 
 int main(int /*argc*/, char* /*argv*/[]) {
-#if !defined(NDEBUG)
-    spdlog::set_level(spdlog::level::debug);
-#else
-    spdlog::set_level(spdlog::level::info);
-#endif
-
-    auto start = std::chrono::steady_clock::now();
-
-    spdlog::info("Starting page rank forward links simulation...");
-
-    Process();
-    const double tol = 1.0 / Nodes;
-
-    auto end = std::chrono::steady_clock::now();
-    auto processDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-    spdlog::info("Finished processing documents. Found {} links. Time taken: {} ms.", Nodes, processDuration);
-
-    spdlog::info("Building CSR Matrix with tolerance {:e}", tol);
-
-    start = std::chrono::steady_clock::now();
-
-    core::CSRMatrix m(Nodes);
-    std::vector<double> outDegree(Nodes, 0.0);
-
-    for (auto& [node, value] : NodeConnections) {
-        for (auto target : value) {
-            m.AddEdge(target, node, 1.0);
-        }
-
-        outDegree[node] = static_cast<double>(value.size());
-    }
-
-    m.Finalize();
-
-    for (int i = 0; i < m.values_.size(); ++i) {
-        if (outDegree[m.col_idx_[i]] > 0) {
-            m.values_[i] /= outDegree[m.col_idx_[i]];
-        }
-    }
-
-    end = std::chrono::steady_clock::now();
-    auto csrMatrixDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
-
-    spdlog::info("Finished CSR matrix building process. Time taken: {} ms", csrMatrixDuration);
-    spdlog::info("Performing page rank....");
-
-    start = std::chrono::steady_clock::now();
-
-    PageRank algo(m, Nodes);
-
-    end = std::chrono::steady_clock::now();
-    auto duration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
-    spdlog::info("Finished pagerank in: {} ms", duration);
-    spdlog::info("Total time taken: {} ms", (duration + csrMatrixDuration + processDuration));
+    mithril::pagerank::PerformPageRank();
 
     std::ofstream outFile;
     outFile.open(OutputFile);
 
-    std::vector<double> scores = algo.GetPageRanks();
+    std::vector<double> &scores = mithril::pagerank::Results;
     std::vector<size_t> idx(scores.size());
     std::iota(idx.begin(), idx.end(), 0);
 
     stable_sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) { return scores[i1] < scores[i2]; });
 
     for (size_t i = 0; i < idx.size(); ++i) {
-        outFile << NodeToLink[static_cast<int>(idx[i])] << ": " << scores[idx[i]] << std::endl;
+        outFile << mithril::pagerank::NodeToDocument[idx[i]].url << ": " << scores[idx[i]] << std::endl;
     }
 
     outFile.close();
 
     spdlog::info("Finished writing to file: {}", OutputFile);
+
     return 0;
 }
