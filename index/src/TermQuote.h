@@ -4,6 +4,7 @@
 #include "IndexStreamReader.h"
 #include "DocumentMapReader.h"
 #include "data/Document.h"
+#include "TermAND.h"
 
 #include <memory>
 #include <string>
@@ -34,8 +35,10 @@ private:
     DocumentMapReader& doc_reader_;
     const std::string& index_path_;
     const std::vector<std::string>& quote_;
-    std::unique_ptr<IndexStreamReader> stream_reader_;
+    std::vector<TermReader*> term_readers_; // sketchy
+    std::unique_ptr<TermAND> stream_reader_;
     data::docid_t current_doc_id_{0};
+    data::docid_t next_doc_id_{0};
     bool at_end_{false};
 };
 
