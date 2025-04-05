@@ -15,6 +15,13 @@ TermQuote::TermQuote(DocumentMapReader& doc_reader, const std::string& index_pat
     for (const auto& term: quote) term_readers.emplace_back(index_path_, term);
     for (const auto& term_reader: term_readers) term_readers_.push_back(term_reader.get());
     stream_reader_ = std::make_unique<TermAND>(std::move(term_readers));
+
+    // set into valid initial state
+    findNextMatch();
+    if (hasNext()) {
+        current_doc_id_ = next_doc_id_;
+        findNextMatch();
+    }
 }
 
 bool TermQuote::hasNext() const {
@@ -22,7 +29,10 @@ bool TermQuote::hasNext() const {
 }
 
 void TermQuote::moveNext() {
-    
+    if (hasNext()) {
+        current_doc_id_ = next_doc_id_;
+        findNextMatch();
+    }
 }
 
 data::docid_t TermQuote::currentDocID() const {
@@ -30,7 +40,8 @@ data::docid_t TermQuote::currentDocID() const {
 }
 
 void TermQuote::seekToDocID(data::docid_t target_doc_id) {
-    
+    while (hasNext() && current_doc_id_ != target_doc_id)
+        moveNext();
 }
 
 bool TermQuote::findNextMatch() {
@@ -47,6 +58,7 @@ bool TermQuote::findNextMatch() {
                 }
             }
             if (all_match) {
+                next_doc_id_ = stream_reader_->currentDocID();
                 return true;
             }
         }
