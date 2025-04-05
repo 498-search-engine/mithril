@@ -50,6 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - dns-level rate limiting over host-level (#111)
 - more config and metrics for rate limits and caching (#113)
 - more metrics and attempts at improvements (#114)
+- introduced static ranking (#115)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
@@ -77,6 +78,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - clamp robots crawl delay to reasonable range (#109)
 - check in flight robot requests at start of fill (#110)
 - cleanup ranking & tests directory w.r.t to ranking tests (#116)
+- fixed domain name whitelist being penalized + add `en.wikipedia.org` to whitelist for Crawler URL ranking (#115)
 
 ## [0.1.0] - 2025-02-07
 
