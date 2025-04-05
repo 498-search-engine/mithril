@@ -4,6 +4,7 @@
 #include "HostRateLimiter.h"
 #include "Robots.h"
 #include "ThreadSync.h"
+#include "core/algorithm.h"
 #include "core/locks.h"
 #include "core/optional.h"
 #include "http/URL.h"
@@ -123,7 +124,7 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
         auto robotsWait = robotRulesCache_.ProcessPendingRequests();
         if (robotsWait != 0) {
             lock.Unlock();
-            usleep(robotsWait * 750L);  // 75% of time
+            usleep(core::min(robotsWait, 5L) * 1000L);  // up to 5ms
             return;
         }
     }
