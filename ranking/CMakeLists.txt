@@ -10,10 +10,7 @@ else()
     endif()
 endif()
 
-add_library(pagerank STATIC
-    src/PageRank.cpp
-)
-
+add_library(pagerank STATIC src/PageRank.cpp)
 target_link_libraries(pagerank PUBLIC
     spdlog::spdlog
     lib::core
@@ -26,28 +23,19 @@ if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME MATCHES "Dar
     target_compile_options(pagerank PRIVATE -fopenmp)
 endif()
 
-add_executable(pagerank_bench
-    tests/PageRank_Bench.cpp
-)
+# Handle tests folder
 
-add_executable(pagerank_sim
-    tests/PageRank_Sim.cpp
-)
+# PageRank related
+add_executable(pagerank_bench tests/PageRank_Bench.cpp)
+target_include_directories(pagerank_bench PRIVATE src)
+target_link_libraries(pagerank_bench PRIVATE pagerank)
 
-add_executable(domainrank_sim
-    tests/DomainRank_Sim.cpp
-)
+add_executable(pagerank_sim tests/PageRank_Sim.cpp)
+target_include_directories(pagerank_sim PRIVATE src)
+target_link_libraries(pagerank_sim PRIVATE pagerank)
+
+add_executable(domainrank_sim tests/DomainRank_Sim.cpp)
+target_include_directories(domainrank_sim PRIVATE src)
+target_link_libraries(domainrank_sim PRIVATE pagerank)
 
 file(COPY config DESTINATION ${CMAKE_BINARY_DIR}/ranking)
-
-target_link_libraries(pagerank_bench PRIVATE
-    pagerank
-)
-
-target_link_libraries(pagerank_sim PRIVATE
-    pagerank
-)
-
-target_link_libraries(domainrank_sim PRIVATE
-    pagerank
-)

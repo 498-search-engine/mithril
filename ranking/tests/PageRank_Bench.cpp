@@ -7,8 +7,11 @@
 
 using namespace std;
 
+// The scores are meaningless (since data is fake), so we do not print them and just ignore it.
 int main(int argc, char* argv[]) {
-    int nodes = 1000;  // 100 mill
+    core::Config config = core::Config("tests.conf");
+
+    int nodes = config.GetInt("pagerank_bench_nodes");  // 100 mill
     if (argc > 1) {
         nodes = stoi(argv[1]);
     }
@@ -16,7 +19,7 @@ int main(int argc, char* argv[]) {
 
     const double tol = 1.0 / nodes;
 
-    std::cout << "simulating " << nodes << " nodes with precision of " << tol << std::endl;
+    spdlog::info("Starting page rank simulation with {} nodes and tolerance {:e}", to_string(nodes), tol);
 
     auto start = std::chrono::steady_clock::now();
 
@@ -58,22 +61,18 @@ int main(int argc, char* argv[]) {
     }
 
     auto end = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto csr_matrix_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    std::cout << "finished building graph in: " << duration.count() << " ms" << std::endl;
+    spdlog::info("Finished CSR matrix building process. Time taken: {} ms", csr_matrix_duration.count());
 
     start = std::chrono::steady_clock::now();
 
     PageRank algo(m, nodes);
 
     end = std::chrono::steady_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "finished pagerank in: " << duration.count() << " ms" << std::endl;
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    spdlog::info("Finished pagerank algorithm in: {} ms", duration.count());    
 
-    // cout << "PageRank scores:\n";
-    // for (double score : algo.GetPageRanks()) {
-    //     cout << score << " ";
-    // }
-    // cout << endl;
+    spdlog::info("Total time taken: {} ms", (duration + csr_matrix_duration).count());
     return 0;
 }
