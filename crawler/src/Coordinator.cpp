@@ -131,9 +131,8 @@ void Coordinator::Run() {
     ++threadCount;
     core::Thread freshURLsThread([&] { frontier_->FreshURLsThread(state_->threadSync); });
     ++threadCount;
-    core::Thread metricsThread([&] { metricsServer_->Run(state_->threadSync); });
-    ++threadCount;
 
+    core::Thread metricsThread([&] { metricsServer_->Run(state_->threadSync); });
     core::Thread snapshotThread([this, threadCount] { this->SnapshotThreadEntry(threadCount); });
 
     // Wait for SIGINT or SIGTERM

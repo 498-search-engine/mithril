@@ -75,8 +75,6 @@ void MetricsServer::Run(ThreadSync& sync) {
     spdlog::info("metrics server listening at :{}", port_);
 
     while (!sync.ShouldShutdown()) {
-        sync.MaybePause();
-
         FD_ZERO(&readfds);
         FD_SET(sock_, &readfds);
 
