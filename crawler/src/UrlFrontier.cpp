@@ -364,8 +364,11 @@ core::Optional<unsigned long> UrlFrontier::LookUpCrawlDelayNonblocking(const htt
                                                                        unsigned long defaultDelay) {
     core::LockGuard lock(robotsCacheMu_, core::DeferLock);
     if (!lock.TryLock()) {
+        CrawlDelayLookupLockFailures.Inc();
         return core::nullopt;
     }
+
+    CrawlDelayLookupLockSuccesses.Inc();
 
     const auto* res = robotRulesCache_.GetOrFetch(host);
     if (res == nullptr) {
