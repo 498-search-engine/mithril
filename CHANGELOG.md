@@ -76,6 +76,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - install libgomp1 in docker container (#106)
 - clamp robots crawl delay to reasonable range (#109)
 - check in flight robot requests at start of fill (#110)
+- cleanup ranking & tests directory w.r.t to ranking tests (#116)
 
 ## [0.1.0] - 2025-02-07
 
