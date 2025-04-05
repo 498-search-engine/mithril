@@ -18,18 +18,9 @@ target_link_libraries(pagerank PUBLIC
     OpenMP::OpenMP_CXX
 )
 
-target_link_libraries(ranking PUBLIC
-    spdlog::spdlog
-    lib::core
-    common
-    index
-    OpenMP::OpenMP_CXX
-)
-
 # Only apply `-fopenmp` on non-Apple Clang systems
 if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME MATCHES "Darwin"))
     target_compile_options(pagerank PRIVATE -fopenmp)
-    target_compile_options(ranking PRIVATE -fopenmp)
 endif()
 
 # Handle tests folder
