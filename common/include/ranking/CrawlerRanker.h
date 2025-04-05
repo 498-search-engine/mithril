@@ -105,6 +105,7 @@ const std::unordered_set<std::string> WhitelistDomain = {
     "bloomberg.com",       // Bloomberg (business and financial news)
 
     // Education and Reference
+    "en.wikipedia.org",
     "wikipedia.org",            // Wikipedia (crowdsourced encyclopedia)
     "britannica.com",           // Encyclopaedia Britannica (authoritative reference)
     "khanacademy.org",          // Khan Academy (educational resources)

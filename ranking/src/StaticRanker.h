@@ -1,86 +1,93 @@
 #ifndef RANKING_STATICRANKER_H
 #define RANKING_STATICRANKER_H
 
+#include "core/config.h"
+
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <unordered_set>
 
 /**
-* @brief This is different from CrawlerRanker in terms of scoring. I'm decoupling it so that we can make more specific tunes to static ranking for what we'd want for queries (but not necessarily for crawling/differences do not matter as much then).
+* @brief This is different from CrawlerRanker in terms of scoring. I'm decoupling it so that we can make more specific
+tunes to static ranking for what we'd want for queries (but not necessarily for crawling/differences do not matter as
+much then).
 
-* Primary differentiating is scoring. The scoring is more granular and we scale up at different points. This is because we want to be able to tune the score more easily and not have to worry about the penalty being too high or too low. We can also add more scoring rules if we want to.
+* Primary differentiating is scoring. The scoring is more granular and we scale up at different points. This is because
+we want to be able to tune the score more easily and not have to worry about the penalty being too high or too low. We
+can also add more scoring rules if we want to.
 
 * We no longer use a % system as well, just a points based system.
 */
 
 namespace mithril::ranking {
+static inline core::Config Config = core::Config("staticranker.conf");
+
 // * HTTPS
-constexpr int32_t HttpsScore = 100;
+static inline const int32_t HttpsScore = Config.GetInt("HttpsScore");
 
 // * Site TLD (whitelist)
-constexpr int32_t WhitelistTldScore = 200;
+static inline const int32_t WhitelistTldScore = Config.GetInt("WhitelistTldScore");
 
 // * Domain whitelist
-constexpr int32_t WhitelistDomainScore = 500;
+static inline const int32_t WhitelistDomainScore = Config.GetInt("WhitelistDomainScore");
 
 // * Domain name length
 // note: includes TLD length
 // note: ignores www.
-constexpr int32_t DomainNameScore = 200;
-constexpr int32_t DomainLengthAcceptable = 11;
-constexpr int32_t DomainPenaltyPerExtraLength = 50;
+static inline const int32_t DomainNameScore = Config.GetInt("DomainNameScore");
+static inline const int32_t DomainLengthAcceptable = Config.GetInt("DomainLengthAcceptable");
+static inline const int32_t DomainPenaltyPerExtraLength = Config.GetInt("DomainPenaltyPerExtraLength");
 
 // * URL length
 // note: URL length does not include domain name length
-constexpr int32_t UrlLengthScore = 400;
-constexpr int32_t UrlLengthAcceptable = 60;
-constexpr int32_t UrlPenaltyPerExtraLength = 50;
+static inline const int32_t UrlLengthScore = Config.GetInt("UrlLengthScore");
+static inline const int32_t UrlLengthAcceptable = Config.GetInt("UrlLengthAcceptable");
+static inline const int32_t UrlPenaltyPerExtraLength = Config.GetInt("UrlPenaltyPerExtraLength");
 
 // * Number of parameters
-constexpr int32_t NumberParamScore = 200;
-constexpr int32_t NumberParamAcceptable = 1;
-constexpr int32_t NumberParamPenaltyPerExtraParam = 100;
+static inline const int32_t NumberParamScore = Config.GetInt("NumberParamScore");
+static inline const int32_t NumberParamAcceptable = Config.GetInt("NumberParamAcceptable");
+static inline const int32_t NumberParamPenaltyPerExtraParam = Config.GetInt("NumberParamPenaltyPerExtraParam");
 
 // * Depth of page
-constexpr int32_t DepthPageScore = 400;
-constexpr int32_t DepthPageAcceptable = 1;
-constexpr int32_t DepthPagePenalty = 50;
+static inline const int32_t DepthPageScore = Config.GetInt("DepthPageScore");
+static inline const int32_t DepthPageAcceptable = Config.GetInt("DepthPageAcceptable");
+static inline const int32_t DepthPagePenalty = Config.GetInt("DepthPagePenalty");
 
 /**
     Positive ranking
 */
-// * Extensions (+30%)
+// * Extensions
 const std::unordered_set<std::string> GoodExtensionList = {"asp", "html", "htm", "php", "asp", ""};
-constexpr int32_t ExtensionBoost = 500;
+static inline const int32_t ExtensionBoost = Config.GetInt("ExtensionBoost");
 
 /**
      Negative ranking
 */
-// * Subdomain count (-50%)
+// * Subdomain count
 // Penalty is per subdomain that is not `www`
 // www.example.com has 1 subdomains (example)
 // www.eecs.example.com has 2 subdomain (eecs, example)
-constexpr int32_t SubdomainAcceptable = 1;
-constexpr int32_t SubdomainPenalty = 200;
+static inline const int32_t SubdomainAcceptable = Config.GetInt("SubdomainAcceptable");
+static inline const int32_t SubdomainPenalty = Config.GetInt("SubdomainPenalty");
+// * Any number in domain name
+static inline const int32_t DomainNameNumberPenalty = Config.GetInt("DomainNameNumberPenalty");
 
-// * Any number in domain name (-20%)
-constexpr int32_t DomainNameNumberPenalty = 500;
+// * Numbers of length > 4 (e.g not years) in URL (this is after the domain name)
+static inline const int32_t URLNumberPenalty = Config.GetInt("URLNumberPenalty");
 
-// * Numbers of length > 4 (e.g not years) in URL (-35%) (this is after the domain name)
-constexpr int32_t URLNumberPenalty = 500;
-
-struct CrawlerRankingsStruct {
+struct StaticRankingsStruct {
     std::string tld;
     std::string domainName;
     std::string extension;
-    int32_t urlLength;
-    int32_t parameterCount;
-    int32_t pageDepth;
-    int32_t subdomainCount;
-    bool numberInDomainName;
-    bool numberInURL;
-    bool isHttps;
+    int32_t urlLength = 0;
+    int32_t parameterCount = 0;
+    int32_t pageDepth = 0;
+    int32_t subdomainCount = 0;
+    bool numberInDomainName = false;
+    bool numberInURL = false;
+    bool isHttps = false;
 };
 
 const std::unordered_set<std::string> WhitelistTld = {
@@ -107,6 +114,7 @@ const std::unordered_set<std::string> WhitelistDomain = {
     "bloomberg.com",       // Bloomberg (business and financial news)
 
     // Education and Reference
+    "en.wikipedia.org",
     "wikipedia.org",            // Wikipedia (crowdsourced encyclopedia)
     "britannica.com",           // Encyclopaedia Britannica (authoritative reference)
     "khanacademy.org",          // Khan Academy (educational resources)
@@ -190,7 +198,7 @@ const std::unordered_set<std::string> WhitelistDomain = {
 /*
  * Gets all relevant ranking info in one pass of the URL string.
  */
-void GetStringStaticRankings(std::string_view url, CrawlerRankingsStruct& ranker);
+void GetStringRankings(std::string_view url, StaticRankingsStruct& ranker);
 int32_t GetUrlStaticRank(std::string_view url);
 }  // namespace mithril::ranking
 

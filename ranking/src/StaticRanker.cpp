@@ -9,18 +9,8 @@
 namespace mithril::ranking {
 
 int32_t GetUrlStaticRank(std::string_view url) {
-    CrawlerRankingsStruct ranker{.tld = "",
-                                 .domainName = "",
-                                 .extension = "",
-                                 .urlLength = 0,
-                                 .parameterCount = 0,
-                                 .pageDepth = 0,
-                                 .subdomainCount = 0,
-                                 .numberInDomainName = false,
-                                 .numberInURL = false,
-                                 .isHttps = false};
-
-    GetStringStaticRankings(url, ranker);
+    StaticRankingsStruct ranker{};
+    GetStringRankings(url, ranker);
 
     int32_t score = 0;
 
@@ -90,7 +80,7 @@ int32_t GetUrlStaticRank(std::string_view url) {
     return std::max(score, 0);
 }
 
-void GetStringStaticRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
+void GetStringRankings(std::string_view url, StaticRankingsStruct& ranker) {
     const char* c = url.data();
     const char* end = url.data() + url.size();
 
