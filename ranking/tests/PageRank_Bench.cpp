@@ -61,9 +61,9 @@ int main(int argc, char* argv[]) {
     }
 
     auto end = std::chrono::steady_clock::now();
-    auto csr_matrix_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto csrMatrixDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    spdlog::info("Finished CSR matrix building process. Time taken: {} ms", csr_matrix_duration.count());
+    spdlog::info("Finished CSR matrix building process. Time taken: {} ms", csrMatrixDuration.count());
 
     start = std::chrono::steady_clock::now();
 
@@ -71,8 +71,8 @@ int main(int argc, char* argv[]) {
 
     end = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    spdlog::info("Finished pagerank algorithm in: {} ms", duration.count());    
+    spdlog::info("Finished pagerank algorithm in: {} ms", duration.count());
 
-    spdlog::info("Total time taken: {} ms", (duration + csr_matrix_duration).count());
+    spdlog::info("Total time taken: {} ms", (duration + csrMatrixDuration).count());
     return 0;
 }

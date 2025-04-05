@@ -12,8 +12,9 @@
 #include <spdlog/spdlog.h>
 
 namespace {
-const std::string InputDirectory = "pages";
-const std::string OutputFile = "domainranks_out.txt";
+core::Config Config = core::Config("tests.conf");
+const std::string InputDirectory = std::string(Config.GetString("simulation_input_index_data_folder").Cstr());
+const std::string OutputFile = std::string(Config.GetString("domainrank_sim_out").Cstr());
 std::unordered_map<std::string, int> LinkToNode;
 std::unordered_map<int, std::string> NodeToLink;
 std::unordered_map<int, std::vector<int>> NodeConnections;
@@ -94,17 +95,17 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
     auto start = std::chrono::steady_clock::now();
 
-    spdlog::info("Starting page rank forward links test...");
+    spdlog::info("Starting domain rank forward links simulation...");
 
     Process();
     const double tol = 1.0 / Nodes;
 
     auto end = std::chrono::steady_clock::now();
-    auto duration = std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    auto processDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    spdlog::info("Finished processing documents. Time taken: " + duration + "ms Links found: " + std::to_string(Nodes));
+    spdlog::info("Finished processing documents. Found {} links. Time taken: {} ms.", Nodes, processDuration);
 
-    spdlog::info("Building CSR Matrix with tolerance " + std::to_string(tol));
+    spdlog::info("Building CSR Matrix with tolerance {:e}", tol);
 
     start = std::chrono::steady_clock::now();
 
@@ -127,20 +128,20 @@ int main(int /*argc*/, char* /*argv*/[]) {
         }
     }
 
-
     end = std::chrono::steady_clock::now();
-    duration = std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    auto csrMatrixDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
-    spdlog::info("Finished CSR matrix building process. Time taken: " + duration + "ms");
-    spdlog::info("Performing page rank....");
+    spdlog::info("Finished CSR matrix building process. Time taken: {} ms", csrMatrixDuration);
+    spdlog::info("Performing domain rank....");
 
     start = std::chrono::steady_clock::now();
 
     PageRank algo(m, Nodes);
 
     end = std::chrono::steady_clock::now();
-    duration = std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
-    spdlog::info("Finished pagerank in: " + duration + "ms");
+    auto duration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    spdlog::info("Finished domainrank in: {} ms", duration);
+    spdlog::info("Total time taken: {} ms", (duration + csrMatrixDuration + processDuration));
 
     std::ofstream outFile;
     outFile.open(OutputFile);
@@ -156,10 +157,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     }
 
     outFile.close();
-    // cout << "PageRank scores:\n";
-    // for (double score : algo.GetPageRanks()) {
-    //     cout << score << " ";
-    // }
-    // cout << endl;
+
+    spdlog::info("Finished writing to file: {}", OutputFile);
     return 0;
 }
