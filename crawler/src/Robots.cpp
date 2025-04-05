@@ -453,6 +453,7 @@ long RobotRulesCache::FillFromQueue() {
 
     auto waitDuration = std::numeric_limits<long>::max();
     bool anyReady = false;
+    size_t waitingCount = 0;
 
     auto it = queuedFetches_.begin();
     while (it != queuedFetches_.end()) {
@@ -460,6 +461,7 @@ long RobotRulesCache::FillFromQueue() {
         if (hostWait > 0) {
             waitDuration = std::min(waitDuration, hostWait);
             ++it;
+            ++waitingCount;
             continue;
         }
 
@@ -473,6 +475,7 @@ long RobotRulesCache::FillFromQueue() {
     }
 
     RobotRulesCacheQueuedFetchesCount.Set(queuedFetches_.size());
+    RobotRulesCacheQueuedFetchesWaitingCount.Set(waitingCount);
     InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
     if (anyReady) {
         nextQueueCheck_ = 0;
