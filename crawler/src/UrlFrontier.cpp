@@ -1,5 +1,6 @@
 #include "UrlFrontier.h"
 
+#include "Clock.h"
 #include "CrawlerMetrics.h"
 #include "HostRateLimiter.h"
 #include "Robots.h"
@@ -80,8 +81,17 @@ bool UrlFrontier::CopyStateToDirectory(const std::string& directory) const {
 }
 
 void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
+    long last = 0;
+
     while (true) {
-        ProcessRobotsRequests(sync);
+        long now = MonotonicTime();
+        bool tryAll = false;
+        if (now - last >= 10) {
+            tryAll = true;
+            last = now;
+        }
+
+        ProcessRobotsRequests(sync, tryAll);
         if (sync.ShouldShutdown()) {
             break;
         }
@@ -111,7 +121,7 @@ void UrlFrontier::FreshURLsThread(ThreadSync& sync) {
     spdlog::info("frontier fresh urls thread terminating");
 }
 
-void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
+void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync, bool tryAll) {
     {
         core::LockGuard lock(robotsCacheMu_);
         // Wait until we have requests to execute. We only ever get new requests
@@ -133,6 +143,40 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
 
     // Process completed robots.txt fetches
     std::set<std::string> allowedURLs;
+
+    if (tryAll) {
+        core::LockGuard waitingLock(waitingUrlsMu_);
+        core::LockGuard robotsLock(robotsCacheMu_);
+
+        if (urlsWaitingForRobots_.size() > robotRulesCache_.CompletedFetchs().size()) {
+            // Something missing to check up on
+            auto it = urlsWaitingForRobots_.begin();
+            while (it != urlsWaitingForRobots_.end()) {
+                const auto* robots = robotRulesCache_.GetOrFetch(it->first);
+                if (robots == nullptr) {
+                    // Still waiting
+                    ++it;
+                    continue;
+                }
+
+                auto host = it->first;
+                auto urls = std::move(it->second);
+                urlsWaitingForRobotsCount_ -= urls.size();
+                it = urlsWaitingForRobots_.erase(it);
+
+                // The cache has fetched and resolved the robots.txt page for this
+                // canonical host. Process all queued URLs.
+                for (auto& url : urls) {
+                    if (robots->Allowed(url.path)) {
+                        allowedURLs.insert(std::move(url.url));
+                    }
+                }
+            }
+        }
+
+        usleep(1);
+    }
+
     {
         core::LockGuard waitingLock(waitingUrlsMu_);
         core::LockGuard robotsLock(robotsCacheMu_);

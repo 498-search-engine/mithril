@@ -157,7 +157,7 @@ private:
      * @brief Processes in-flight and pending robots.txt requests for URLs
      * waiting to get into the frontier.
      */
-    void ProcessRobotsRequests(ThreadSync& sync);
+    void ProcessRobotsRequests(ThreadSync& sync, bool tryAll);
 
     /**
      * @brief Processes freshly-added URLs from PushURL and PushURLs,
