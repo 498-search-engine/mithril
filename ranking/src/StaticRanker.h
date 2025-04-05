@@ -35,6 +35,7 @@ static inline const int32_t WhitelistDomainScore = Config.GetInt("WhitelistDomai
 // * Domain name length
 // note: includes TLD length
 // note: ignores www.
+// note: ignored if domain name is in whitelist
 static inline const int32_t DomainNameScore = Config.GetInt("DomainNameScore");
 static inline const int32_t DomainLengthAcceptable = Config.GetInt("DomainLengthAcceptable");
 static inline const int32_t DomainPenaltyPerExtraLength = Config.GetInt("DomainPenaltyPerExtraLength");
@@ -69,9 +70,11 @@ static inline const int32_t ExtensionBoost = Config.GetInt("ExtensionBoost");
 // Penalty is per subdomain that is not `www`
 // www.example.com has 1 subdomains (example)
 // www.eecs.example.com has 2 subdomain (eecs, example)
+// only penalized if the domain is not in the whitelist (e.g en.wikipedia.org)
 static inline const int32_t SubdomainAcceptable = Config.GetInt("SubdomainAcceptable");
 static inline const int32_t SubdomainPenalty = Config.GetInt("SubdomainPenalty");
 // * Any number in domain name
+// only penalized if the domain is not in the whitelist
 static inline const int32_t DomainNameNumberPenalty = Config.GetInt("DomainNameNumberPenalty");
 
 // * Numbers of length > 4 (e.g not years) in URL (this is after the domain name)

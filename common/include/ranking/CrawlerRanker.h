@@ -17,6 +17,7 @@ constexpr int32_t WhitelistDomainScore = 10;
 // * Domain name length (10%)
 // note: includes TLD length
 // note: ignores www.
+// note: ignored if domain name is in whitelist
 constexpr int32_t DomainNameScore = 10;
 constexpr int32_t DomainLengthAcceptable = 11;
 constexpr int32_t DomainPenaltyPerExtraLength = 5;
@@ -48,6 +49,7 @@ constexpr int32_t ExtensionBoost = 30;
 // Penalty is per subdomain that is not `www`
 // www.example.com has 1 subdomains (example)
 // www.eecs.example.com has 2 subdomain (eecs, example)
+// only penalized if the domain is not in the whitelist (e.g en.wikipedia.org)
 constexpr int32_t SubdomainAcceptable = 1;
 constexpr int32_t SubdomainPenalty = 15;
 
@@ -61,6 +63,7 @@ const std::unordered_set<std::string> BadExtensionList = {
     "mpg", "m4a", "aiff", "au",   "raw",  "cr2",  "nef",  "orf", "sr2",    "torrent"};
 
 // * Any number in domain name (-20%)
+// only penalized if the domain is not in the whitelist
 constexpr int32_t DomainNameNumberPenalty = 20;
 
 // * Numbers of length > 4 (e.g not years) in URL (-35%) (this is after the domain name)

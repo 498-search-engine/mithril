@@ -15,6 +15,13 @@ int32_t GetUrlRank(std::string_view url) {
 
     int32_t score = 0;
 
+    // * Extensions
+    if (GoodExtensionList.contains(ranker.extension)) {
+        score += ExtensionBoost;
+    } else if (BadExtensionList.contains(ranker.extension)) {
+        return -100;
+    }
+
     // * Site TLD (whitelist)
     if (WhitelistTld.contains(ranker.tld)) {
         score += WhitelistTldScore;
@@ -23,15 +30,25 @@ int32_t GetUrlRank(std::string_view url) {
     // * Domain whitelist
     if (WhitelistDomain.contains(ranker.domainName)) {
         score += WhitelistDomainScore;
-    }
+    } else {
+        // * Domain name length
+        int32_t domainNamePenalty = 0;
+        if (ranker.domainName.length() > DomainLengthAcceptable) {
+            // NOLINTNEXTLINE(bugprone-narrowing-conversions)
+            domainNamePenalty = DomainPenaltyPerExtraLength * (ranker.domainName.length() - DomainLengthAcceptable);
+        }
+        score += DomainNameScore - std::min(domainNamePenalty, DomainNameScore);
 
-    // * Domain name length
-    int32_t domainNamePenalty = 0;
-    if (ranker.domainName.length() > DomainLengthAcceptable) {
-        // NOLINTNEXTLINE(bugprone-narrowing-conversions)
-        domainNamePenalty = DomainPenaltyPerExtraLength * (ranker.domainName.length() - DomainLengthAcceptable);
+        // * Subdomain count
+        if (ranker.subdomainCount > SubdomainAcceptable) {
+            score -= SubdomainPenalty * (ranker.subdomainCount - SubdomainAcceptable);
+        }
+
+        // * Number in domain name
+        if (ranker.numberInDomainName) {
+            score -= DomainNameNumberPenalty;
+        }
     }
-    score += DomainNameScore - std::min(domainNamePenalty, DomainNameScore);
 
     // * URL length
     int32_t urlPenalty = 0;
@@ -62,25 +79,8 @@ int32_t GetUrlRank(std::string_view url) {
         score -= std::min(score, HttpsDebuffScore);
     }
 
-    // * Extensions
-    if (GoodExtensionList.contains(ranker.extension)) {
-        score += ExtensionBoost;
-    } else if (BadExtensionList.contains(ranker.extension)) {
-        return -100;
-    }
-
-    // * Subdomain count
-    if (ranker.subdomainCount > SubdomainAcceptable) {
-        score -= SubdomainPenalty * (ranker.subdomainCount - SubdomainAcceptable);
-    }
-
-    // * Number in domain name
-    if (ranker.numberInDomainName) {
-        score -= DomainNameNumberPenalty;
-    }
-
     // * Number in URL
-    if (ranker.numberInURL) {
+    if (!ranker.numberInURL) {
         score -= URLNumberPenalty;
     }
 
