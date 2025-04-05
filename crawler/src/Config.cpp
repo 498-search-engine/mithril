@@ -89,6 +89,10 @@ CrawlerConfig LoadConfigFromFile(const std::string& path) {
             config.request_timeout = std::stoul(std::string(value));
         } else if (key == "default_crawl_delay_ms"sv) {
             config.default_crawl_delay_ms = std::stol(std::string(value));
+        } else if (key == "ratelimit_bucket_ms"sv) {
+            config.ratelimit_bucket_ms = std::stol(std::string(value));
+        } else if (key == "ratelimit_bucket_count"sv) {
+            config.ratelimit_bucket_count = std::stoul(std::string(value));
         } else if (key == "middle_queue.queue_count"sv) {
             config.middle_queue_queue_count = std::stoul(std::string(value));
         } else if (key == "middle_queue.url_batch_size"sv) {

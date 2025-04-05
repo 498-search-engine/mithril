@@ -104,6 +104,8 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
     // is acceptable.
     size_t maxPossibleReady = std::min(max, n_);
     size_t added = 0;
+    size_t rateLimitedCount = 0;
+    size_t waitingLookupCount = 0;
 
     if (ActiveQueueCount() > 0) {
         auto waitDuration = std::numeric_limits<long>::max();
@@ -122,6 +124,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
                     record->crawlDelayMs = CrawlDelayFromDirective(*delay);
                 } else {
                     // Still waiting
+                    ++waitingLookupCount;
                     continue;
                 }
             }
@@ -131,6 +134,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
             if (hostWait != 0) {
                 // Need to wait for host
                 waitDuration = std::min(waitDuration, hostWait);
+                ++rateLimitedCount;
                 continue;
             }
 
@@ -151,6 +155,8 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 
     MiddleQueueActiveQueueCount.Set(ActiveQueueCount());
     MiddleQueueTotalQueuedURLs.Set(totalQueuedURLs_);
+    MiddleQueueRateLimitedCount.Set(rateLimitedCount);
+    MiddleQueueWaitingDelayLookupCount.Set(waitingLookupCount);
     MiddleQueueTotalHosts.Set(hosts_.size());
 }
 

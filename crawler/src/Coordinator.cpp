@@ -79,7 +79,8 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
         blacklistedHostsTrie_.Insert(parts);
     }
 
-    limiter_ = core::MakeUnique<HostRateLimiter>(config.default_crawl_delay_ms);
+    limiter_ = core::MakeUnique<HostRateLimiter>(
+        config.default_crawl_delay_ms, config.ratelimit_bucket_ms, config.ratelimit_bucket_count);
     state_ = core::MakeUnique<LiveState>();
 
     docQueue_ = core::MakeUnique<DocumentQueue>(state_->threadSync);
@@ -130,9 +131,8 @@ void Coordinator::Run() {
     ++threadCount;
     core::Thread freshURLsThread([&] { frontier_->FreshURLsThread(state_->threadSync); });
     ++threadCount;
-    core::Thread metricsThread([&] { metricsServer_->Run(state_->threadSync); });
-    ++threadCount;
 
+    core::Thread metricsThread([&] { metricsServer_->Run(state_->threadSync); });
     core::Thread snapshotThread([this, threadCount] { this->SnapshotThreadEntry(threadCount); });
 
     // Wait for SIGINT or SIGTERM
