@@ -48,6 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - last minute crawler config changes (#103)
 - global and robust host-level rate limiting (#107)
 - dns-level rate limiting over host-level (#111)
+- add bm25 stats support in index for stastic ranking and dev POC, actually fix tired merge, improve position (add field tags) and core indexing (performance, cleanup) (#112)
+   - anubhav will finish this!
 - more config and metrics for rate limits and caching (#113)
 - more metrics and attempts at improvements (#114)
 

@@ -21,30 +21,27 @@ void DocumentMapReader::loadDocumentMap(const std::string& path) {
     in.read(reinterpret_cast<char*>(&doc_count_), sizeof(uint32_t));
     doc_infos_.reserve(doc_count_);
 
-    // tempt buffers
+    // Temp buffers
     std::vector<char> url_buffer;
     std::vector<char> title_buffer;
 
-    // First pass: calculate total string sizes needed
+    // First pass: calculate total string sizes
     size_t total_url_size = 0;
     size_t total_title_size = 0;
-
-    // Save current position for rewinding
     std::streampos start_pos = in.tellg();
+
     for (size_t i = 0; i < doc_count_; ++i) {
         data::docid_t doc_id;
         uint32_t url_len, title_len;
 
         in.read(reinterpret_cast<char*>(&doc_id), sizeof(doc_id));
         in.read(reinterpret_cast<char*>(&url_len), sizeof(url_len));
-
-        // Skip URL content for now
         in.seekg(url_len, std::ios::cur);
-
         in.read(reinterpret_cast<char*>(&title_len), sizeof(title_len));
-
-        // Skip title content for now
         in.seekg(title_len, std::ios::cur);
+
+        // Skip BM25F stats in first pass
+        in.seekg(sizeof(uint32_t) * 4 + sizeof(float), std::ios::cur);
 
         total_url_size += url_len;
         total_title_size += title_len;
@@ -53,37 +50,44 @@ void DocumentMapReader::loadDocumentMap(const std::string& path) {
     // Pre-allocate string pools
     urls_.reserve(total_url_size);
     titles_.reserve(total_title_size);
-
-    // Reset to start of document data
     in.seekg(start_pos);
 
-    // Second pass: read actual data
+    // Second pass: actual loading
     for (size_t i = 0; i < doc_count_; ++i) {
         DocInfo info;
+        uint32_t url_str_len, title_str_len;
 
+        // Read ID and URL string
         in.read(reinterpret_cast<char*>(&info.id), sizeof(info.id));
-        in.read(reinterpret_cast<char*>(&info.url_length), sizeof(info.url_length));
-
-        // Read URL into string pool
-        url_buffer.resize(info.url_length);
-        in.read(url_buffer.data(), info.url_length);
-
+        in.read(reinterpret_cast<char*>(&url_str_len), sizeof(url_str_len));
+        url_buffer.resize(url_str_len);
+        in.read(url_buffer.data(), url_str_len);
         info.url_offset = urls_.size();
-        urls_.append(url_buffer.data(), info.url_length);
+        info.url_length = url_str_len;  // Store actual string length
+        urls_.append(url_buffer.data(), url_str_len);
 
-        in.read(reinterpret_cast<char*>(&info.title_length), sizeof(info.title_length));
-
-        // Read title into string pool
-        title_buffer.resize(info.title_length);
-        in.read(title_buffer.data(), info.title_length);
-
+        // Read title string
+        in.read(reinterpret_cast<char*>(&title_str_len), sizeof(title_str_len));
+        title_buffer.resize(title_str_len);
+        in.read(title_buffer.data(), title_str_len);
         info.title_offset = titles_.size();
-        titles_.append(title_buffer.data(), info.title_length);
+        info.title_length = title_str_len;  // Store actual string length
+        titles_.append(title_buffer.data(), title_str_len);
 
-        // Add document info
+        // Read BM25F stats (but don't overwrite string lengths)
+        uint32_t body_tokens, title_tokens, url_tokens, desc_tokens;
+        in.read(reinterpret_cast<char*>(&body_tokens), sizeof(body_tokens));
+        in.read(reinterpret_cast<char*>(&title_tokens), sizeof(title_tokens));
+        in.read(reinterpret_cast<char*>(&url_tokens), sizeof(url_tokens));
+        in.read(reinterpret_cast<char*>(&desc_tokens), sizeof(desc_tokens));
+        in.read(reinterpret_cast<char*>(&info.pagerank_score), sizeof(info.pagerank_score));
+
+        // Store token counts separately
+        info.body_length = body_tokens;
+        // Note: We preserve title_str_len for the actual string length
+        info.desc_length = desc_tokens;
+
         doc_infos_.push_back(info);
-
-        // Add URL lookup
         std::string_view url_view(urls_.data() + info.url_offset, info.url_length);
         url_to_id_[url_view] = info.id;
     }

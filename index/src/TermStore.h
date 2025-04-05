@@ -17,15 +17,13 @@ public:
     const std::vector<Posting>& postings() const;
     const std::vector<SyncPoint>& sync_points() const { return sync_points_; }
 
-    size_t size_bytes() const;
     void clear();
     bool empty() const;
 
-    static constexpr uint32_t SYNC_INTERVAL = 8 * 1024 * 1024;  // 1 MB
+    static constexpr uint32_t SYNC_INTERVAL = 128;
 
 private:
     std::vector<Posting> postings_;
-    size_t size_bytes_{0};
     std::vector<SyncPoint> sync_points_;
 };
 
