@@ -22,6 +22,7 @@ struct URL {
 
     std::string_view BasePath() const;
     std::string_view Extension() const;
+    std::string NonEmptyPort() const;
 };
 
 struct CanonicalHost {
@@ -29,10 +30,16 @@ struct CanonicalHost {
     std::string scheme;
     std::string host;
     std::string port;
+
+    std::string NonEmptyPort() const;
 };
 
 inline bool operator==(const CanonicalHost& a, const CanonicalHost& b) {
     return a.url == b.url;
+}
+
+inline bool operator<(const CanonicalHost& lhs, const CanonicalHost& rhs) {
+    return lhs.url < rhs.url;
 }
 
 /**

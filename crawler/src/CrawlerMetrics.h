@@ -74,6 +74,30 @@ inline auto WaitingRobotsURLs = Metric{
     "Number of URLs waiting for robots.txt to be resolved for their hosts",
 };
 
+inline auto RobotRulesCacheQueuedFetchesCount = Metric{
+    "crawler_robot_rules_cache_queued_fetches_count",
+    MetricTypeGauge,
+    "Number of queued robots fetches in the robot rules cache",
+};
+
+inline auto RobotRulesCacheQueuedFetchesWaitingCount = Metric{
+    "crawler_robot_rules_cache_queued_fetches_waiting_count",
+    MetricTypeGauge,
+    "Number of queued robots fetches in the robot rules cache that are currently rate limited",
+};
+
+inline auto RobotRulesCacheHits = Metric{
+    "crawler_robot_rules_cache_hits",
+    MetricTypeCounter,
+    "Number of cache hits for robot rules lookup",
+};
+
+inline auto RobotRulesCacheMisses = Metric{
+    "crawler_robot_rules_cache_misses",
+    MetricTypeCounter,
+    "Number of cache misses for robot rules lookup",
+};
+
 inline auto DocumentQueueSizeMetric = Metric{
     "crawler_document_queue_size",
     MetricTypeGauge,
@@ -98,6 +122,18 @@ inline auto MiddleQueueTotalHosts = Metric{
     "Number of tracked hosts in the middle queue",
 };
 
+inline auto MiddleQueueRateLimitedCount = Metric{
+    "crawler_middle_queue_rate_limited_active_hosts_count",
+    MetricTypeGauge,
+    "Number of active hosts in middle queue that are currently rate limited",
+};
+
+inline auto MiddleQueueWaitingDelayLookupCount = Metric{
+    "crawler_middle_queue_waiting_delay_lookup_count",
+    MetricTypeGauge,
+    "Number of active hosts in middle queue that are waiting for a delay lookup",
+};
+
 inline auto FrontierSize = Metric{
     "crawler_frontier_size",
     MetricTypeGauge,
@@ -116,6 +152,18 @@ inline auto FrontierFreshURLs = Metric{
     "Number of fresh URLs waiting to be pushed onto the frontier",
 };
 
+inline auto CrawlDelayLookupLockFailures = Metric{
+    "crawler_delay_lookup_lock_failures",
+    MetricTypeCounter,
+    "Number of times acquiring the robots cache lock failed when looking up crawl delay",
+};
+
+inline auto CrawlDelayLookupLockSuccesses = Metric{
+    "crawler_delay_lookup_lock_successes",
+    MetricTypeCounter,
+    "Number of times acquiring the robots cache lock succeeded when looking up crawl delay",
+};
+
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&TotalDocumentCorpusSizeMetric);
     server.Register(&DocumentsProcessedMetric);
@@ -128,13 +176,21 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&InFlightRobotsRequestsMetric);
     server.Register(&WaitingRobotsHosts);
     server.Register(&WaitingRobotsURLs);
+    server.Register(&RobotRulesCacheQueuedFetchesCount);
+    server.Register(&RobotRulesCacheQueuedFetchesWaitingCount);
+    server.Register(&RobotRulesCacheHits);
+    server.Register(&RobotRulesCacheMisses);
     server.Register(&DocumentQueueSizeMetric);
     server.Register(&MiddleQueueActiveQueueCount);
     server.Register(&MiddleQueueTotalQueuedURLs);
     server.Register(&MiddleQueueTotalHosts);
+    server.Register(&MiddleQueueRateLimitedCount);
+    server.Register(&MiddleQueueWaitingDelayLookupCount);
     server.Register(&FrontierSize);
     server.Register(&FrontierQueueSize);
     server.Register(&FrontierFreshURLs);
+    server.Register(&CrawlDelayLookupLockFailures);
+    server.Register(&CrawlDelayLookupLockSuccesses);
 }
 
 }  // namespace mithril

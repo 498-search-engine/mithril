@@ -47,6 +47,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add numbers in URL factors to crawler ranking (#104)
 - last minute crawler config changes (#103)
 - global and robust host-level rate limiting (#107)
+- dns-level rate limiting over host-level (#111)
+- more config and metrics for rate limits and caching (#113)
+- more metrics and attempts at improvements (#114)
 
 ### Fixed
 - Fix copying body data from buffer (#24)
@@ -71,6 +74,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - have anu's page rank stuff compile on VM (#95)
 - cmake compile for apple clang + remove dupl compile warnings (#100)
 - install libgomp1 in docker container (#106)
+- clamp robots crawl delay to reasonable range (#109)
+- check in flight robot requests at start of fill (#110)
+- cleanup ranking & tests directory w.r.t to ranking tests (#116)
 
 ## [0.1.0] - 2025-02-07
 

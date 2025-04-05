@@ -1,9 +1,9 @@
-#include "pagerank.h"
+#include "PageRank.h"
 
 #include <cmath>
 
 #if __has_include(<omp.h>)
-#include <omp.h>
+#    include <omp.h>
 #endif
 
 PageRank::PageRank(core::CSRMatrix& matrix_, int N) : matrix_(matrix_) {

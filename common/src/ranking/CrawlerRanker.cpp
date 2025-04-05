@@ -9,16 +9,7 @@
 namespace mithril::ranking {
 
 int32_t GetUrlRank(std::string_view url) {
-    CrawlerRankingsStruct ranker{.tld = "",
-                                 .domainName = "",
-                                 .extension = "",
-                                 .urlLength = 0,
-                                 .parameterCount = 0,
-                                 .pageDepth = 0,
-                                 .subdomainCount = 0,
-                                 .numberInDomainName = false,
-                                 .numberInURL = false,
-                                 .isHttps = false};
+    CrawlerRankingsStruct ranker{};
 
     GetStringRankings(url, ranker);
 
@@ -156,7 +147,7 @@ void GetStringRankings(std::string_view url, CrawlerRankingsStruct& ranker) {
             readExtension = true;
         } else if (readExtension) {
             ranker.extension += *c;
-        } 
+        }
 
         if (std::isdigit(*c)) {
             currentNumberLength++;

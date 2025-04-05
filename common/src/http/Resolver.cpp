@@ -3,6 +3,8 @@
 #include <cstring>
 #include <netdb.h>
 #include <vector>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 namespace mithril::http {
 
@@ -128,6 +130,44 @@ ResolvedAddr& ResolvedAddr::operator=(ResolvedAddr&& other) noexcept {
 
 const addrinfo* ResolvedAddr::AddrInfo() const {
     return &info_;
+}
+
+bool operator==(const ResolvedAddr& lhs, const ResolvedAddr& rhs) {
+    const addrinfo* lhsInfo = lhs.AddrInfo();
+    const addrinfo* rhsInfo = rhs.AddrInfo();
+
+    // If either pointer is null, they're equal only if both are null
+    if (!lhsInfo || !rhsInfo) {
+        return lhsInfo == rhsInfo;
+    }
+
+    // Different address families means different addresses
+    if (lhsInfo->ai_family != rhsInfo->ai_family) {
+        return false;
+    }
+
+    // Different address lengths means different addresses
+    if (lhsInfo->ai_addrlen != rhsInfo->ai_addrlen) {
+        return false;
+    }
+
+    // If either socket address is null, they're equal only if both are null
+    if (!lhsInfo->ai_addr || !rhsInfo->ai_addr) {
+        return lhsInfo->ai_addr == rhsInfo->ai_addr;
+    }
+
+    // Compare based on address family
+    if (lhsInfo->ai_family == AF_INET) {
+        // IPv4 comparison
+        const auto* lhsIpv4 = reinterpret_cast<const struct sockaddr_in*>(lhsInfo->ai_addr);
+        const auto* rhsIpv4 = reinterpret_cast<const struct sockaddr_in*>(rhsInfo->ai_addr);
+
+        // Compare IP addresses (and optionally ports)
+        return lhsIpv4->sin_addr.s_addr == rhsIpv4->sin_addr.s_addr && lhsIpv4->sin_port == rhsIpv4->sin_port;
+    } else {
+        // For other address families, compare the raw memory
+        return memcmp(lhsInfo->ai_addr, rhsInfo->ai_addr, lhsInfo->ai_addrlen) == 0;
+    }
 }
 
 }  // namespace mithril::http

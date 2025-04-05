@@ -6,6 +6,7 @@
 #include "HostRateLimiter.h"
 #include "ThreadSync.h"
 #include "UrlFrontier.h"
+#include "core/algorithm.h"
 #include "core/memory.h"
 #include "core/optional.h"
 #include "http/URL.h"
@@ -103,6 +104,8 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
     // is acceptable.
     size_t maxPossibleReady = std::min(max, n_);
     size_t added = 0;
+    size_t rateLimitedCount = 0;
+    size_t waitingLookupCount = 0;
 
     if (ActiveQueueCount() > 0) {
         auto waitDuration = std::numeric_limits<long>::max();
@@ -118,17 +121,20 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
                 auto delay = frontier_->LookUpCrawlDelayNonblocking(record->host, 0);
                 if (delay.HasValue()) {
                     record->waitingDelayLookup = false;
-                    limiter_->SetHostDelayMs(record->host.host, *delay);
+                    record->crawlDelayMs = CrawlDelayFromDirective(*delay);
                 } else {
                     // Still waiting
+                    ++waitingLookupCount;
                     continue;
                 }
             }
 
-            auto hostWait = limiter_->TryLeaseHost(record->host.host, now);
+            auto hostWait =
+                limiter_->TryLeaseHost(record->host.host, record->host.NonEmptyPort(), now, record->crawlDelayMs);
             if (hostWait != 0) {
                 // Need to wait for host
                 waitDuration = std::min(waitDuration, hostWait);
+                ++rateLimitedCount;
                 continue;
             }
 
@@ -149,6 +155,8 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 
     MiddleQueueActiveQueueCount.Set(ActiveQueueCount());
     MiddleQueueTotalQueuedURLs.Set(totalQueuedURLs_);
+    MiddleQueueRateLimitedCount.Set(rateLimitedCount);
+    MiddleQueueWaitingDelayLookupCount.Set(waitingLookupCount);
     MiddleQueueTotalHosts.Set(hosts_.size());
 }
 
@@ -196,7 +204,7 @@ void MiddleQueue::PushURLForNewHost(std::string url, const http::CanonicalHost& 
     auto delay = frontier_->LookUpCrawlDelayNonblocking(host, 0);
     if (delay.HasValue()) {
         record->waitingDelayLookup = false;
-        limiter_->SetHostDelayMs(host.host, *delay);
+        record->crawlDelayMs = CrawlDelayFromDirective(*delay);
     }
 
     auto it = hosts_.insert({
@@ -277,8 +285,8 @@ bool MiddleQueue::WantURL(std::string_view url) const {
 
 
 unsigned long MiddleQueue::CrawlDelayFromDirective(unsigned long directive) const {
-    // Clamp between default and 60 seconds
-    return std::clamp(directive * 1000L, defaultCrawlDelayMs_, 60UL * 1000UL);
+    // Clamp between default and 30 seconds
+    return core::clamp(directive * 1000UL, defaultCrawlDelayMs_, 30UL * 1000UL);
 }
 
 }  // namespace mithril
