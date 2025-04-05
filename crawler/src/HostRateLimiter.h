@@ -16,28 +16,16 @@ public:
                     long rateLimitBucketDurationMs,
                     unsigned long rateLimitBucketRequestCount);
 
-    long TryLeaseHost(const std::string& host, const std::string& port, unsigned long delayMs);
-    long TryLeaseHost(const std::string& host, const std::string& port, long now, unsigned long delayMs);
-
-    void UnleaseHost(const std::string& host, const std::string& port);
-    void UnleaseHost(const std::string& host, const std::string& port, long now);
-
     long TryUseHost(const std::string& host, const std::string& port);
     long TryUseHost(const std::string& host, const std::string& port, long now);
 
 private:
     struct Entry {
-        bool leased{};
-        long earliest{};
-        unsigned long delayAfterUnlease{};
-
         long bucketStart{};
         size_t bucketCount{};
     };
 
-    long TryLeaseHostImpl(const std::string& host, const std::string& port, long now, unsigned long delayMs);
     long TryUseHostImpl(const std::string& host, const std::string& port, long now);
-    void UnleaseHostImpl(const std::string& host, const std::string& port, long now);
 
     Entry* GetOrInsert(const std::string& host, const std::string& port);
     const http::ResolvedAddr* GetOrResolve(const std::string& host, const std::string& port, bool& ready);

@@ -10,6 +10,7 @@
 #include "core/memory.h"
 #include "core/optional.h"
 #include "http/URL.h"
+#include "spdlog/spdlog.h"
 
 #include <algorithm>
 #include <cassert>
@@ -51,11 +52,12 @@ MiddleQueue::MiddleQueue(UrlFrontier* frontier,
     for (size_t i = 0; i < numQueues; ++i) {
         emptyQueues_[i] = numQueues - i - 1;
     }
+    MiddleQueueTotalQueues.Set(n_);
 }
 
 void MiddleQueue::RestoreFrom(std::vector<std::string>& urls) {
     for (auto& url : urls) {
-        AcceptURL(std::move(url));
+        AcceptURL(std::move(url), 0);
     }
 }
 
@@ -91,9 +93,10 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
             return;
         }
 
+        auto now = MonotonicTimeMs();
         // Push all obtained URLs into the middle queue
         for (auto url : r) {
-            AcceptURL(std::move(url));
+            AcceptURL(std::move(url), now);
         }
     }
 
@@ -103,13 +106,15 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
     // queue set. A queue is only popped from if the time since the last crawl
     // is acceptable.
     size_t maxPossibleReady = std::min(max, n_);
-    size_t added = 0;
+    size_t readyCount = 0;
+    size_t hostCooldownCount = 0;
     size_t rateLimitedCount = 0;
     size_t waitingLookupCount = 0;
 
+    MiddleQueueActiveQueueCount.Set(ActiveQueueCount());
+
     if (ActiveQueueCount() > 0) {
         auto waitDuration = std::numeric_limits<long>::max();
-        bool anyReady = false;
 
         for (size_t i = 0; i < n_; ++i, k_ = (k_ + 1) % n_) {
             auto* record = queues_[k_];
@@ -129,32 +134,37 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
                 }
             }
 
-            auto hostWait =
-                limiter_->TryLeaseHost(record->host.host, record->host.NonEmptyPort(), now, record->crawlDelayMs);
+            if (now < record->earliestNextCrawl) {
+                // Need to wait for host due to crawl cooldown
+                waitDuration = std::min(waitDuration, record->earliestNextCrawl - now);
+                ++hostCooldownCount;
+                continue;
+            }
+
+            auto hostWait = limiter_->TryUseHost(record->host.host, record->host.NonEmptyPort(), now);
             if (hostWait != 0) {
-                // Need to wait for host
+                // Need to wait for host due to ip rate limit
                 waitDuration = std::min(waitDuration, hostWait);
                 ++rateLimitedCount;
                 continue;
             }
 
-            anyReady = true;
-            out.push_back(PopFromHost(*record));
-            ++added;
-            if (added >= maxPossibleReady) {
+            out.push_back(PopFromHost(*record, now));
+            ++readyCount;
+            if (readyCount >= maxPossibleReady) {
                 k_ = (k_ + 1) % n_;
                 break;
             }
         }
 
-        if (!anyReady && atLeastOne && waitDuration != std::numeric_limits<long>::max()) {
+        if (readyCount == 0 && atLeastOne && waitDuration != std::numeric_limits<long>::max()) {
             // We are waiting for the next delayed crawl to be ready.
             usleep(waitDuration * 1000 / 2);
         }
     }
 
-    MiddleQueueActiveQueueCount.Set(ActiveQueueCount());
     MiddleQueueTotalQueuedURLs.Set(totalQueuedURLs_);
+    MiddleQueueHostCooldownCount.Set(hostCooldownCount);
     MiddleQueueRateLimitedCount.Set(rateLimitedCount);
     MiddleQueueWaitingDelayLookupCount.Set(waitingLookupCount);
     MiddleQueueTotalHosts.Set(hosts_.size());
@@ -168,7 +178,7 @@ double MiddleQueue::QueueUtilization() const {
     return static_cast<double>(ActiveQueueCount()) / static_cast<double>(n_);
 }
 
-void MiddleQueue::AcceptURL(std::string url) {
+void MiddleQueue::AcceptURL(std::string url, long now) {
     auto parsed = http::ParseURL(url);
     if (!parsed) {
         return;
@@ -179,7 +189,7 @@ void MiddleQueue::AcceptURL(std::string url) {
     if (recordIt != hosts_.end()) {
         PushURLForHost(std::move(url), recordIt->second.Get());
     } else {
-        PushURLForNewHost(std::move(url), canonicalHost);
+        PushURLForNewHost(std::move(url), canonicalHost, now);
     }
 }
 
@@ -193,10 +203,12 @@ void MiddleQueue::PushURLForHost(std::string url, HostRecord* record) {
     }
 }
 
-void MiddleQueue::PushURLForNewHost(std::string url, const http::CanonicalHost& host) {
+void MiddleQueue::PushURLForNewHost(std::string url, const http::CanonicalHost& host, long now) {
     auto record = core::MakeUnique<HostRecord>(HostRecord{
         .host = host,
         .waitingDelayLookup = true,
+        .crawlDelayMs = defaultCrawlDelayMs_,
+        .earliestNextCrawl = now,
         .queue = {},
         .activeQueue = {},
     });
@@ -216,15 +228,17 @@ void MiddleQueue::PushURLForNewHost(std::string url, const http::CanonicalHost& 
     PushURLForHost(std::move(url), it.first->second.Get());
 }
 
-std::string MiddleQueue::PopFromHost(HostRecord& record) {
+std::string MiddleQueue::PopFromHost(HostRecord& record, long now) {
     assert(!record.queue.empty());
     assert(!record.waitingDelayLookup);
+    assert(record.earliestNextCrawl <= now);
     assert(record.activeQueue.HasValue());
 
     auto url = std::move(record.queue.front());
     record.queue.pop();
     --totalQueuedURLs_;
 
+    record.earliestNextCrawl = static_cast<long>(static_cast<unsigned long>(now) + record.crawlDelayMs);
     if (record.queue.empty()) {
         // The host's queue is now empty, remove it from the active queue set
         queues_[*record.activeQueue] = nullptr;
@@ -251,8 +265,9 @@ void MiddleQueue::PopulateActiveQueues() {
 }
 
 void MiddleQueue::CleanEmptyHosts() {
+    auto now = MonotonicTimeMs();
     for (auto it = hosts_.begin(); it != hosts_.end();) {
-        if (it->second->queue.empty()) {
+        if (it->second->queue.empty() && now >= it->second->earliestNextCrawl + it->second->crawlDelayMs) {
             assert(!it->second->activeQueue.HasValue());
             it = hosts_.erase(it);
         } else {
