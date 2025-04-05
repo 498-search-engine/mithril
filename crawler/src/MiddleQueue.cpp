@@ -104,6 +104,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
     // is acceptable.
     size_t maxPossibleReady = std::min(max, n_);
     size_t added = 0;
+    size_t rateLimitedCount = 0;
 
     if (ActiveQueueCount() > 0) {
         auto waitDuration = std::numeric_limits<long>::max();
@@ -131,6 +132,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
             if (hostWait != 0) {
                 // Need to wait for host
                 waitDuration = std::min(waitDuration, hostWait);
+                ++rateLimitedCount;
                 continue;
             }
 
@@ -151,6 +153,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 
     MiddleQueueActiveQueueCount.Set(ActiveQueueCount());
     MiddleQueueTotalQueuedURLs.Set(totalQueuedURLs_);
+    MiddleQueueRateLimitedCount.Set(rateLimitedCount);
     MiddleQueueTotalHosts.Set(hosts_.size());
 }
 
