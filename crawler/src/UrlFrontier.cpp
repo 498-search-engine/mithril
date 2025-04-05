@@ -119,15 +119,10 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync) {
             return;
         }
 
-        size_t before = robotRulesCache_.PendingRequests();
         auto robotsWait = robotRulesCache_.ProcessPendingRequests();
         if (robotsWait != 0) {
             lock.Unlock();
             usleep(robotsWait * 750L);  // 75% of time
-            return;
-        }
-        if (robotRulesCache_.PendingRequests() >= before) {
-            // No requests finished on call to ProcessPendingRequests
             return;
         }
     }
