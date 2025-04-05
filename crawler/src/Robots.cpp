@@ -397,6 +397,7 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
     if (entry == nullptr) {
         cache_.Insert({canonicalHost.url, RobotCacheEntry{}});
         QueueFetch(canonicalHost);
+        RobotRulesCacheMisses.Inc();
         return nullptr;
     }
 
