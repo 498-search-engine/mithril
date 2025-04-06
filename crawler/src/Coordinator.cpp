@@ -17,6 +17,7 @@
 #include "data/Reader.h"
 #include "data/Serialize.h"
 #include "data/Writer.h"
+#include "metrics/CommonMetrics.h"
 #include "metrics/MetricsServer.h"
 
 #include <algorithm>
@@ -93,6 +94,7 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
 
     frontier_->InitSync(state_->threadSync);
     RegisterCrawlerMetrics(*metricsServer_);
+    RegisterCommonMetrics(*metricsServer_);
 
     RecoverState(StatePath());
 }
