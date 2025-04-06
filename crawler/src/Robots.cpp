@@ -550,6 +550,7 @@ long RobotRulesCache::ProcessPendingRequests() {
         failed.clear();
     }
 
+    InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
     return 0;
 }
 
