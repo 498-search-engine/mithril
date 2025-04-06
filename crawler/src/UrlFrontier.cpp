@@ -38,6 +38,8 @@ bool IsValidUrl(std::string_view url) {
 constexpr unsigned int URLHighScoreCutoff = 90;        // Score >= 90 is "high"
 constexpr unsigned int URLHighScoreQueuePercent = 90;  // Take from "high" scoring urls 90% of the time
 
+constexpr size_t MaxFreshURLsBatch = 50000;
+
 }  //  namespace
 
 UrlFrontier::UrlFrontier(HostRateLimiter* limiter,
@@ -255,9 +257,15 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
             return;
         }
 
-        urls = std::move(freshURLs_);
-        freshURLs_.clear();
-        FrontierFreshURLs.Zero();
+        if (freshURLs_.size() > MaxFreshURLsBatch) {
+            urls = std::vector<std::string>{freshURLs_.begin(), freshURLs_.begin() + MaxFreshURLsBatch};
+            freshURLs_.erase(freshURLs_.begin(), freshURLs_.begin() + MaxFreshURLsBatch);
+            FrontierFreshURLs.Set(freshURLs_.size());
+        } else {
+            urls = std::move(freshURLs_);
+            freshURLs_.clear();
+            FrontierFreshURLs.Zero();
+        }
     }
 
     SPDLOG_TRACE("starting processing of {} fresh urls", urls.size());
