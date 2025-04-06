@@ -24,6 +24,8 @@ using namespace std::string_view_literals;
 
 namespace {
 
+constexpr size_t MaxLinksInADocument = 5000;
+
 bool IsSpace(char ch) {
     return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v';
 }
@@ -213,7 +215,7 @@ const char* HandleTagAction(DesiredAction action,
     case DesiredAction::Anchor:
         {
             if (endTag) {
-                if (state.inAnchor) {
+                if (state.inAnchor && links.size() < MaxLinksInADocument) {
                     links.emplace_back(std::move(currentLink));
                     currentLink = Link{.url = ""sv, .anchorText = {}};
                     state.inAnchor = false;
@@ -223,7 +225,7 @@ const char* HandleTagAction(DesiredAction action,
 
             auto href = ProcessTagAttributes(nameStart, bufferEnd, "href"sv);
             if (!href.empty()) {
-                if (state.inAnchor) {
+                if (state.inAnchor && links.size() < MaxLinksInADocument) {
                     links.emplace_back(std::move(currentLink));
                 }
                 href = DecodeStringWithRef(http::DecodeURL(href), decodedWords);
@@ -252,7 +254,7 @@ const char* HandleTagAction(DesiredAction action,
             if (endTag)
                 return AfterEndingOfTag(nameEnd, bufferEnd);
             std::string_view src = ProcessTagAttributes(nameStart, bufferEnd, "src"sv);
-            if (!src.empty()) {
+            if (!src.empty() && links.size() < MaxLinksInADocument) {
                 src = DecodeStringWithRef(http::DecodeURL(src), decodedWords);
                 links.emplace_back(src);
             }
@@ -450,7 +452,7 @@ void ParseDocument(std::string_view doc, ParsedDocument& parsed) {
     currentWordLength = 0;
     needsDecode = false;
 
-    if (state.inAnchor && !currentLink.url.empty()) {
+    if (state.inAnchor && !currentLink.url.empty() && links.size() < MaxLinksInADocument) {
         links.emplace_back(std::move(currentLink));
         currentLink.url = ""sv;
     }
