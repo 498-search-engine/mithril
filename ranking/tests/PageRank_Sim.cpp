@@ -23,14 +23,14 @@ int main(int /*argc*/, char* /*argv*/[]) {
     std::ofstream outFile;
     outFile.open(OutputFile);
 
-    std::vector<double> &scores = mithril::pagerank::Results;
+    std::vector<double> &scores = *mithril::pagerank::Results;
     std::vector<size_t> idx(scores.size());
     std::iota(idx.begin(), idx.end(), 0);
 
     stable_sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) { return scores[i1] < scores[i2]; });
 
     for (size_t i = 0; i < idx.size(); ++i) {
-        outFile << mithril::pagerank::NodeToDocument[idx[i]].url << ": " << scores[idx[i]] << std::endl;
+        outFile << (*mithril::pagerank::NodeToDocument)[idx[i]].url << ": " << scores[idx[i]] << std::endl;
     }
 
     outFile.close();

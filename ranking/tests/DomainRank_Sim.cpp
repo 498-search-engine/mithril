@@ -146,7 +146,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     std::ofstream outFile;
     outFile.open(OutputFile);
 
-    std::vector<double> &scores = mithril::pagerank::Results;
+    std::vector<double> &scores = *mithril::pagerank::Results;
     std::vector<size_t> idx(scores.size());
     std::iota(idx.begin(), idx.end(), 0);
 

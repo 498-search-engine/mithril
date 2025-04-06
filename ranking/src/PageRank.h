@@ -3,9 +3,9 @@
 
 #include "core/config.h"
 #include "core/csr.h"
+#include "core/memory.h"
 #include "data/Document.h"
 
-#include "core/memory.h"
 
 #include <vector>
 
@@ -18,23 +18,40 @@ namespace mithril::pagerank {
 void PerformPageRank(core::CSRMatrix& matrix_, int N);
 
 /**
+    @brief Gets the node ID for a particular link. If it doesn't exist, it ssigns it one.
+*/
+int GetLinkNode(const std::string& link);
+
+/**
     @brief Builds the CSR matrix and performs page rank on it.
 */
 void PerformPageRank();
+/**
+    @brief Builds the CSR matrix and performs domain rank on it.
+*/
 void PerformDomainRank();
 
 /**
-    variables that external users might care about
+    @brief Cleanup all associated memory with PageRank.
 */
-extern std::vector<double> Results;
-extern std::unordered_map<data::docid_t, data::Document> NodeToDocument;
+void Cleanup();
 
+/**
+    variables that external users might care about
+    unique pointers so memory can be completely freed once this is no longer needed
+*/
+extern core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode;
+extern core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink;
+extern core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections;
+extern core::UniquePtr<std::unordered_map<data::docid_t, data::Document>> NodeToDocument;
+extern core::UniquePtr<std::vector<double>> Results;
+
+extern int Nodes;
 /**
     private namespace variables
 */
 static core::Config Config = core::Config("pagerank.conf");
 const static inline std::string InputDirectory =
     std::string(Config.GetString("document_folder").Cstr());
-static int Nodes = 0;
 };  // namespace mithril::pagerank
 #endif

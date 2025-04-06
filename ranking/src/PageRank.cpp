@@ -8,50 +8,76 @@
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
-#include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <spdlog/spdlog.h>
 
 #if __has_include(<omp.h>)
 #    include <omp.h>
 #endif
 
-std::vector<double> mithril::pagerank::Results;
-std::unordered_map<mithril::data::docid_t, mithril::data::Document> mithril::pagerank::NodeToDocument;
+namespace mithril::pagerank {
+core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode =
+    core::UniquePtr<std::unordered_map<std::string, int>>(new std::unordered_map<std::string, int>());
+core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink =
+    core::UniquePtr<std::unordered_map<int, std::string>>(new std::unordered_map<int, std::string>());
+core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections =
+    core::UniquePtr<std::unordered_map<int, std::vector<int>>>(new std::unordered_map<int, std::vector<int>>());
+core::UniquePtr<std::unordered_map<data::docid_t, data::Document>> NodeToDocument =
+    core::UniquePtr<std::unordered_map<data::docid_t, data::Document>>(
+        new std::unordered_map<data::docid_t, data::Document>());
+core::UniquePtr<std::vector<double>> Results = core::UniquePtr<std::vector<double>>(new std::vector<double>());
 
-void mithril::pagerank::PerformPageRank(core::CSRMatrix& matrix_, int N) {
+int Nodes = 0;
+
+int GetLinkNode(const std::string& link) {
+    auto it = LinkToNode->find(link);
+    int nodeNo;
+    if (it == LinkToNode->end()) {
+        nodeNo = Nodes;
+        (*LinkToNode)[link] = nodeNo;
+        (*NodeToLink)[nodeNo] = link;
+        Nodes++;
+    } else {
+        nodeNo = it->second;
+    }
+
+    return nodeNo;
+}
+
+void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     int maxIteration = Config.GetInt("max_iterations");
     double d = Config.GetDouble("decay_factor");
     double tol = 1.0 / N;
 
-    mithril::pagerank::Results.resize(N, 1.0 / N);
+    Results->resize(N, 1.0 / N);
 
     std::vector<double> teleport(N, (1.0 - d) / N);
 
     for (int iter = 0; iter < maxIteration; ++iter) {
-        std::vector<double> newR = matrix_.Multiply(mithril::pagerank::Results);
+        std::vector<double> newR = matrix_.Multiply(*Results);
 
         double diff = 0.0;
 #pragma omp parallel for reduction(+ : diff)
         for (int i = 0; i < N; ++i) {
             newR[i] = d * newR[i] + teleport[i];
-            diff += fabs(newR[i] - mithril::pagerank::Results[i]);
+            diff += fabs(newR[i] - (*Results)[i]);
         }
         if (diff < tol) {
             break;
         }
 
-        mithril::pagerank::Results = newR;
+        *Results = newR;
     }
 }
 
-void mithril::pagerank::PerformPageRank() {
+void PerformPageRank() {
     std::unordered_map<std::string, data::docid_t> linkToNode;
 
     spdlog::info("Starting page rank...");
 
     auto start = std::chrono::steady_clock::now();
-    data::docid_t maxNodeSeen = 0;
 
+    // Read PageRank info related info from all documents and setup info needed to form the CSR Matrix
     for (const auto& entry : std::filesystem::recursive_directory_iterator(InputDirectory)) {
         if (!entry.is_regular_file()) {
             continue;  // skip chunk dir
@@ -67,38 +93,17 @@ void mithril::pagerank::PerformPageRank() {
                 }
             }
 
-            NodeToDocument[doc.id] = doc;
-            linkToNode[doc.url] = doc.id;
-            maxNodeSeen = std::max(maxNodeSeen, doc.id);
-            Nodes++;
+            int fromNode = GetLinkNode(doc.url);
+            auto& vec = (*NodeConnections)[fromNode];
+
+            for (const std::string& link : doc.forwardLinks) {
+                vec.push_back(GetLinkNode(link));
+            }
+
+            (*NodeToDocument)[fromNode] = std::move(doc);
         } catch (const std::exception& e) {
             spdlog::error("\nError processing {}: {}", entry.path().string(), e.what());
         }
-    }
-
-    // Create fake info for links that have not been scraped/do not exist.
-    std::vector<std::pair<std::string, data::docid_t>> insertMap;
-    for (auto& [id, document] : NodeToDocument) {
-        for (const std::string& link : document.forwardLinks) {
-            if (linkToNode.find(link) == linkToNode.end()) {
-                maxNodeSeen++;
-                Nodes++;
-                
-                if (NodeToDocument.find(maxNodeSeen) != NodeToDocument.end()) {
-                    spdlog::error("Duplicate node id found: {}", maxNodeSeen);
-                    throw std::runtime_error("");
-                }
-                linkToNode[link] = maxNodeSeen;
-                insertMap.emplace_back(link, maxNodeSeen);
-            }
-        }
-    }
-
-    for (auto & [link, id] : insertMap) {
-        NodeToDocument[id] = data::Document{
-            .id = id,
-            .url = link
-        };
     }
 
     auto end = std::chrono::steady_clock::now();
@@ -106,6 +111,8 @@ void mithril::pagerank::PerformPageRank() {
 
     spdlog::info("Finished processing documents. Found {} links. Time taken: {} ms.", Nodes, processDuration);
 
+    // Build CSR Matrix from the above data.
+    // This tolerance is dynamic based on number of nodes.
     const double tol = 1.0 / Nodes;
     spdlog::info("Building CSR Matrix with tolerance {:e}", tol);
 
@@ -115,32 +122,29 @@ void mithril::pagerank::PerformPageRank() {
     std::vector<double> outDegree(Nodes, 0.0);
 
     size_t edges = 0;
-    for (auto& [id, document] : NodeToDocument) {
-        for (const std::string& link : document.forwardLinks) {
-            auto it = linkToNode.find(link);
-            if (it != linkToNode.end()) {
-                m.AddEdge(static_cast<int>(it->second), static_cast<int>(id), 1.0);
-                edges++;
-            }
+    for (auto& [node, value] : *NodeConnections) {
+        for (auto target : value) {
+            m.AddEdge(target, node, 1.0);
+            edges++;
         }
 
-        outDegree[id] = static_cast<double>(document.forwardLinks.size());
+        outDegree[node] = static_cast<double>(value.size());
     }
 
     m.Finalize();
 
-    size_t danglingLinks = Nodes;
     for (int i = 0; i < m.values_.size(); ++i) {
         if (outDegree[m.col_idx_[i]] > 0) {
             m.values_[i] /= outDegree[m.col_idx_[i]];
-            danglingLinks--;
         }
     }
-    
+
     end = std::chrono::steady_clock::now();
     auto csrMatrixDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
-    spdlog::info("Finished CSR matrix building process. Edges: {}, Dangling links: {}, Time taken: {} ms", edges, danglingLinks, csrMatrixDuration);
+    spdlog::info("Finished CSR matrix building process. Edges: {}. Time taken: {} ms",
+                 edges,
+                 csrMatrixDuration);
     spdlog::info("Performing page rank....");
 
     start = std::chrono::steady_clock::now();
@@ -152,3 +156,13 @@ void mithril::pagerank::PerformPageRank() {
     spdlog::info("Finished pagerank in: {} ms", duration);
     spdlog::info("Total time taken: {} ms", (duration + csrMatrixDuration + processDuration));
 }
+
+void Cleanup() {
+    LinkToNode.Reset(nullptr);
+    NodeToLink.Reset(nullptr);
+    NodeConnections.Reset(nullptr);
+    NodeToDocument.Reset(nullptr);
+    Results.Reset(nullptr);
+}
+
+}  // namespace mithril::pagerank
