@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <spdlog/spdlog.h>
+#include <stdexcept>
 
 #if __has_include(<omp.h>)
 #    include <omp.h>
@@ -76,19 +77,28 @@ void mithril::pagerank::PerformPageRank() {
     }
 
     // Create fake info for links that have not been scraped/do not exist.
+    std::vector<std::pair<std::string, data::docid_t>> insertMap;
     for (auto& [id, document] : NodeToDocument) {
         for (const std::string& link : document.forwardLinks) {
             if (linkToNode.find(link) == linkToNode.end()) {
                 maxNodeSeen++;
                 Nodes++;
-
+                
+                if (NodeToDocument.find(maxNodeSeen) != NodeToDocument.end()) {
+                    spdlog::error("Duplicate node id found: {}", maxNodeSeen);
+                    throw std::runtime_error("");
+                }
                 linkToNode[link] = maxNodeSeen;
-                NodeToDocument[maxNodeSeen] = data::Document{
-                    .id = maxNodeSeen,
-                    .url = link,
-                };
+                insertMap.emplace_back(link, maxNodeSeen);
             }
         }
+    }
+
+    for (auto & [link, id] : insertMap) {
+        NodeToDocument[id] = data::Document{
+            .id = id,
+            .url = link
+        };
     }
 
     auto end = std::chrono::steady_clock::now();
@@ -104,13 +114,13 @@ void mithril::pagerank::PerformPageRank() {
     core::CSRMatrix m(Nodes);
     std::vector<double> outDegree(Nodes, 0.0);
 
+    size_t edges = 0;
     for (auto& [id, document] : NodeToDocument) {
         for (const std::string& link : document.forwardLinks) {
             auto it = linkToNode.find(link);
             if (it != linkToNode.end()) {
                 m.AddEdge(static_cast<int>(it->second), static_cast<int>(id), 1.0);
-            } else {
-                throw std::runtime_error("Link not found in linkToNode map: " + link);
+                edges++;
             }
         }
 
@@ -130,7 +140,7 @@ void mithril::pagerank::PerformPageRank() {
     end = std::chrono::steady_clock::now();
     auto csrMatrixDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
-    spdlog::info("Finished CSR matrix building process. Dangling links: {}, Time taken: {} ms", danglingLinks, csrMatrixDuration);
+    spdlog::info("Finished CSR matrix building process. Edges: {}, Dangling links: {}, Time taken: {} ms", edges, danglingLinks, csrMatrixDuration);
     spdlog::info("Performing page rank....");
 
     start = std::chrono::steady_clock::now();

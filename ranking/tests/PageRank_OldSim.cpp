@@ -92,9 +92,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
     core::CSRMatrix m(Nodes);
     std::vector<double> outDegree(Nodes, 0.0);
 
+    size_t edge = 0;
     for (auto& [node, value] : NodeConnections) {
         for (auto target : value) {
             m.AddEdge(target, node, 1.0);
+            edge++;
         }
 
         outDegree[node] = static_cast<double>(value.size());
@@ -113,7 +115,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     end = std::chrono::steady_clock::now();
     auto csrMatrixDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
-    spdlog::info("Finished CSR matrix building process. Dangling links: {}, Time taken: {} ms", danglingLinks, csrMatrixDuration);
+    spdlog::info("Finished CSR matrix building process. Edges: {}, Dangling links: {}, Time taken: {} ms", edge, danglingLinks, csrMatrixDuration);
     spdlog::info("Performing page rank....");
 
     start = std::chrono::steady_clock::now();

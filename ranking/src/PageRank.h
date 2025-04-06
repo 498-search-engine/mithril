@@ -5,6 +5,8 @@
 #include "core/csr.h"
 #include "data/Document.h"
 
+#include "core/memory.h"
+
 #include <vector>
 
 constexpr double ErrorAllowed = 0.001;
