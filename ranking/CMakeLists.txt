@@ -38,10 +38,6 @@ add_executable(pagerank_sim tests/PageRank_Sim.cpp)
 target_include_directories(pagerank_sim PRIVATE src)
 target_link_libraries(pagerank_sim PRIVATE ranking)
 
-add_executable(pagerank_oldsim tests/PageRank_OldSim.cpp)
-target_include_directories(pagerank_oldsim PRIVATE src)
-target_link_libraries(pagerank_oldsim PRIVATE ranking)
-
 add_executable(domainrank_sim tests/DomainRank_Sim.cpp)
 target_include_directories(domainrank_sim PRIVATE src)
 target_link_libraries(domainrank_sim PRIVATE ranking)
