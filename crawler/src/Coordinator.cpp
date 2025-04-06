@@ -231,6 +231,11 @@ void Coordinator::RecoverState(const std::string& file) {
 
 void Coordinator::SnapshotThreadEntry(size_t n) {
     auto start = MonotonicTime();
+    if (config_.snapshot_period_seconds > (60L * 30L)) {
+        start -= static_cast<long>(config_.snapshot_period_seconds);
+        start += 60L * 30L;
+    }
+
     while (!state_->threadSync.ShouldShutdown()) {
         sleep(1);
         if (state_->threadSync.ShouldShutdown()) {
