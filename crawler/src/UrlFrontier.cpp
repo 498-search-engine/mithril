@@ -133,6 +133,7 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync, bool tryAll) {
             return;
         }
 
+        ProcessRobotsRequestsCounter.Inc();
         auto robotsWait = robotRulesCache_.ProcessPendingRequests();
         if (robotsWait != 0) {
             lock.Unlock();
@@ -257,6 +258,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
             return;
         }
 
+        ProcessFreshURLsCounter.Inc();
         if (freshURLs_.size() > MaxFreshURLsBatch) {
             urls = std::vector<std::string>{freshURLs_.begin(), freshURLs_.begin() + MaxFreshURLsBatch};
             freshURLs_.erase(freshURLs_.begin(), freshURLs_.begin() + MaxFreshURLsBatch);

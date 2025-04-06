@@ -104,7 +104,6 @@ inline auto DocumentQueueSizeMetric = Metric{
     "Number of documents in document queue waiting to be processed by a worker",
 };
 
-
 inline auto MiddleQueueTotalQueuedURLs = Metric{
     "crawler_middle_queue_total_queued_urls",
     MetricTypeGauge,
@@ -177,6 +176,18 @@ inline auto CrawlDelayLookupLockSuccesses = Metric{
     "Number of times acquiring the robots cache lock succeeded when looking up crawl delay",
 };
 
+inline auto ProcessFreshURLsCounter = Metric{
+    "crawler_process_fresh_urls_counter",
+    MetricTypeCounter,
+    "Number of times fresh URLs were processed",
+};
+
+inline auto ProcessRobotsRequestsCounter = Metric{
+    "crawler_process_robots_requests_counter",
+    MetricTypeCounter,
+    "Number of times robots requests were processed",
+};
+
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&TotalDocumentCorpusSizeMetric);
     server.Register(&DocumentsProcessedMetric);
@@ -206,6 +217,8 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&FrontierFreshURLs);
     server.Register(&CrawlDelayLookupLockFailures);
     server.Register(&CrawlDelayLookupLockSuccesses);
+    server.Register(&ProcessFreshURLsCounter);
+    server.Register(&ProcessRobotsRequestsCounter);
 }
 
 }  // namespace mithril
