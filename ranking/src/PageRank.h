@@ -26,10 +26,6 @@ int GetLinkNode(const std::string& link);
     @brief Builds the CSR matrix and performs page rank on it.
 */
 void PerformPageRank();
-/**
-    @brief Builds the CSR matrix and performs domain rank on it.
-*/
-void PerformDomainRank();
 
 /**
     @brief Cleanup all associated memory with PageRank.
