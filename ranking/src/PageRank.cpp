@@ -118,18 +118,46 @@ void PerformPageRank() {
 
     // Read PageRank info related info from all documents and setup info needed to form the CSR Matrix
     size_t documentCount = 0;
+
+    std::vector<std::string> documentPaths;
+
     for (const auto& entry : std::filesystem::recursive_directory_iterator(InputDirectory)) {
         if (!entry.is_regular_file()) {
             continue;  // skip chunk dir
         }
 
+        std::string path = entry.path().string();
+        if (path == "/.DS_Store") {
+            continue;
+        }
+        documentPaths.push_back(std::move(path));
+    }
+    std::sort(documentPaths.begin(), documentPaths.end());
+
+    for (const auto &path : documentPaths) {
+        size_t docID = 0;
+        try {
+            docID = stoi(path.substr(path.size() - 10));
+        } catch (std::exception &e) {
+            continue;
+        }
+
+        if (docID != documentCount) {
+            spdlog::error("There is a hole in the documents starting at ID: {}. Ensure all data is present.", docID);
+            exit(1);
+        }
+
+        documentCount++;
+    }
+
+    for (const auto& path : documentPaths) {
         try {
             data::Document doc;
             {
-                data::FileReader file{entry.path().string().c_str()};
+                data::FileReader file{path.c_str()};
                 data::GzipReader gzip{file};
                 if (!data::DeserializeValue(doc, gzip)) {
-                    throw std::runtime_error("Failed to deserialize document: " + entry.path().string());
+                    throw std::runtime_error("Failed to deserialize document: " + path);
                 }
             }
 
@@ -143,7 +171,8 @@ void PerformPageRank() {
             (*NodeToDocument)[fromNode] = std::move(doc);
             documentCount++;
         } catch (const std::exception& e) {
-            spdlog::error("Error processing {}: {}", entry.path().string(), e.what());
+            spdlog::error("Error processing {}: {}", path, e.what());
+            exit(1);
         }
     }
 

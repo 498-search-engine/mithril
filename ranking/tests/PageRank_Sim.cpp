@@ -18,7 +18,6 @@ const std::string OutputFile = std::string(Config.GetString("pagerank_sim_out").
 const bool WriteToFile = Config.GetInt("write_results_to_file") != 0;
 
 void writeToFile() {
-
     spdlog::info("Writing to human readable output file {}...", OutputFile);
 
     std::ofstream outFile;
