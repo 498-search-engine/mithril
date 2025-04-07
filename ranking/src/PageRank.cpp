@@ -142,7 +142,7 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     StandardizedResults->resize(N);
 
     for (int i = 0; i < N; ++i) {
-        temp.push_back(std::log((*Results)[i] + Epsilon));
+        temp.push_back(std::log10((*Results)[i] + Epsilon));
     }
 
     auto [minit, maxit] = std::minmax_element(temp.begin(), temp.end());
@@ -151,8 +151,9 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     double max = *maxit;
     double range = max - min;
 
+    constexpr double Power = 0.5;  // Square root to spread lower values
     for (int i = 0; i < N; ++i) {
-        (*StandardizedResults)[i] = static_cast<float>((temp[i] - min) / range);
+        (*StandardizedResults)[i] = static_cast<float>(std::pow(((temp[i] - min) / range), Power));
     }
 }
 
