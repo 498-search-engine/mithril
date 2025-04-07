@@ -23,7 +23,7 @@ target_link_libraries(ranking PUBLIC
 )
 
 # Only apply `-fopenmp` on non-Apple Clang systems
-if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME MATCHES "Darwin"))
+if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND COMPILER_VERSION MATCHES "Apple" AND CMAKE_SYSTEM_NAME MATCHES "Darwin"))
     target_compile_options(ranking PRIVATE -fopenmp)
 endif()
 
