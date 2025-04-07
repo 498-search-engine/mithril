@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     zlib1g-dev \
     libgomp1 \
+    libjemalloc-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up working directory
@@ -19,7 +20,7 @@ RUN mkdir -p build
 
 # Build the application
 WORKDIR /app/build
-RUN cmake .. -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release
+RUN cmake .. -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release -DUSE_JEMALLOC=On
 RUN cmake --build . -j $(nproc) -t mithril_crawler && test -f crawler/mithril_crawler
 
 # Use a smaller image for the final container
@@ -30,6 +31,7 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     zlib1g \
     libgomp1 \
+    libjemalloc2 \
     ca-certificates \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*

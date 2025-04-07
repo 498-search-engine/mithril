@@ -12,6 +12,29 @@ add_compile_definitions(
     $<$<NOT:$<CONFIG:Debug>>:SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO>
 )
 
+option(USE_JEMALLOC "Use jemalloc as memory allocator" OFF)
+
+if(USE_JEMALLOC)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(JEMALLOC jemalloc)
+
+    if(JEMALLOC_FOUND)
+        message(STATUS "Using jemalloc allocator")
+
+        # Set compile definition to indicate jemalloc is available
+        add_compile_definitions(USE_JEMALLOC)
+
+        # Add the linker flag globally
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ljemalloc")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -ljemalloc")
+
+        # Add include directories globally
+        include_directories(${JEMALLOC_INCLUDE_DIRS})
+    else()
+        message(WARNING "jemalloc requested but not found. Using standard allocator.")
+    endif()
+endif()
+
 # Add subdirectories
 add_subdirectory(external)
 add_subdirectory(lib)
