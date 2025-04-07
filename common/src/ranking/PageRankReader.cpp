@@ -1,4 +1,4 @@
-#include "PageRankReader.h"
+#include "ranking/PageRankReader.h"
 
 #include "core/config.h"
 
@@ -20,30 +20,32 @@ PageRankReader::PageRankReader() {
         throw std::runtime_error("Failed to stat pagerank output file: " + outputFile);
     }
 
-    void* mapped = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    map_ = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
 
-    if (mapped == MAP_FAILED) {
+    if (map_ == MAP_FAILED) {
         throw std::runtime_error("Failed to memory map pagerank data");
     }
 
     size_ = st.st_size / sizeof(double);
-    map_ = new double[size_];
+}
 
-    char* data = reinterpret_cast<char*>(mapped);
-
-    for (size_t i = 0; i < size_; i++, data += sizeof(double)) {
-        uint64_t bytes;
-        memcpy(&bytes, data, sizeof(double));
-
-        bytes = ntohll(bytes);
-        memcpy(&map_[i], &bytes, sizeof(double));
+PageRankReader::~PageRankReader() {
+    if (map_ != nullptr) {
+        munmap(map_, size_ * sizeof(double));
     }
-
-    munmap(mapped, st.st_size);
 }
 
 double PageRankReader::GetDocumentPageRank(data::docid_t docid) {
-    return map_[docid];
+    char* data = reinterpret_cast<char*>(map_)+ (docid * sizeof(double));
+
+    uint64_t bytes;
+    memcpy(&bytes, data, sizeof(double));
+
+    bytes = ntohll(bytes);
+
+    double ret;
+    memcpy(&bytes, &ret, sizeof(double));
+    return ret;
 }
 };  // namespace mithril::pagerank

@@ -7,13 +7,14 @@ namespace mithril::pagerank {
 class PageRankReader {
 public:
     PageRankReader();
+    ~PageRankReader();
 
     double GetDocumentPageRank(data::docid_t docid);
 
     uint64_t size_;
 
 private:
-    double* map_;
+    void* map_ = nullptr;
 };
 }  // namespace mithril::pagerank
 #endif

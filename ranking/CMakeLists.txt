@@ -12,7 +12,6 @@ endif()
 
 add_library(ranking STATIC 
     src/PageRank.cpp
-    src/PageRankReader.cpp
     src/StaticRanker.cpp
 )
 target_include_directories(ranking PUBLIC src)

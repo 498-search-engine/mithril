@@ -255,7 +255,7 @@ void IndexBuilder::process_document(Document doc) {
                 static_cast<uint32_t>(doc.title.size()),
                 static_cast<uint32_t>(url_tokens.size()),
                 static_cast<uint32_t>(doc.description.size()),
-                0.0f  // def pagerank
+                pagerank_reader_.GetDocumentPageRank(doc.id)
             });
         }
 
