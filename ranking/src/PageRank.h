@@ -45,10 +45,13 @@ void Cleanup();
 extern core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode;
 extern core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink;
 extern core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections;
-extern core::UniquePtr<std::unordered_map<data::docid_t, data::Document>> NodeToDocument;
+extern core::UniquePtr<std::unordered_map<int, data::Document>> NodeToDocument;
+extern core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode;
 extern core::UniquePtr<std::vector<double>> Results;
+extern core::UniquePtr<std::vector<float>> StandardizedResults;
 
 extern int Nodes;
+extern size_t DocumentCount;
 /**
     private namespace variables
 */

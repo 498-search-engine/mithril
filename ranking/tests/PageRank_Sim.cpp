@@ -30,7 +30,7 @@ void writeToFile() {
     stable_sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) { return scores[i1] < scores[i2]; });
 
     for (size_t i = 0; i < idx.size(); ++i) {
-        outFile << (*mithril::pagerank::NodeToDocument)[idx[i]].url << " (docid: " <<(*mithril::pagerank::NodeToDocument)[idx[i]].id << "): " << scores[idx[i]] << std::endl;
+        outFile << (*mithril::pagerank::NodeToDocument)[idx[i]].url << " (docid: " <<(*mithril::pagerank::NodeToDocument)[idx[i]].id << "): " << (*mithril::pagerank::StandardizedResults)[idx[i]] << "(" << scores[idx[i]] << ")" << std::endl;
     }
 
     outFile.close();

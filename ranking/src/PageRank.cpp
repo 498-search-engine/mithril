@@ -1,5 +1,6 @@
 #include "PageRank.h"
 
+#include "core/memory.h"
 #include "data/Deserialize.h"
 #include "data/Document.h"
 #include "data/Gzip.h"
@@ -18,6 +19,37 @@
 #    include <omp.h>
 #endif
 
+#define USE_DOMAIN_RANK 0
+
+namespace {
+    std::string GetLinkDomain(const std::string& link) {
+        int c = 0;
+        std::string ret;
+    
+        for (char ch : link) {
+            ret += ch;
+    
+            if (ch == '/') {
+                c++;
+            }
+    
+            if (c == 3) {
+                break;
+            }
+        }
+    
+        return ret;
+    }
+
+    std::string ProcessLink(const std::string& link) {
+        #if USE_DOMAIN_RANK == 1
+            return GetLinkDomain(link);
+        #else
+            return link;
+        #endif
+    }
+}
+
 namespace mithril::pagerank {
 core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode =
     core::UniquePtr<std::unordered_map<std::string, int>>(new std::unordered_map<std::string, int>());
@@ -25,20 +57,25 @@ core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink =
     core::UniquePtr<std::unordered_map<int, std::string>>(new std::unordered_map<int, std::string>());
 core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections =
     core::UniquePtr<std::unordered_map<int, std::vector<int>>>(new std::unordered_map<int, std::vector<int>>());
-core::UniquePtr<std::unordered_map<data::docid_t, data::Document>> NodeToDocument =
-    core::UniquePtr<std::unordered_map<data::docid_t, data::Document>>(
-        new std::unordered_map<data::docid_t, data::Document>());
+core::UniquePtr<std::unordered_map<int, data::Document>> NodeToDocument =
+    core::UniquePtr<std::unordered_map<int, data::Document>>(
+        new std::unordered_map<int, data::Document>());
+core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode = 
+    core::UniquePtr<std::unordered_map<data::docid_t, int>>(new std::unordered_map<data::docid_t, int>());
 core::UniquePtr<std::vector<double>> Results = core::UniquePtr<std::vector<double>>(new std::vector<double>());
+core::UniquePtr<std::vector<float>> StandardizedResults = core::UniquePtr<std::vector<float>>(new std::vector<float>());
 
 int Nodes = 0;
+size_t DocumentCount = 0;
 
 int GetLinkNode(const std::string& link) {
-    auto it = LinkToNode->find(link);
+    std::string processedLink = ProcessLink(link);
+    auto it = LinkToNode->find(processedLink);
     int nodeNo;
     if (it == LinkToNode->end()) {
         nodeNo = Nodes;
-        (*LinkToNode)[link] = nodeNo;
-        (*NodeToLink)[nodeNo] = link;
+        (*LinkToNode)[processedLink] = nodeNo;
+        (*NodeToLink)[nodeNo] = processedLink;
         Nodes++;
     } else {
         nodeNo = it->second;
@@ -56,36 +93,56 @@ void Write() {
     std::iota(idx.begin(), idx.end(), 0);
 
     sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) {
-        auto it1 = NodeToDocument->find(i1);
+        auto it1 = NodeToDocument->find(static_cast<int>(i1));
         data::docid_t docid1 = it1 == NodeToDocument->end() ? UINT_MAX : it1->second.id;
 
-        auto it2 = NodeToDocument->find(i2);
+        auto it2 = NodeToDocument->find(static_cast<int>(i2));
         data::docid_t docid2 = it2 == NodeToDocument->end() ? UINT_MAX : it2->second.id;
 
         return docid1 < docid2;
     });
 
-    size_t i = 0;
-    for (; i < idx.size(); ++i) {
-        auto it = NodeToDocument->find(idx[i]);
-        if (it == NodeToDocument->end()) {
-            break;
-        }
+
+    size_t written = 0;
+    for (size_t i = 0; i < DocumentCount; ++i) {
+        auto it = DocumentToNode->find(static_cast<data::docid_t>(i));
 
         uint64_t bytes;
-
-        if (i == it->second.id) {
-            memcpy(&bytes, &scores[idx[i]], sizeof(double));
-            bytes = htonll(bytes);
-        } else {
-            bytes = 0;
+        if (it == DocumentToNode->end()) {
             spdlog::info("Could not find result for document ID: {}. Writing a pagerank of 0.0 instead.", i);
+            bytes = 0;
+        } else {
+            memcpy(&bytes, &scores[it->second], sizeof(double));
+            bytes = htonll(bytes);
+            written++;
         }
 
         fwrite(&bytes, sizeof(bytes), 1, f);
     }
+
     fclose(f);
-    spdlog::info("Wrote results of {} documents.", i);
+
+    // size_t i = 0;
+    // for (; i < idx.size(); ++i) {
+    //     auto it = NodeToDocument->find(static_cast<int>(idx[i]));
+    //     if (it == NodeToDocument->end()) {
+    //         break;
+    //     }
+
+    //     uint64_t bytes;
+
+    //     if (i == it->second.id) {
+    //         memcpy(&bytes, &scores[idx[i]], sizeof(double));
+    //         bytes = htonll(bytes);
+    //     } else {
+    //         bytes = 0;
+    //         spdlog::info("Could not find result for document ID: {}. Writing a pagerank of 0.0 instead.", i);
+    //     }
+
+    //     fwrite(&bytes, sizeof(bytes), 1, f);
+    // }
+    // fclose(f);
+    spdlog::info("Wrote results of {}/{} documents.", written, DocumentCount);
 }
 
 void PerformPageRank(core::CSRMatrix& matrix_, int N) {
@@ -94,6 +151,7 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     double tol = 1.0 / N;
 
     Results->resize(N, 1.0 / N);
+    StandardizedResults->resize(N);
 
     std::vector<double> teleport(N, (1.0 - d) / N);
 
@@ -112,6 +170,14 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
 
         *Results = newR;
     }
+
+    double min = *std::min_element(Results->begin(), Results->end());
+    double max = *std::max_element(Results->begin(), Results->end());
+
+    double range = max - min;
+    for (int i = 0; i < N; ++i) {
+        (*StandardizedResults)[i] = static_cast<float>(((*Results)[i] - min) / range);
+    }
 }
 
 void PerformPageRank() {
@@ -122,8 +188,6 @@ void PerformPageRank() {
     auto start = std::chrono::steady_clock::now();
 
     // Read PageRank info related info from all documents and setup info needed to form the CSR Matrix
-    size_t documentCount = 0;
-
     std::vector<std::string> documentPaths;
 
     for (const auto& entry : std::filesystem::recursive_directory_iterator(InputDirectory)) {
@@ -139,20 +203,20 @@ void PerformPageRank() {
     }
     std::sort(documentPaths.begin(), documentPaths.end());
 
-    for (const auto &path : documentPaths) {
+    for (const auto& path : documentPaths) {
         size_t docID = 0;
         try {
             docID = stoi(path.substr(path.size() - 10));
-        } catch (std::exception &e) {
+        } catch (std::exception& e) {
             continue;
         }
 
-        if (docID != documentCount) {
+        if (docID != DocumentCount) {
             spdlog::error("There is a hole in the documents starting at ID: {}. Ensure all data is present.", docID);
             exit(1);
         }
 
-        documentCount++;
+        DocumentCount++;
     }
 
     for (const auto& path : documentPaths) {
@@ -173,8 +237,8 @@ void PerformPageRank() {
                 vec.push_back(GetLinkNode(link));
             }
 
+            (*DocumentToNode)[doc.id] = fromNode;
             (*NodeToDocument)[fromNode] = std::move(doc);
-            documentCount++;
         } catch (const std::exception& e) {
             spdlog::error("Error processing {}: {}", path, e.what());
         }
@@ -184,7 +248,7 @@ void PerformPageRank() {
     auto processDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     spdlog::info(
-        "Finished processing {} documents. Found {} links. Time taken: {} ms.", documentCount, Nodes, processDuration);
+        "Finished processing {} documents. Found {} links. Time taken: {} ms.", DocumentCount, Nodes, processDuration);
 
     // Build CSR Matrix from the above data.
     // This tolerance is dynamic based on number of nodes.
@@ -245,7 +309,9 @@ void Cleanup() {
     NodeToLink.Reset(nullptr);
     NodeConnections.Reset(nullptr);
     NodeToDocument.Reset(nullptr);
+    DocumentToNode.Reset(nullptr);
     Results.Reset(nullptr);
+    StandardizedResults.Reset(nullptr);
 }
 
 }  // namespace mithril::pagerank
