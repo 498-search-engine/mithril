@@ -73,10 +73,15 @@ void Write() {
         }
 
         uint64_t bytes;
-        memcpy(&bytes, &scores[idx[i]], sizeof(double));
 
-        bytes = htonll(bytes);
-        
+        if (i == it->second.id) {
+            memcpy(&bytes, &scores[idx[i]], sizeof(double));
+            bytes = htonll(bytes);
+        } else {
+            bytes = 0;
+            spdlog::info("Could not find result for document ID: {}. Writing a pagerank of 0.0 instead.", i);
+        }
+
         fwrite(&bytes, sizeof(bytes), 1, f);
     }
     fclose(f);
