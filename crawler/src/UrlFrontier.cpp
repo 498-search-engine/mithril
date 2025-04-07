@@ -181,34 +181,47 @@ void UrlFrontier::ProcessRobotsRequests(ThreadSync& sync, bool tryAll) {
     }
 
     {
-        core::LockGuard waitingLock(waitingUrlsMu_);
-        core::LockGuard robotsLock(robotsCacheMu_);
 
-        auto& completed = robotRulesCache_.CompletedFetchs();
+        std::vector<http::CanonicalHost> completed;
+        {
+            core::LockGuard robotsLock(robotsCacheMu_);
+            completed = std::move(robotRulesCache_.CompletedFetchs());
+            robotRulesCache_.CompletedFetchs().clear();
+        }
+
         while (!completed.empty()) {
-            auto it = urlsWaitingForRobots_.find(completed.back());
-            completed.pop_back();
-            if (it == urlsWaitingForRobots_.end()) {
-                continue;
+            http::CanonicalHost host;
+            std::vector<http::URL> urls;
+
+            {
+                core::LockGuard waitingLock(waitingUrlsMu_);
+                auto it = urlsWaitingForRobots_.find(completed.back());
+                completed.pop_back();
+                if (it == urlsWaitingForRobots_.end()) {
+                    continue;
+                }
+
+                host = it->first;
+                urls = std::move(it->second);
+                urlsWaitingForRobotsCount_ -= urls.size();
+                urlsWaitingForRobots_.erase(it);
             }
 
-            auto host = it->first;
-            auto urls = std::move(it->second);
-            urlsWaitingForRobotsCount_ -= urls.size();
-            urlsWaitingForRobots_.erase(it);
+            {
+                core::LockGuard robotsLock(robotsCacheMu_);
+                const auto* robots = robotRulesCache_.GetOrFetch(host);
+                if (robots == nullptr) {
+                    // robots.txt page was invalid in some way, don't fetch any
+                    // results.
+                    continue;
+                }
 
-            const auto* robots = robotRulesCache_.GetOrFetch(host);
-            if (robots == nullptr) {
-                // robots.txt page was invalid in some way, don't fetch any
-                // results.
-                continue;
-            }
-
-            // The cache has fetched and resolved the robots.txt page for this
-            // canonical host. Process all queued URLs.
-            for (auto& url : urls) {
-                if (robots->Allowed(url.path)) {
-                    allowedURLs.insert(std::move(url.url));
+                // The cache has fetched and resolved the robots.txt page for this
+                // canonical host. Process all queued URLs.
+                for (auto& url : urls) {
+                    if (robots->Allowed(url.path)) {
+                        allowedURLs.insert(std::move(url.url));
+                    }
                 }
             }
         }
@@ -345,8 +358,8 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
     std::vector<RobotsLookupResult> robotResults;
     robotResults.reserve(canonicalHosts.size());
     {
-        core::LockGuard robotsLock(robotsCacheMu_);
         for (size_t i = 0; i < canonicalHosts.size(); ++i) {
+            core::LockGuard robotsLock(robotsCacheMu_);
             const auto* robots = robotRulesCache_.GetOrFetch(canonicalHosts[i]);
             if (robots == nullptr) {
                 robotResults.push_back(RobotsLookupResult::NotCached);
@@ -367,11 +380,11 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
     std::vector<http::URL*> pushURLs;
     pushURLs.reserve(newURLs.size());
     {
-        core::LockGuard waitingLock(waitingUrlsMu_);
         for (size_t i = 0; i < newURLs.size(); ++i) {
             switch (robotResults[i]) {
             case RobotsLookupResult::NotCached:
                 {
+                    core::LockGuard waitingLock(waitingUrlsMu_);
                     // robots.txt rules are not cached in memory. Push onto waiting
                     // queue.
                     size_t sizeBefore = urlsWaitingForRobots_.size();
