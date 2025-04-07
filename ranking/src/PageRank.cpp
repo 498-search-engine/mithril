@@ -177,7 +177,6 @@ void PerformPageRank() {
             documentCount++;
         } catch (const std::exception& e) {
             spdlog::error("Error processing {}: {}", path, e.what());
-            exit(1);
         }
     }
 
