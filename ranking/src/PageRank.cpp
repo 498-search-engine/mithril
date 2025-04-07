@@ -209,10 +209,12 @@ void PerformPageRank() {
     }
 
     auto end = std::chrono::steady_clock::now();
-    auto processDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+    std::chrono::duration<double> processDoubleDuration = end - start;
+    auto processDuration = processDoubleDuration.count();
 
     spdlog::info(
-        "Finished processing {} documents. Found {} links. Time taken: {} ms.", DocumentCount, Nodes, processDuration);
+        "Finished processing {} documents. Found {} links. Time taken: {}s.", DocumentCount, Nodes, processDuration);
 
     // Build CSR Matrix from the above data.
     // This tolerance is dynamic based on number of nodes.
@@ -243,9 +245,10 @@ void PerformPageRank() {
     }
 
     end = std::chrono::steady_clock::now();
-    auto csrMatrixDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    std::chrono::duration<double> csrMatrixDoubleDuration = end - start;
+    auto csrMatrixDuration = csrMatrixDoubleDuration.count();
 
-    spdlog::info("Finished CSR matrix building process. Edges: {}. Time taken: {} ms", edges, csrMatrixDuration);
+    spdlog::info("Finished CSR matrix building process. Edges: {}. Time taken: {}s", edges, csrMatrixDuration);
     spdlog::info("Performing page rank...");
 
     start = std::chrono::steady_clock::now();
@@ -253,19 +256,21 @@ void PerformPageRank() {
     pagerank::PerformPageRank(m, Nodes);
 
     end = std::chrono::steady_clock::now();
-    auto duration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
-    spdlog::info("Finished pagerank in: {} ms", duration);
+    std::chrono::duration<double> doubleDuration = end - start;
+    auto duration = doubleDuration.count();
+    spdlog::info("Finished pagerank in: {}s", duration);
 
     spdlog::info("Writing pagerank results to {}...", OutputFile);
 
     Write();
 
     end = std::chrono::steady_clock::now();
-    auto writeDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    std::chrono::duration<double> writeDurationDouble = end - start;
+    auto writeDuration = writeDurationDouble.count();
 
-    spdlog::info("Finished writing pagerank results to {}. Time taken: {} ms", OutputFile, writeDuration);
+    spdlog::info("Finished writing pagerank results to {}. Time taken: {}s", OutputFile, writeDuration);
 
-    spdlog::info("Total time taken: {} ms", (duration + csrMatrixDuration + processDuration + writeDuration));
+    spdlog::info("Total time taken: {}s", (duration + csrMatrixDuration + processDuration + writeDuration));
 }
 
 void Cleanup() {
