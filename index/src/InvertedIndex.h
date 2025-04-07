@@ -35,7 +35,7 @@ struct DocumentMetadata {
     uint32_t title_length{0};
     uint32_t url_length{0};
     uint32_t desc_length{0};
-    double pagerank_score{0.0};
+    float pagerank_score{0.0F};
 };
 
 struct IndexStatistics {

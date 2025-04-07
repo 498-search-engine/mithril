@@ -24,6 +24,4 @@ int main() {
 
         std::cout << reader.GetDocumentPageRank(docid) << std::endl;
     }
-
-
 }

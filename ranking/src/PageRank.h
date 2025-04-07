@@ -1,6 +1,7 @@
 #ifndef PAGERANK_H
 #define PAGERANK_H
 
+static_assert(sizeof(float) == 4, "Size of float is not 4 bytes");
 static_assert(sizeof(double) == 8, "Size of double is not 8 bytes");
 
 #include "core/config.h"

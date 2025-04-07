@@ -9,7 +9,7 @@ public:
     PageRankReader();
     ~PageRankReader();
 
-    double GetDocumentPageRank(data::docid_t docid);
+    float GetDocumentPageRank(data::docid_t docid);
 
     uint64_t size_;
 

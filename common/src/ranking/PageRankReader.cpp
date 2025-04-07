@@ -27,27 +27,26 @@ PageRankReader::PageRankReader() {
         throw std::runtime_error("Failed to memory map pagerank data");
     }
 
-    size_ = st.st_size / sizeof(double);
+    size_ = st.st_size / sizeof(float);
 }
 
 PageRankReader::~PageRankReader() {
     if (map_ != nullptr) {
-        munmap(map_, size_ * sizeof(double));
+        munmap(map_, size_ * sizeof(float));
     }
 }
 
-double PageRankReader::GetDocumentPageRank(data::docid_t docid) {
-    char* data = reinterpret_cast<char*>(map_) + (docid * sizeof(double));
+float PageRankReader::GetDocumentPageRank(data::docid_t docid) {
+    char* data = reinterpret_cast<char*>(map_) + (docid * sizeof(float));
 
-    double bytes;
-    memcpy(&bytes, data, sizeof(double));
+    float bytes;
+    memcpy(&bytes, data, sizeof(float));
 
     /**
      * bit_cast is equivalent to reinterpret_cast
-     * for some reason reinterpret_cast on double & uint64_t is not allowed
      * DO NOT CHANGE TO STATIC CAST
      */
-    bytes = std::bit_cast<double>(ntohll(std::bit_cast<uint64_t>(bytes)));
+    bytes = std::bit_cast<float>(ntohl(std::bit_cast<uint32_t>(bytes)));
 
     return bytes;
 }

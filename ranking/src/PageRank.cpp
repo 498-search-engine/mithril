@@ -17,9 +17,6 @@
 #    include <omp.h>
 #endif
 
-/**
-* Domain rank is really bad - at least on early_sample_crawl data on Google Drive. Probably not worth using.
-*/
 #define USE_DOMAIN_RANK 0
 
 namespace {
@@ -88,19 +85,19 @@ void Write() {
     FILE* f = fopen(OutputFile.c_str(), "wb+");
     assert(f != nullptr);
 
-    std::vector<double>& scores = *mithril::pagerank::Results;
+    std::vector<float>& scores = *mithril::pagerank::StandardizedResults;
 
     size_t written = 0;
     for (size_t i = 0; i < DocumentCount; ++i) {
         auto it = DocumentToNode->find(static_cast<data::docid_t>(i));
 
-        uint64_t bytes;
+        uint32_t bytes;
         if (it == DocumentToNode->end()) {
             spdlog::info("Could not find result for document ID: {}. Writing a pagerank of 0.0 instead.", i);
             bytes = 0;
         } else {
-            memcpy(&bytes, &scores[it->second], sizeof(double));
-            bytes = htonll(bytes);
+            memcpy(&bytes, &scores[it->second], sizeof(bytes));
+            bytes = htonl(bytes);
             written++;
         }
 
