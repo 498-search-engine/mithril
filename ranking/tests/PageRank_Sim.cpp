@@ -23,7 +23,7 @@ void WriteBackToFile() {
     std::vector<size_t> idx(mithril::pagerank::DocumentCount);
     std::iota(idx.begin(), idx.end(), 0);
 
-    stable_sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) {
+    sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) {
         auto it1 = mithril::pagerank::DocumentToNode->find(static_cast<mithril::data::docid_t>(i1));
         auto it2 = mithril::pagerank::DocumentToNode->find(static_cast<mithril::data::docid_t>(i2));
 
@@ -33,10 +33,18 @@ void WriteBackToFile() {
     });
 
     for (size_t i = 0; i < idx.size(); ++i) {
-        int j = static_cast<int>(idx[i]);
-        outFile << mithril::pagerank::ProcessLink((*mithril::pagerank::NodeToDocument)[j].url)
-                << " (docid: " << (*mithril::pagerank::NodeToDocument)[j].id
-                << "): " << (*mithril::pagerank::StandardizedResults)[idx[i]] << " (" << scores[idx[i]] << ")"
+        size_t docID = idx[i];
+        auto it1 = mithril::pagerank::DocumentToNode->find(static_cast<mithril::data::docid_t>(docID));
+        if (it1 == mithril::pagerank::DocumentToNode->end()) {
+            outFile << "docid " << docID << " has no information\n";
+            continue;
+        }
+
+        int node = it1->second;
+
+        outFile << mithril::pagerank::ProcessLink((*mithril::pagerank::NodeToDocument)[node].url)
+                << " (docid: " << (*mithril::pagerank::NodeToDocument)[node].id
+                << "): " << (*mithril::pagerank::StandardizedResults)[node] << " (" << scores[node] << ")"
                 << std::endl;
     }
 
