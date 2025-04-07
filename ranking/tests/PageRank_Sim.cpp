@@ -62,7 +62,5 @@ int main(int /*argc*/, char* /*argv*/[]) {
         WriteBackToFile();
     }
 
-    mithril::pagerank::Cleanup();
-
     return 0;
 }

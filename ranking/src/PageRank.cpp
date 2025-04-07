@@ -135,12 +135,24 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
         *Results = newR;
     }
 
-    double min = *std::min_element(Results->begin(), Results->end());
-    double max = *std::max_element(Results->begin(), Results->end());
+    constexpr double Epsilon = 1e-30;  // Avoid log(0)
 
-    double range = max - min;
+    std::vector<double> temp;
+    temp.reserve(N);
+    StandardizedResults->resize(N);
+
     for (int i = 0; i < N; ++i) {
-        (*StandardizedResults)[i] = static_cast<float>(((*Results)[i] - min) / range);
+        temp.push_back(std::log((*Results)[i] + Epsilon));
+    }
+
+    auto [minit, maxit] = std::minmax_element(temp.begin(), temp.end());
+
+    double min = *minit;
+    double max = *maxit;
+    double range = max - min;
+
+    for (int i = 0; i < N; ++i) {
+        (*StandardizedResults)[i] = static_cast<float>((temp[i] - min) / range);
     }
 }
 
@@ -213,9 +225,12 @@ void PerformPageRank() {
             auto end = std::chrono::steady_clock::now();
             std::chrono::duration<double> processDoubleDuration = end - start;
             auto processDuration = processDoubleDuration.count();
-        
-            spdlog::info(
-                "Processed {}/{} documents so far. Found {} links. Time taken: {}s.", processed, DocumentCount, Nodes, processDuration);
+
+            spdlog::info("Processed {}/{} documents so far. Found {} links. Time taken: {}s.",
+                         processed,
+                         DocumentCount,
+                         Nodes,
+                         processDuration);
         }
     }
 
