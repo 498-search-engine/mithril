@@ -37,15 +37,18 @@ PageRankReader::~PageRankReader() {
 }
 
 double PageRankReader::GetDocumentPageRank(data::docid_t docid) {
-    char* data = reinterpret_cast<char*>(map_)+ (docid * sizeof(double));
+    char* data = reinterpret_cast<char*>(map_) + (docid * sizeof(double));
 
-    uint64_t bytes;
+    double bytes;
     memcpy(&bytes, data, sizeof(double));
 
-    bytes = ntohll(bytes);
+    /**
+     * bit_cast is equivalent to reinterpret_cast
+     * for some reason reinterpret_cast on double & uint64_t is not allowed
+     * DO NOT CHANGE TO STATIC CAST
+     */
+    bytes = std::bit_cast<double>(ntohll(std::bit_cast<uint64_t>(bytes)));
 
-    double ret;
-    memcpy(&bytes, &ret, sizeof(double));
-    return ret;
+    return bytes;
 }
 };  // namespace mithril::pagerank
