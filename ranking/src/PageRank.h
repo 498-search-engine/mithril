@@ -13,6 +13,12 @@ static_assert(sizeof(double) == 8, "Size of double is not 8 bytes");
 constexpr double ErrorAllowed = 0.001;
 
 namespace mithril::pagerank {
+
+/**
+    @brief Process any links as necessary (e.g for DomainRank.)
+*/
+std::string ProcessLink(const std::string &link);
+
 /**
     @brief Performs page rank on a CSR Matrix and number of nodes and stores it in Results.
 */

@@ -42,10 +42,6 @@ add_executable_with_copy(pagerank_reader tests/PageRank_ReaderSim.cpp)
 target_include_directories(pagerank_reader PRIVATE src)
 target_link_libraries(pagerank_reader PRIVATE ranking)
 
-add_executable(domainrank_sim tests/DomainRank_Sim.cpp)
-target_include_directories(domainrank_sim PRIVATE src)
-target_link_libraries(domainrank_sim PRIVATE ranking)
-
 # Crawler ranker related
 add_executable(crawler_rank_test tests/CrawlerURLRanker_Sim.cpp)
 target_link_libraries(crawler_rank_test PRIVATE common)

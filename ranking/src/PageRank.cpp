@@ -7,11 +7,9 @@
 #include "data/Reader.h"
 
 #include <algorithm>
-#include <climits>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
-#include <numeric>
 #include <stdexcept>
 #include <spdlog/spdlog.h>
 
@@ -19,36 +17,31 @@
 #    include <omp.h>
 #endif
 
+/**
+* Domain rank is really bad - at least on early_sample_crawl data on Google Drive. Probably not worth using.
+*/
 #define USE_DOMAIN_RANK 0
 
 namespace {
-    std::string GetLinkDomain(const std::string& link) {
-        int c = 0;
-        std::string ret;
-    
-        for (char ch : link) {
-            ret += ch;
-    
-            if (ch == '/') {
-                c++;
-            }
-    
-            if (c == 3) {
-                break;
-            }
+std::string GetLinkDomain(const std::string& link) {
+    int c = 0;
+    std::string ret;
+
+    for (char ch : link) {
+        ret += ch;
+
+        if (ch == '/') {
+            c++;
         }
-    
-        return ret;
+
+        if (c == 3) {
+            break;
+        }
     }
 
-    std::string ProcessLink(const std::string& link) {
-        #if USE_DOMAIN_RANK == 1
-            return GetLinkDomain(link);
-        #else
-            return link;
-        #endif
-    }
+    return ret;
 }
+}  // namespace
 
 namespace mithril::pagerank {
 core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode =
@@ -58,15 +51,22 @@ core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink =
 core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections =
     core::UniquePtr<std::unordered_map<int, std::vector<int>>>(new std::unordered_map<int, std::vector<int>>());
 core::UniquePtr<std::unordered_map<int, data::Document>> NodeToDocument =
-    core::UniquePtr<std::unordered_map<int, data::Document>>(
-        new std::unordered_map<int, data::Document>());
-core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode = 
+    core::UniquePtr<std::unordered_map<int, data::Document>>(new std::unordered_map<int, data::Document>());
+core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode =
     core::UniquePtr<std::unordered_map<data::docid_t, int>>(new std::unordered_map<data::docid_t, int>());
 core::UniquePtr<std::vector<double>> Results = core::UniquePtr<std::vector<double>>(new std::vector<double>());
 core::UniquePtr<std::vector<float>> StandardizedResults = core::UniquePtr<std::vector<float>>(new std::vector<float>());
 
 int Nodes = 0;
 size_t DocumentCount = 0;
+
+std::string ProcessLink(const std::string& link) {
+#if USE_DOMAIN_RANK == 1
+    return GetLinkDomain(link);
+#else
+    return link;
+#endif
+}
 
 int GetLinkNode(const std::string& link) {
     std::string processedLink = ProcessLink(link);
@@ -89,19 +89,6 @@ void Write() {
     assert(f != nullptr);
 
     std::vector<double>& scores = *mithril::pagerank::Results;
-    std::vector<size_t> idx(scores.size());
-    std::iota(idx.begin(), idx.end(), 0);
-
-    sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) {
-        auto it1 = NodeToDocument->find(static_cast<int>(i1));
-        data::docid_t docid1 = it1 == NodeToDocument->end() ? UINT_MAX : it1->second.id;
-
-        auto it2 = NodeToDocument->find(static_cast<int>(i2));
-        data::docid_t docid2 = it2 == NodeToDocument->end() ? UINT_MAX : it2->second.id;
-
-        return docid1 < docid2;
-    });
-
 
     size_t written = 0;
     for (size_t i = 0; i < DocumentCount; ++i) {
@@ -122,26 +109,6 @@ void Write() {
 
     fclose(f);
 
-    // size_t i = 0;
-    // for (; i < idx.size(); ++i) {
-    //     auto it = NodeToDocument->find(static_cast<int>(idx[i]));
-    //     if (it == NodeToDocument->end()) {
-    //         break;
-    //     }
-
-    //     uint64_t bytes;
-
-    //     if (i == it->second.id) {
-    //         memcpy(&bytes, &scores[idx[i]], sizeof(double));
-    //         bytes = htonll(bytes);
-    //     } else {
-    //         bytes = 0;
-    //         spdlog::info("Could not find result for document ID: {}. Writing a pagerank of 0.0 instead.", i);
-    //     }
-
-    //     fwrite(&bytes, sizeof(bytes), 1, f);
-    // }
-    // fclose(f);
     spdlog::info("Wrote results of {}/{} documents.", written, DocumentCount);
 }
 
