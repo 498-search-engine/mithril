@@ -183,6 +183,7 @@ void PerformPageRank() {
         DocumentCount++;
     }
 
+    size_t processed = 0;
     for (const auto& path : documentPaths) {
         try {
             data::Document doc;
@@ -203,13 +204,22 @@ void PerformPageRank() {
 
             (*DocumentToNode)[doc.id] = fromNode;
             (*NodeToDocument)[fromNode] = std::move(doc);
+            processed++;
         } catch (const std::exception& e) {
             spdlog::error("Error processing {}: {}", path, e.what());
+        }
+
+        if ((processed % 10000 == 0 || processed == 1)) {
+            auto end = std::chrono::steady_clock::now();
+            std::chrono::duration<double> processDoubleDuration = end - start;
+            auto processDuration = processDoubleDuration.count();
+        
+            spdlog::info(
+                "Processed {}/{} documents so far. Found {} links. Time taken: {}s.", processed, DocumentCount, Nodes, processDuration);
         }
     }
 
     auto end = std::chrono::steady_clock::now();
-
     std::chrono::duration<double> processDoubleDuration = end - start;
     auto processDuration = processDoubleDuration.count();
 
