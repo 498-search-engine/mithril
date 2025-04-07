@@ -51,6 +51,7 @@ void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& 
         auto zipWriter = data::GzipWriter{fWriter};
         data::SerializeValue(doc, zipWriter);
         zipWriter.Finish();
+        fWriter.DontNeed();
     } catch (const std::exception& e) {
         spdlog::error("failed to write document {} ({}): {}", doc.id, doc.url, e.what());
     }

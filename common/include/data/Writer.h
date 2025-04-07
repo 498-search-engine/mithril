@@ -33,6 +33,7 @@ public:
     void Write(const void* data, size_t size);
     void Flush();
     void Close();
+    void DontNeed();
 
 private:
     FILE* file_;
