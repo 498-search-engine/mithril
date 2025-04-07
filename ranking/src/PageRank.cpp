@@ -143,7 +143,7 @@ void PerformPageRank() {
             (*NodeToDocument)[fromNode] = std::move(doc);
             documentCount++;
         } catch (const std::exception& e) {
-            spdlog::error("\nError processing {}: {}", entry.path().string(), e.what());
+            spdlog::error("Error processing {}: {}", entry.path().string(), e.what());
         }
     }
 
