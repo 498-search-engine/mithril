@@ -5,9 +5,12 @@
 #include "data/Gzip.h"
 #include "data/Reader.h"
 
+#include <algorithm>
+#include <climits>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
+#include <numeric>
 #include <stdexcept>
 #include <spdlog/spdlog.h>
 
@@ -44,6 +47,38 @@ int GetLinkNode(const std::string& link) {
     return nodeNo;
 }
 
+void Write() {
+    FILE* f = fopen(OutputFile.c_str(), "wb+");
+    assert(f != nullptr);
+
+    std::vector<double>& scores = *mithril::pagerank::Results;
+    std::vector<size_t> idx(scores.size());
+    std::iota(idx.begin(), idx.end(), 0);
+
+    sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) { 
+        auto it1 = NodeToDocument->find(i1);
+        data::docid_t docid1 = it1 == NodeToDocument->end() ? UINT_MAX : it1->second.id;
+
+        auto it2 = NodeToDocument->find(i2);
+        data::docid_t docid2 = it2 == NodeToDocument->end() ? UINT_MAX : it2->second.id;
+
+        return docid1 < docid2; 
+    });
+
+    for (size_t i = 0; i < idx.size(); ++i) {
+        auto it = NodeToDocument->find(idx[i]);
+        if (it == NodeToDocument->end()) {
+            spdlog::info("Wrote results of {} documents.", i);
+            break;
+        }
+
+        uint64_t bytes;
+        memcpy(&bytes, &scores[idx[i]], sizeof(double));
+        fwrite(&bytes, sizeof(bytes), 1, f);
+    }
+    fclose(f);
+}
+
 void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     int maxIteration = Config.GetInt("max_iterations");
     double d = Config.GetDouble("decay_factor");
@@ -78,6 +113,7 @@ void PerformPageRank() {
     auto start = std::chrono::steady_clock::now();
 
     // Read PageRank info related info from all documents and setup info needed to form the CSR Matrix
+    size_t documentCount = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(InputDirectory)) {
         if (!entry.is_regular_file()) {
             continue;  // skip chunk dir
@@ -101,6 +137,7 @@ void PerformPageRank() {
             }
 
             (*NodeToDocument)[fromNode] = std::move(doc);
+            documentCount++;
         } catch (const std::exception& e) {
             spdlog::error("\nError processing {}: {}", entry.path().string(), e.what());
         }
@@ -109,12 +146,12 @@ void PerformPageRank() {
     auto end = std::chrono::steady_clock::now();
     auto processDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    spdlog::info("Finished processing documents. Found {} links. Time taken: {} ms.", Nodes, processDuration);
+    spdlog::info("Finished processing {} documents. Found {} links. Time taken: {} ms.", documentCount,  Nodes, processDuration);
 
     // Build CSR Matrix from the above data.
     // This tolerance is dynamic based on number of nodes.
     const double tol = 1.0 / Nodes;
-    spdlog::info("Building CSR Matrix with tolerance {:e}", tol);
+    spdlog::info("Building CSR Matrix with tolerance {:e}...", tol);
 
     start = std::chrono::steady_clock::now();
 
@@ -142,10 +179,8 @@ void PerformPageRank() {
     end = std::chrono::steady_clock::now();
     auto csrMatrixDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
-    spdlog::info("Finished CSR matrix building process. Edges: {}. Time taken: {} ms",
-                 edges,
-                 csrMatrixDuration);
-    spdlog::info("Performing page rank....");
+    spdlog::info("Finished CSR matrix building process. Edges: {}. Time taken: {} ms", edges, csrMatrixDuration);
+    spdlog::info("Performing page rank...");
 
     start = std::chrono::steady_clock::now();
 
@@ -154,7 +189,17 @@ void PerformPageRank() {
     end = std::chrono::steady_clock::now();
     auto duration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
     spdlog::info("Finished pagerank in: {} ms", duration);
-    spdlog::info("Total time taken: {} ms", (duration + csrMatrixDuration + processDuration));
+
+    spdlog::info("Writing pagerank results to {}...", OutputFile);
+
+    Write();
+
+    end = std::chrono::steady_clock::now();
+    auto writeDuration = (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+
+    spdlog::info("Finished writing pagerank results to {}. Time taken: {} ms", OutputFile, writeDuration);
+
+    spdlog::info("Total time taken: {} ms", (duration + csrMatrixDuration + processDuration + writeDuration));
 }
 
 void Cleanup() {

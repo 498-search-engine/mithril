@@ -1,11 +1,12 @@
 #ifndef PAGERANK_H
 #define PAGERANK_H
 
+static_assert(sizeof(double) == 8, "Size of double is not 8 bytes");
+
 #include "core/config.h"
 #include "core/csr.h"
 #include "core/memory.h"
 #include "data/Document.h"
-
 
 #include <vector>
 
@@ -21,6 +22,11 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N);
     @brief Gets the node ID for a particular link. If it doesn't exist, it ssigns it one.
 */
 int GetLinkNode(const std::string& link);
+
+/**
+    @brief Writes PageRank info per docID to a file in byte format (big endian)
+*/
+void Write();
 
 /**
     @brief Builds the CSR matrix and performs page rank on it.
@@ -47,7 +53,8 @@ extern int Nodes;
     private namespace variables
 */
 static core::Config Config = core::Config("pagerank.conf");
-const static inline std::string InputDirectory =
-    std::string(Config.GetString("document_folder").Cstr());
+const static inline std::string InputDirectory = std::string(Config.GetString("document_folder").Cstr());
+const static inline std::string OutputFile = std::string(Config.GetString("output_file").Cstr());
+
 };  // namespace mithril::pagerank
 #endif
