@@ -55,28 +55,32 @@ void Write() {
     std::vector<size_t> idx(scores.size());
     std::iota(idx.begin(), idx.end(), 0);
 
-    sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) { 
+    sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) {
         auto it1 = NodeToDocument->find(i1);
         data::docid_t docid1 = it1 == NodeToDocument->end() ? UINT_MAX : it1->second.id;
 
         auto it2 = NodeToDocument->find(i2);
         data::docid_t docid2 = it2 == NodeToDocument->end() ? UINT_MAX : it2->second.id;
 
-        return docid1 < docid2; 
+        return docid1 < docid2;
     });
 
-    for (size_t i = 0; i < idx.size(); ++i) {
+    size_t i = 0;
+    for (; i < idx.size(); ++i) {
         auto it = NodeToDocument->find(idx[i]);
         if (it == NodeToDocument->end()) {
-            spdlog::info("Wrote results of {} documents.", i);
             break;
         }
 
         uint64_t bytes;
         memcpy(&bytes, &scores[idx[i]], sizeof(double));
+
+        bytes = htonll(bytes);
+        
         fwrite(&bytes, sizeof(bytes), 1, f);
     }
     fclose(f);
+    spdlog::info("Wrote results of {} documents.", i);
 }
 
 void PerformPageRank(core::CSRMatrix& matrix_, int N) {
@@ -146,7 +150,8 @@ void PerformPageRank() {
     auto end = std::chrono::steady_clock::now();
     auto processDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    spdlog::info("Finished processing {} documents. Found {} links. Time taken: {} ms.", documentCount,  Nodes, processDuration);
+    spdlog::info(
+        "Finished processing {} documents. Found {} links. Time taken: {} ms.", documentCount, Nodes, processDuration);
 
     // Build CSR Matrix from the above data.
     // This tolerance is dynamic based on number of nodes.

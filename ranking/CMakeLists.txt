@@ -12,6 +12,7 @@ endif()
 
 add_library(ranking STATIC 
     src/PageRank.cpp
+    src/PageRankReader.cpp
     src/StaticRanker.cpp
 )
 target_include_directories(ranking PUBLIC src)
@@ -37,6 +38,10 @@ target_link_libraries(pagerank_bench PRIVATE ranking)
 add_executable(pagerank_sim tests/PageRank_Sim.cpp)
 target_include_directories(pagerank_sim PRIVATE src)
 target_link_libraries(pagerank_sim PRIVATE ranking)
+
+add_executable(pagerank_reader tests/PageRank_ReaderSim.cpp)
+target_include_directories(pagerank_reader PRIVATE src)
+target_link_libraries(pagerank_reader PRIVATE ranking)
 
 add_executable(domainrank_sim tests/DomainRank_Sim.cpp)
 target_include_directories(domainrank_sim PRIVATE src)
