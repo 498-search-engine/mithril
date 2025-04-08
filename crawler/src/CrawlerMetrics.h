@@ -224,6 +224,18 @@ inline auto FreshURLsStepPush = HistogramMetric{
     ExponentialBuckets(0.00001, 4, 11),
 };
 
+inline auto NewURLCounter = Metric{
+    "crawler_new_url",
+    MetricTypeCounter,
+    "Number of new URLs seen during the crawl",
+};
+
+inline auto DuplicateURLCounter = Metric{
+    "crawler_duplicate_url",
+    MetricTypeCounter,
+    "Number of duplicate URLs seen during the crawl",
+};
+
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&TotalDocumentCorpusSizeMetric);
     server.Register(&DocumentsProcessedMetric);
@@ -261,6 +273,8 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&FreshURLsStepLookUpRobots);
     server.Register(&FreshURLsStepEnqueue);
     server.Register(&FreshURLsStepPush);
+    server.Register(&NewURLCounter);
+    server.Register(&DuplicateURLCounter);
 }
 
 }  // namespace mithril
