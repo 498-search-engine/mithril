@@ -93,7 +93,7 @@ void Write() {
 
         uint32_t bytes;
         if (it == DocumentToNode->end()) {
-            spdlog::info("Could not find result for document ID: {}. Writing a pagerank of 0.0 instead.", i);
+            spdlog::warn("Could not find result for document ID: {}. Writing a pagerank of 0.0 instead.", i);
             bytes = 0;
         } else {
             memcpy(&bytes, &scores[it->second], sizeof(bytes));
