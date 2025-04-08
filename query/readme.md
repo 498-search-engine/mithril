@@ -1,4 +1,41 @@
 
+# Setup
+## General
+`mkdir build`
+`cmake -DCMAKE_BUILD_TYPE=Release -S . -B build`
+`cmake --build build`
+`git submodule update --init --recursive`
+`cd build`
+
+## Crawl (for a few minutes)
+`mkdir data`
+`mkdir data/snapshot`
+`mkdir data/docs`
+`mkdir data/state`
+`./crawler/mithril_crawler ../crawler/crawler.conf`
+control-C when you want to stop 
+
+## Build Index
+`./index/mithril_indexer data`
+
+## Run Query Engine
+There are many scripts here, you can find them all in `build/query`, however I will only cover how to set up the general coordinator and workers and other important scripts
+
+`/query/parser-driver`: super helpful for testing single queries
+
+Go to `query/src/server.conf` and take a look at each of these servers. I would start with one. Then, from within the build directory, do: 
+`./query/mithril_worker --index index_output --port <some_port>`
+make sure the port lines up with what is in `server.conf`
+In another terminal, do: 
+`./query/mithril_coordinator --conf ../query/server.conf`
+
+Then you can send queries from the coordinator to the worker! 
+
+
+
+
+
+
 
 
 ./query/mithril_coordinator --conf ../query/server.conf 
