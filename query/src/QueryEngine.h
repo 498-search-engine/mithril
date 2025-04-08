@@ -62,8 +62,7 @@ public:
             std::cout << std::endl;
         }
     }
-
-
+    
 private:
     mithril::DocumentMapReader map_reader_;
 };
