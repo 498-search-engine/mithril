@@ -1,6 +1,7 @@
 add_library(query STATIC
     src/Lexer.cpp
     src/intersect.cpp
+    src/network.cpp
 )
 target_include_directories(query PUBLIC src)
 target_link_libraries(query PUBLIC
@@ -13,6 +14,15 @@ add_executable(mithril_lexer
     src/main.cpp
 )
 target_link_libraries(mithril_lexer PRIVATE
+    spdlog::spdlog
+    query
+)
+
+
+add_executable(mithril_child
+    src/mithril_child.cpp
+)
+target_link_libraries(mithril_child PRIVATE
     spdlog::spdlog
     query
 )
