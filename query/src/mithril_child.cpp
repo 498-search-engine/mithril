@@ -1,8 +1,9 @@
-#include <iostream>
-#include <string>
-#include "network.h"
 #include "NetworkHelper.h"
 #include "QueryEngine.h"
+#include "network.h"
+
+#include <iostream>
+#include <string>
 
 constexpr int BUFFER_SIZE = 1024;
 
@@ -56,7 +57,7 @@ int main(int argc, char* argv[]) {
         socklen_t client_len = sizeof(client_addr);
 
         int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
-
+        std::cout << "Accepted a child connection\n";
         if (client_fd < 0) {
             std::cerr << "Failed to accept connection." << std::endl;
             continue;
@@ -70,10 +71,11 @@ int main(int argc, char* argv[]) {
             auto query = queryEngine.EvaluateQuery(data.data);
             queryEngine.DisplayResults(query, 10);
 
-            std::cout << "Query evaluated successfully." << std::endl;
+            std::cout << "Query evaluated successfully." << std::endl
+                      << "--------------------" << std::endl
+                      << std::endl;
 
-            std::string response =
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nServer is running with index path: " + indexPath;
+            std::string response = "Valid Query" + indexPath;
             write(client_fd, response.c_str(), response.size());
         }
 
