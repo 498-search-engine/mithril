@@ -8,11 +8,11 @@
 #include <vector>
 #include <utility>
 #include <string>
-#include "TermOR.h"
 #include "Token.h"
 #include "../../index/src/TermReader.h"
 #include "../../index/src/TermAND.h"
 #include "../../index/src/TermOR.h"
+#include "../../index/src/NotIndexStreamReader.h"
 #include "QueryConfig.h"
 #include "intersect.h"
 #include <unordered_map>
@@ -21,6 +21,10 @@
 // TODO: Determine if we should limit the number of documents we read
 using DocIDArray = std::vector<int32_t>;
 const int MAX_DOCUMENTS = 1e5; 
+
+
+// namespace mithril {
+
 
 class Query {
 public:
@@ -132,8 +136,7 @@ class OrQuery :  public Query {
     Query* right_; 
 
 public: 
-
-    OrQuery(Query* left, Query* right) : left_(left), right_(right) {
+ OrQuery(Query* left, Query* right) : left_(left), right_(right) {
         if (!left && !right){
             std::cerr << "Need a left and right query\n";
             exit(1);
@@ -165,9 +168,66 @@ public:
 };
 
 
-// class NotQuery : public Query {
-//     // Excludes documents matching the negated term
-// };
+
+class NotQuery : public Query {
+public:
+    NotQuery(Query* expression) : expression_(expression),
+        not_isr_(std::make_unique<mithril::NotISR>(std::move(expression->generate_isr()), query::QueryConfig::GetMaxDocId())) {
+        if (!expression) {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+            std::cerr << "Need an expression for NOT query\n";
+            exit(1);
+        }
+    }
+
+    std::vector<uint32_t> evaluate() const override {
+        // Get all documents that match the expression
+        std::vector<uint32_t> expr_docs = expression_->evaluate();
+        std::vector<uint32_t> all_docs;
+        all_docs.reserve(query::QueryConfig::GetMaxDocId() - expr_docs.size());
+        
+        // Generate all document IDs from 0 to max_doc_id
+        for (uint32_t i = 0; i < query::QueryConfig::GetMaxDocId(); i++) {
+            all_docs.push_back(i);
+        }
+        
+        // Return documents that are NOT in expr_docs
+        std::vector<uint32_t> result;
+        size_t expr_idx = 0;
+        
+        for (uint32_t doc_id : all_docs) {
+            while (expr_idx < expr_docs.size() && expr_docs[expr_idx] < doc_id) {
+                expr_idx++;
+            }
+            
+            if (expr_idx >= expr_docs.size() || expr_docs[expr_idx] != doc_id) {
+                result.push_back(doc_id);
+            }
+        }
+        
+        return result;
+    }
+
+    [[nodiscard]] std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
+        return std::make_unique<mithril::NotISR>(
+            expression_->generate_isr(),
+            query::QueryConfig::GetMaxDocId()
+        );
+    }
+
+    [[nodiscard]] std::string to_string() const override {
+        return "NOT(" + expression_->to_string() + ")";
+    }
+    
+    [[nodiscard]] std::string get_type() const override {
+        return "NotQuery";
+    }
+
+private:
+    Query* expression_;
+    std::unique_ptr<mithril::NotISR> not_isr_;
+};
+
+// }  // namespace mithril
 
 // class FieldQuery : public Query {
 //     // Restricts search to specific fields (TITLE, TEXT)
