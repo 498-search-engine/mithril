@@ -20,8 +20,8 @@ bool check_phrase_positions(const std::vector<std::unique_ptr<mithril::TermReade
     std::vector<uint32_t> positions = readers[0]->currentPositions();
 
     // Debug output
-    std::cout << "Term '" << readers[0]->getTerm() << "' has " << positions.size() << " positions in doc " << doc_id
-              << std::endl;
+    // std::cout << "Term '" << readers[0]->getTerm() << "' has " << positions.size() << " positions in doc " << doc_id
+    //           << std::endl;
 
     // For each position of the first term, check if remaining terms follow within proximity
     for (uint32_t start_pos : positions) {
@@ -39,8 +39,8 @@ bool check_phrase_positions(const std::vector<std::unique_ptr<mithril::TermReade
             // Get positions for this term
             std::vector<uint32_t> term_positions = readers[i]->currentPositions();
 
-            std::cout << "  Term '" << readers[i]->getTerm() << "' has " << term_positions.size()
-                      << " positions in doc " << doc_id << std::endl;
+            // std::cout << "  Term '" << readers[i]->getTerm() << "' has " << term_positions.size()
+            //           << " positions in doc " << doc_id << std::endl;
 
             // Find the first position that comes after last_pos within max_distance
             bool found_match = false;

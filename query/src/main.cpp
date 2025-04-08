@@ -7,7 +7,7 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
-#include "QueryEngine.h"  // Your actual implementation
+// #include "QueryEngine.h"  // Your actual implementation
 
 namespace mithril {
 
