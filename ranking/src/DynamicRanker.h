@@ -56,6 +56,15 @@ struct RankerWeights {
 
 static inline const RankerWeights Weights;
 
+static inline const float MinScore = 0.0F;
+static inline const float MaxScore =
+    Weights.bm25 + Weights.query_in_title + Weights.query_in_url + Weights.query_in_description +
+    Weights.query_in_body + Weights.query_in_order + Weights.short_spans + Weights.body_term_freq +
+    Weights.percent_query_url + Weights.percent_query_title + Weights.percent_query_description +
+    Weights.percent_query_body + Weights.earliest_pos_title + Weights.earliest_pos_url + Weights.earliest_pos_body +
+    Weights.static_rank + Weights.pagerank;
+static inline const float ScoreRange = MaxScore - MinScore;
+
 float GetUrlDynamicRank(const RankerFeatures& features);
 
 };  // namespace mithril::ranking::dynamic
