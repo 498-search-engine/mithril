@@ -9,13 +9,13 @@
 
 namespace mithril::ranking {
 
-int32_t GetUrlStaticRank(std::string_view url) {
+double GetUrlStaticRank(std::string_view url) {
     spdlog::debug("Getting static rank for URL: {}", url);
 
     StaticRankingsStruct ranker{};
     GetStringRankings(url, ranker);
 
-    int32_t score = 1000;
+    int32_t score = BaseScore;
 
     // * Site TLD (whitelist)
     if (WhitelistTld.contains(ranker.tld)) {
@@ -23,6 +23,8 @@ int32_t GetUrlStaticRank(std::string_view url) {
         spdlog::debug(
             "New score: {} | Score added: {} | Reason: Whitelist TLD ({})", score, WhitelistTldScore, ranker.tld);
     }
+
+    int32_t domainNamePenalty = 0;
 
     // * Domain whitelist
     if (WhitelistDomain.contains(ranker.domainName)) {
@@ -53,19 +55,27 @@ int32_t GetUrlStaticRank(std::string_view url) {
         }
 
         // * Domain name length
-        int32_t domainNamePenalty = 0;
         if (ranker.domainName.length() > DomainLengthAcceptable) {
             // NOLINTNEXTLINE(bugprone-narrowing-conversions)
             domainNamePenalty = DomainPenaltyPerExtraLength * (ranker.domainName.length() - DomainLengthAcceptable);
         }
+    }
+    
+    score += DomainNameScore - std::min(domainNamePenalty, DomainNameScore);
+    spdlog::debug("New score: {} | Score added: {} | Reason: Domain Name Length (Length: {} | Excess: {})",
+                 score,
+                 DomainNameScore - std::min(domainNamePenalty, DomainNameScore),
+                 ranker.domainName.length(),
+                 ranker.domainName.length() - DomainLengthAcceptable);
 
-        score += DomainNameScore - std::min(domainNamePenalty, DomainNameScore);
+    // * Good Extension
+    if (GoodExtensionList.contains(ranker.extension)) {
+        score += ExtensionBoost;
 
-        spdlog::debug("New score: {} | Score added: {} | Reason: Domain Name Length (Length: {} | Excess: {})",
+        spdlog::debug("New score: {} | Score added: {} | Reason: Good Extension ({})",
                      score,
-                     DomainNameScore - std::min(domainNamePenalty, DomainNameScore),
-                     ranker.domainName.length(),
-                     ranker.domainName.length() - DomainLengthAcceptable);
+                     ExtensionBoost,
+                     ranker.extension);
     }
 
     // * URL length
@@ -124,8 +134,9 @@ int32_t GetUrlStaticRank(std::string_view url) {
 
     spdlog::debug("Final score: {}\n", score);
 
-    // Make sure score is not negative
-    return std::max(score, 0);
+    // Noramlize score
+    double scoreDec = score;
+    return (scoreDec - MinScore) / DiffScore;
 }
 
 void GetStringRankings(std::string_view url, StaticRankingsStruct& ranker) {

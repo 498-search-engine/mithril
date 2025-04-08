@@ -23,6 +23,8 @@ can also add more scoring rules if we want to.
 namespace mithril::ranking {
 static inline core::Config Config = core::Config("staticranker.conf");
 
+static inline const int32_t BaseScore = 1000;
+
 // * HTTPS
 static inline const int32_t HttpsScore = Config.GetInt("HttpsScore");
 
@@ -79,6 +81,13 @@ static inline const int32_t DomainNameNumberPenalty = Config.GetInt("DomainNameN
 
 // * Numbers of length > 4 (e.g not years) in URL (this is after the domain name)
 static inline const int32_t URLNumberPenalty = Config.GetInt("URLNumberPenalty");
+
+// Normalization Details
+static inline const double MaxPossibleScore = BaseScore + HttpsScore + WhitelistTldScore + WhitelistDomainScore +
+                                               DomainNameScore + UrlLengthScore + NumberParamScore + DepthPageScore +
+                                               ExtensionBoost;
+static inline const double MinScore = BaseScore - 500; // Assuming a domain will not get penalized more than 500 points (if it does, it's probably really bad anyways)
+static inline const double DiffScore = MaxPossibleScore - MinScore;
 
 struct StaticRankingsStruct {
     std::string tld;
@@ -202,7 +211,7 @@ const std::unordered_set<std::string> WhitelistDomain = {
  * Gets all relevant ranking info in one pass of the URL string.
  */
 void GetStringRankings(std::string_view url, StaticRankingsStruct& ranker);
-int32_t GetUrlStaticRank(std::string_view url);
+double GetUrlStaticRank(std::string_view url);
 }  // namespace mithril::ranking
 
 #endif

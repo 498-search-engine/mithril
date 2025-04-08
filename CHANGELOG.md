@@ -83,6 +83,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - check in flight robot requests at start of fill (#110)
 - cleanup ranking & tests directory w.r.t to ranking tests (#116)
 - fixed domain name whitelist being penalized + add `en.wikipedia.org` to whitelist for Crawler URL ranking (#115)
+- normalize Static Ranker + fix some small issues (#119)
 
 ## [0.1.0] - 2025-02-07
 
