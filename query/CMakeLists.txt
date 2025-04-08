@@ -25,6 +25,7 @@ add_executable(mithril_child
 target_link_libraries(mithril_child PRIVATE
     spdlog::spdlog
     query
+    index
 )
 
 # Add test executable

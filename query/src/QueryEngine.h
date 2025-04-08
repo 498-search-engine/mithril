@@ -18,7 +18,9 @@ class QueryEngine {
 public:
     QueryEngine(const std::string& index_dir) : map_reader_(index_dir) {
         query::QueryConfig::SetIndexPath(index_dir);
-        query::QueryConfig::SetMaxDocId(map_reader_.GetMaxDocId());
+        query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
+
+        std::cout << "Query engine initialized\n";
     }
 
     static auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
@@ -28,7 +30,7 @@ public:
 
     std::vector<Token> GetTokens(const std::string& input) {
         Parser parser(input);
-        return parser.get_tokens();s
+        return parser.get_tokens();
     }
 
     std::vector<uint32_t> EvaluateQuery(std::string input) { 
