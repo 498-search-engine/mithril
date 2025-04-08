@@ -63,7 +63,7 @@ public:
     Token get_token() { return token_; }
 
     std::vector<uint32_t> evaluate() const override {
-        mithril::TermReader term(query::QueryConfig::IndexPath, token_.value);
+        mithril::TermReader term(query::QueryConfig::GetIndexPath() , token_.value);
 
         std::vector<uint32_t> results;
         results.reserve(MAX_DOCUMENTS);
@@ -78,7 +78,7 @@ public:
     }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        return std::make_unique<mithril::TermReader>(query::QueryConfig::IndexPath, token_.value);
+        return std::make_unique<mithril::TermReader>(query::QueryConfig::GetIndexPath(), token_.value);
     }
 
     [[nodiscard]] std::string to_string() const override {

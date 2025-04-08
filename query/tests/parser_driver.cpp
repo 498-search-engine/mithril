@@ -55,12 +55,10 @@ auto main(int argc, char* argv[]) -> int {
     }
 
     DocumentMapReader doc_reader(indexPath);
-    query::QueryConfig::max_doc_id = doc_reader.documentCount();
-    query::QueryConfig::max_doc_id_set = true;
     
     // Set the index path in the QueryConfig
-    query::QueryConfig::IndexPath = indexPath;
-    std::cout << "Using index path: " << query::QueryConfig::IndexPath << std::endl;
+    query::QueryConfig::SetIndexPath(indexPath);
+    std::cout << "Using index path: " << query::QueryConfig::GetIndexPath() << std::endl;
     
     // If query terms were provided, join them as input
     if (!queryArgs.empty()) {

@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
     }
     
     // Set the index path
-    query::QueryConfig::IndexPath = std::string(argv[1]);
+    query::QueryConfig::GetIndexPath() = std::string(argv[1]);
     
     // Determine which mode to run
     std::string mode = argv[4];
@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    std::cout << "Using index at: '" << query::QueryConfig::IndexPath << "'" << std::endl;
+    std::cout << "Using index at: '" << query::QueryConfig::GetIndexPath() << "'" << std::endl;
     std::cout << "Searching for terms: '" << argv[2] << "' OR '" << argv[3] << "'" << std::endl;
     std::cout << "Mode: " << mode << std::endl;
     
