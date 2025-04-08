@@ -37,6 +37,22 @@ int main(int argc, char* argv[]) {
 
     mithril::QueryCoordinator queryCoordinator(confPath);
     queryCoordinator.print_server_configs();
-    queryCoordinator.send_query_to_workers("hello");
+    
+    std::string query;
+    while (true) {
+        std::cout << "Enter your search query (or 'Ctrl-C' to quit): ";
+        std::getline(std::cin, query);
+        
+        if (query.empty()) {
+            continue;
+        }
+        
+        try {
+            queryCoordinator.send_query_to_workers(query);
+        } catch (const std::exception& e) {
+            std::cerr << "Error processing query: " << e.what() << std::endl;
+        }
+    }
+    
     return 0;
 }

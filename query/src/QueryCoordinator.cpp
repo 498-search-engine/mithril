@@ -1,11 +1,12 @@
 #include "QueryCoordinator.h"
-#include<core/thread.h>
+#include <core/thread.h>
 #include "NetworkHelper.h"
 #include "network.h"
+#include "../../index/src/TextPreprocessor.h"
+
 
 using namespace core;
-
-
+using namespace mithril; 
 
 mithril::QueryCoordinator::QueryCoordinator(const std::string& conf_path) {
     try {
@@ -47,13 +48,22 @@ void mithril::QueryCoordinator::print_server_configs() const {
         }
 }
 void mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
+
+    mithril::TokenNormalizer token_normalizer;
+    std::string normalized_query = token_normalizer.normalize(query);
+
+    if (normalized_query.empty()) {
+        std::cout << "Normalized query is empty" << std::endl;
+        return;
+    }
+
     std::vector<std::vector<uint32_t>> worker_results(server_configs_.size());
     std::vector<core::Thread> threads;
     threads.reserve(server_configs_.size());
     
     // Create all threads
     for (size_t i = 0; i < server_configs_.size(); ++i) {
-        threads.emplace_back(handle_worker_response, server_configs_[i], std::ref(worker_results[i]), query);
+        threads.emplace_back(handle_worker_response, server_configs_[i], std::ref(worker_results[i]), normalized_query);
     }
     
     // Wait for all threads to complete
