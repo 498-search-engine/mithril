@@ -191,37 +191,37 @@ inline auto ProcessRobotsRequestsCounter = Metric{
 inline auto FreshURLsStepMove = HistogramMetric{
     "crawler_fresh_urls_step_move",
     "Move/Copy fresh URLs step duration",
-    ExponentialBuckets(0.001, 2, 14),
+    ExponentialBuckets(0.00001, 4, 11),
 };
 
 inline auto FreshURLsStepValidate = HistogramMetric{
     "crawler_fresh_urls_step_validate",
     "Validate fresh URLs step duration",
-    ExponentialBuckets(0.001, 2, 14),
+    ExponentialBuckets(0.00001, 4, 11),
 };
 
 inline auto FreshURLsStepDeduplicate = HistogramMetric{
     "crawler_fresh_urls_step_deduplicate",
     "Deduplicate fresh URLs step duration",
-    ExponentialBuckets(0.001, 2, 14),
+    ExponentialBuckets(0.00001, 4, 11),
 };
 
 inline auto FreshURLsStepLookUpRobots = HistogramMetric{
     "crawler_fresh_urls_step_look_up_robots",
     "Look up robots fresh URLs step duration",
-    ExponentialBuckets(0.001, 2, 14),
+    ExponentialBuckets(0.00001, 4, 11),
 };
 
 inline auto FreshURLsStepEnqueue = HistogramMetric{
     "crawler_fresh_urls_step_enqueue",
     "Enqueue fresh URLs step duration",
-    ExponentialBuckets(0.001, 2, 14),
+    ExponentialBuckets(0.00001, 4, 11),
 };
 
 inline auto FreshURLsStepPush = HistogramMetric{
     "crawler_fresh_urls_step_push",
     "Push fresh URLs step duration",
-    ExponentialBuckets(0.001, 2, 14),
+    ExponentialBuckets(0.00001, 4, 11),
 };
 
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {

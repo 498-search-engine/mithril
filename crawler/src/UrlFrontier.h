@@ -14,6 +14,7 @@
 #include "ranking/CrawlerRanker.h"
 
 #include <cstddef>
+#include <deque>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -190,7 +191,7 @@ private:
 
     // List of fresh URLs to consider for placement into the frontier, pushed by
     // workers
-    std::vector<std::string> freshURLs_;
+    std::deque<std::string> freshURLs_;
 
     core::LRUCache<http::CanonicalHost, core::Optional<unsigned long>> delayCache_;
 };

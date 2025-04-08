@@ -18,6 +18,8 @@ namespace mithril::metrics {
 
 namespace {
 
+constexpr double Epsilon = 0.000001;
+
 void RenderPrometheusString(const std::string& s, std::string& out) {
     out.push_back('"');
     for (char c : s) {
@@ -38,7 +40,7 @@ void RenderPrometheusString(const std::string& s, std::string& out) {
 }
 
 std::string StringOfDouble(double val) {
-    if (val - std::floor(val) <= 0.0001 && val < static_cast<double>(std::numeric_limits<long>::max())) {
+    if (val - std::floor(val) <= Epsilon && val < static_cast<double>(std::numeric_limits<long>::max())) {
         return std::to_string(static_cast<long>(val));
     } else {
         return std::to_string(val);
