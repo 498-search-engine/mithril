@@ -290,7 +290,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
         }
 
         end = MonotonicTimeUs();
-        FreshURLsStepMove.Observe(static_cast<double>(end - start) / 1000000.0);
+        FreshURLsStepMove.Observe(static_cast<double>(end - start) / 1000000.0 / static_cast<double>(urls.size()));
     }
 
     SPDLOG_TRACE("starting processing of {} fresh urls", urls.size());
@@ -313,7 +313,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
     }
 
     end = MonotonicTimeUs();
-    FreshURLsStepValidate.Observe(static_cast<double>(end - start) / 1000000.0);
+    FreshURLsStepValidate.Observe(static_cast<double>(end - start) / 1000000.0 / static_cast<double>(urls.size()));
 
     if (validURLs.empty()) {
         SPDLOG_TRACE("finished processing of fresh urls: no valid urls");
@@ -328,16 +328,21 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
         auto seen = std::set<std::string_view>{};
         core::LockGuard queueLock(urlQueueMu_);
         for (auto& url : validURLs) {
-            if (seen.contains(url.url) || urlQueue_.Seen(url.url)) {
+            if (seen.contains(url.url)) {
+                continue;
+            } else if (urlQueue_.Seen(url.url)) {
+                DuplicateURLCounter.Inc();
                 continue;
             }
             seen.insert(url.url);
             newURLs.push_back(&url);
+            NewURLCounter.Inc();
         }
     }
 
     end = MonotonicTimeUs();
-    FreshURLsStepDeduplicate.Observe(static_cast<double>(end - start) / 1000000.0);
+    FreshURLsStepDeduplicate.Observe(static_cast<double>(end - start) / 1000000.0 /
+                                     static_cast<double>(validURLs.size()));
 
     if (newURLs.empty()) {
         SPDLOG_TRACE("finished processing of fresh urls: no new urls");
@@ -374,7 +379,8 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
     }
 
     end = MonotonicTimeUs();
-    FreshURLsStepLookUpRobots.Observe(static_cast<double>(end - start) / 1000000.0);
+    FreshURLsStepLookUpRobots.Observe(static_cast<double>(end - start) / 1000000.0 /
+                                      static_cast<double>(canonicalHosts.size()));
 
     // 5. Enqueue URLs that aren't ready to waiting list and discard disallowed URLs
     assert(newURLs.size() == robotResults.size());
@@ -411,7 +417,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
     }
 
     end = MonotonicTimeUs();
-    FreshURLsStepEnqueue.Observe(static_cast<double>(end - start) / 1000000.0);
+    FreshURLsStepEnqueue.Observe(static_cast<double>(end - start) / 1000000.0 / static_cast<double>(newURLs.size()));
 
     if (pushURLs.empty()) {
         SPDLOG_TRACE("finished processing of fresh urls: no ready urls, {} awaiting robots.txt", newURLs.size());
@@ -431,7 +437,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
     urlQueueCv_.Broadcast();
 
     end = MonotonicTimeUs();
-    FreshURLsStepPush.Observe(static_cast<double>(end - start) / 1000000.0);
+    FreshURLsStepPush.Observe(static_cast<double>(end - start) / 1000000.0 / static_cast<double>(pushURLs.size()));
 
     SPDLOG_TRACE("finished processing of fresh urls: {} urls pushed, {} awaiting robots.txt",
                  pushURLs.size(),
