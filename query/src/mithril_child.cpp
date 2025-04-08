@@ -2,6 +2,7 @@
 #include <string>
 #include "network.h"
 #include "NetworkHelper.h"
+#include "QueryEngine.h"
 
 constexpr int BUFFER_SIZE = 1024;
 
@@ -48,6 +49,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Server running on localhost:" << port << std::endl;
     std::cout << "Using index path: " << indexPath << std::endl;
 
+    QueryEngine queryEngine(indexPath);
+
     while (true) {
         sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
@@ -63,6 +66,12 @@ int main(int argc, char* argv[]) {
 
         if (data.data.size() > 0) {
             std::cout << "Received message: " << data.data << std::endl;
+
+            auto query = queryEngine.EvaluateQuery(data.data);
+            queryEngine.DisplayResults(query, 10);
+
+            std::cout << "Query evaluated successfully." << std::endl;
+
             std::string response =
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nServer is running with index path: " + indexPath;
             write(client_fd, response.c_str(), response.size());
