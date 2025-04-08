@@ -1,3 +1,8 @@
+
+
+
+./query/mithril_coordinator --conf ../query/server.conf 
+
 <!-- Second Pass -->
 
 # Simpler Query Language

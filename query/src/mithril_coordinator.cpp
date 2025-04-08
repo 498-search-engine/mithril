@@ -35,7 +35,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    mithril::QueryCoordinator const queryCoordinator(confPath);
+    mithril::QueryCoordinator queryCoordinator(confPath);
     queryCoordinator.print_server_configs();
+    queryCoordinator.send_query_to_workers("hello");
     return 0;
 }

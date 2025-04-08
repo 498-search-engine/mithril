@@ -2,6 +2,7 @@ add_library(query STATIC
     src/Lexer.cpp
     src/intersect.cpp
     src/network.cpp
+    src/QueryCoordinator.cpp
 )
 target_include_directories(query PUBLIC src)
 target_link_libraries(query PUBLIC
