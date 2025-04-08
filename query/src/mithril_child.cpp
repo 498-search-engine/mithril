@@ -68,6 +68,8 @@ int main(int argc, char* argv[]) {
         if (data.data.size() > 0) {
             std::cout << "Received message: " << data.data << std::endl;
 
+            auto tree = queryEngine.ParseQuery(data.data);
+            std::cout << "Query tree: " << tree->to_string() << std::endl;
             auto query = queryEngine.EvaluateQuery(data.data);
             queryEngine.DisplayResults(query, 10);
 
@@ -75,7 +77,7 @@ int main(int argc, char* argv[]) {
                       << "--------------------" << std::endl
                       << std::endl;
 
-            std::string response = "Valid Query" + indexPath;
+            std::string response = "Valid Query and successfully evaluated \n";
             write(client_fd, response.c_str(), response.size());
         }
 
