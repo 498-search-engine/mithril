@@ -8,6 +8,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include "QueryConfig.h"
 
 namespace mithril {
 
@@ -109,8 +110,9 @@ private:
                     } else if (op == "OR") {
                         leftComponent = std::make_unique<OrQuery>(leftComponent.release(), rightComponent.release());
                     } else if (op == "NOT") {
+                        // return std::make_uqnie
                         // When you implement NotQuery, uncomment this:
-                        // return std::make_unique<NotQuery>(rightComponent.release());
+                        return std::make_unique<NotQuery>(rightComponent.release());
                         throw ParseException("NOT operator not yet implemented");
                     }
                 } 
