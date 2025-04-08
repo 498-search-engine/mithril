@@ -16,6 +16,8 @@ struct CrawlerConfig {
     std::string state_directory;
     std::string snapshot_directory;
 
+    unsigned int frontier_growth_rate_bp = 10000;
+
     size_t dns_cache_size = 100000;
 
     size_t num_workers = 2;
@@ -27,7 +29,7 @@ struct CrawlerConfig {
 
     long default_crawl_delay_ms = 200;  // milliseconds
     long ratelimit_bucket_ms = 60000;
-    unsigned ratelimit_bucket_count = 60;
+    unsigned int ratelimit_bucket_count = 60;
 
     size_t middle_queue_queue_count = 100;
     size_t middle_queue_url_batch_size = 10;

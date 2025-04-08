@@ -11,4 +11,9 @@ long MonotonicTime();
  */
 long MonotonicTimeMs();
 
+/**
+ * @brief Gets a monotonic timestamp, in microseconds.
+ */
+long MonotonicTimeUs();
+
 #endif

@@ -26,3 +26,13 @@ long MonotonicTimeMs() {
     }
     return (tp.tv_sec * 1000) + (tp.tv_nsec / 1000000);
 }
+
+long MonotonicTimeUs() {
+    struct timespec tp {};
+    int status = clock_gettime(CLOCK_MONOTONIC, &tp);
+    if (status < 0) [[unlikely]] {
+        spdlog::critical("clock_gettime failed: {}", strerror(errno));
+        exit(1);
+    }
+    return (tp.tv_sec * 1000000) + (tp.tv_nsec / 1000);
+}

@@ -1,6 +1,7 @@
 #ifndef CRAWLER_URLFRONTIER_H
 #define CRAWLER_URLFRONTIER_H
 
+#include "CrawlerMetrics.h"
 #include "HostRateLimiter.h"
 #include "PriorityURLQueue.h"
 #include "Robots.h"
@@ -14,6 +15,7 @@
 #include "ranking/CrawlerRanker.h"
 
 #include <cstddef>
+#include <deque>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -25,6 +27,7 @@ class UrlFrontier {
 public:
     UrlFrontier(HostRateLimiter* limiter,
                 const std::string& frontierDirectory,
+                unsigned int growthRateBp,
                 size_t concurrentRobotsRequests,
                 size_t robotsCacheSize);
 
@@ -134,6 +137,9 @@ public:
             return;
         }
         urlQueue_.PopURLs(max, out, f);
+
+        FrontierSize.Set(urlQueue_.TotalSize());
+        FrontierQueueSize.Set(urlQueue_.Size());
     }
 
     /**
@@ -141,14 +147,14 @@ public:
      *
      * @param u URL to add to frontier.
      */
-    void PushURL(std::string u);
+    void PushURL(std::string u, bool always = false);
 
     /**
      * @brief Pushes multiple urls onto the frontier (if not already visited).
      *
      * @param urls URLs to add to frontier.
      */
-    void PushURLs(std::vector<std::string>& urls);
+    void PushURLs(std::vector<std::string>& urls, bool always = false);
 
     void DumpPendingURLs(std::vector<std::string>& urls);
 
@@ -181,6 +187,7 @@ private:
     core::cv freshURLsCv_;  // Notifies when a fresh URL is available for processing
 
     PriorityURLQueue<Scorer> urlQueue_;
+    unsigned int growthRateBp_;
 
     // Cache for robots.txt rulesets
     RobotRulesCache robotRulesCache_;
@@ -190,7 +197,7 @@ private:
 
     // List of fresh URLs to consider for placement into the frontier, pushed by
     // workers
-    std::vector<std::string> freshURLs_;
+    std::deque<std::string> freshURLs_;
 
     core::LRUCache<http::CanonicalHost, core::Optional<unsigned long>> delayCache_;
 };
