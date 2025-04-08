@@ -24,6 +24,8 @@ double GetUrlStaticRank(std::string_view url) {
             "New score: {} | Score added: {} | Reason: Whitelist TLD ({})", score, WhitelistTldScore, ranker.tld);
     }
 
+    int32_t domainNamePenalty = 0;
+
     // * Domain whitelist
     if (WhitelistDomain.contains(ranker.domainName)) {
         score += WhitelistDomainScore;
@@ -53,19 +55,27 @@ double GetUrlStaticRank(std::string_view url) {
         }
 
         // * Domain name length
-        int32_t domainNamePenalty = 0;
         if (ranker.domainName.length() > DomainLengthAcceptable) {
             // NOLINTNEXTLINE(bugprone-narrowing-conversions)
             domainNamePenalty = DomainPenaltyPerExtraLength * (ranker.domainName.length() - DomainLengthAcceptable);
         }
+    }
+    
+    score += DomainNameScore - std::min(domainNamePenalty, DomainNameScore);
+    spdlog::debug("New score: {} | Score added: {} | Reason: Domain Name Length (Length: {} | Excess: {})",
+                 score,
+                 DomainNameScore - std::min(domainNamePenalty, DomainNameScore),
+                 ranker.domainName.length(),
+                 ranker.domainName.length() - DomainLengthAcceptable);
 
-        score += DomainNameScore - std::min(domainNamePenalty, DomainNameScore);
+    // * Good Extension
+    if (GoodExtensionList.contains(ranker.extension)) {
+        score += ExtensionBoost;
 
-        spdlog::debug("New score: {} | Score added: {} | Reason: Domain Name Length (Length: {} | Excess: {})",
+        spdlog::debug("New score: {} | Score added: {} | Reason: Good Extension ({})",
                      score,
-                     DomainNameScore - std::min(domainNamePenalty, DomainNameScore),
-                     ranker.domainName.length(),
-                     ranker.domainName.length() - DomainLengthAcceptable);
+                     ExtensionBoost,
+                     ranker.extension);
     }
 
     // * URL length
