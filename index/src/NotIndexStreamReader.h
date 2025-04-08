@@ -24,7 +24,9 @@ public:
     {
     }
 
-    ~NotISR();
+    ~NotISR() override {
+        return;
+    }
 
 
     // ISR
