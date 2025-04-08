@@ -1,8 +1,9 @@
 #include "../src/Query.h"
-#include "../src/Token.h"
 #include "../src/QueryConfig.h"
+#include "../src/Token.h"
 
-#include <_types/_uint32_t.h>
+#include <cstdint>
+// #include <_types/_uint32_t.h>
 #include <chrono>
 #include <filesystem>
 #include <iomanip>
