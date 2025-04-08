@@ -23,7 +23,7 @@ target_link_libraries(ranking PUBLIC
 )
 
 # Only apply `-fopenmp` on non-Apple Clang systems
-if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME MATCHES "Darwin"))
+if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND COMPILER_VERSION MATCHES "Apple" AND CMAKE_SYSTEM_NAME MATCHES "Darwin"))
     target_compile_options(ranking PRIVATE -fopenmp)
 endif()
 
@@ -34,13 +34,13 @@ add_executable(pagerank_bench tests/PageRank_Bench.cpp)
 target_include_directories(pagerank_bench PRIVATE src)
 target_link_libraries(pagerank_bench PRIVATE ranking)
 
-add_executable(pagerank_sim tests/PageRank_Sim.cpp)
+add_executable_with_copy(pagerank_sim tests/PageRank_Sim.cpp)
 target_include_directories(pagerank_sim PRIVATE src)
 target_link_libraries(pagerank_sim PRIVATE ranking)
 
-add_executable(domainrank_sim tests/DomainRank_Sim.cpp)
-target_include_directories(domainrank_sim PRIVATE src)
-target_link_libraries(domainrank_sim PRIVATE ranking)
+add_executable_with_copy(pagerank_reader tests/PageRank_ReaderSim.cpp)
+target_include_directories(pagerank_reader PRIVATE src)
+target_link_libraries(pagerank_reader PRIVATE ranking)
 
 # Crawler ranker related
 add_executable(crawler_rank_test tests/CrawlerURLRanker_Sim.cpp)
@@ -56,4 +56,6 @@ target_link_libraries(static_rank_test PRIVATE ranking)
 add_executable(static_rank_struct_test tests/StaticURLRanker_StructSim.cpp)
 target_link_libraries(static_rank_struct_test PRIVATE ranking)
 
+# Copy config to build & pipeline directory
 file(COPY config DESTINATION ${CMAKE_BINARY_DIR}/ranking)
+file(COPY config DESTINATION ${DESTINATION_DIR})

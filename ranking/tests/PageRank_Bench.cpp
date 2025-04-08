@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
 
     start = std::chrono::steady_clock::now();
 
-    PageRank algo(m, nodes);
+    mithril::pagerank::PerformPageRank(m, nodes);
 
     end = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);

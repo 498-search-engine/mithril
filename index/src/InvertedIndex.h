@@ -3,6 +3,7 @@
 
 #include "TermStore.h"
 #include "TextPreprocessor.h"
+#include "ranking/PageRankReader.h"
 #include "data/Document.h"
 
 #include <atomic>
@@ -34,7 +35,7 @@ struct DocumentMetadata {
     uint32_t title_length{0};
     uint32_t url_length{0};
     uint32_t desc_length{0};
-    float pagerank_score{0.0f};
+    float pagerank_score{0.0F};
 };
 
 struct IndexStatistics {
@@ -79,6 +80,9 @@ public:
     void save_index_stats();
 
 private:
+    // Page rank reader
+    pagerank::PageRankReader pagerank_reader_;
+
     // Doc Metadata Storage
     std::vector<DocumentMetadata> document_metadata_;
     std::unordered_map<std::string, uint32_t> url_to_id_;

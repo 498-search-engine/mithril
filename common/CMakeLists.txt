@@ -25,6 +25,7 @@ add_library(common STATIC
     src/metrics/MetricsServer.cpp
 
     src/ranking/CrawlerRanker.cpp
+    src/ranking/PageRankReader.cpp
 
     src/Clock.cpp
     src/FileSystem.cpp
