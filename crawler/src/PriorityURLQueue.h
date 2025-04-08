@@ -69,6 +69,7 @@ public:
             close(fd_);
             throw std::runtime_error("failed to map string file");
         }
+        posix_madvise(mapped_, 0, POSIX_MADV_RANDOM);
 
         if (!exists) {
             // Initialize header
@@ -150,6 +151,7 @@ private:
         if (mapped_ == MAP_FAILED) {
             throw std::runtime_error("failed to remap url data file after resize");
         }
+        posix_madvise(mapped_, 0, POSIX_MADV_RANDOM);
 
         fileSize_ = newFileSize;
     }
