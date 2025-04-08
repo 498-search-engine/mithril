@@ -9,13 +9,13 @@
 
 namespace mithril::ranking {
 
-int32_t GetUrlStaticRank(std::string_view url) {
+double GetUrlStaticRank(std::string_view url) {
     spdlog::debug("Getting static rank for URL: {}", url);
 
     StaticRankingsStruct ranker{};
     GetStringRankings(url, ranker);
 
-    int32_t score = 1000;
+    int32_t score = BaseScore;
 
     // * Site TLD (whitelist)
     if (WhitelistTld.contains(ranker.tld)) {
@@ -124,8 +124,9 @@ int32_t GetUrlStaticRank(std::string_view url) {
 
     spdlog::debug("Final score: {}\n", score);
 
-    // Make sure score is not negative
-    return std::max(score, 0);
+    // Noramlize score
+    double scoreDec = score;
+    return (scoreDec - MinScore) / DiffScore;
 }
 
 void GetStringRankings(std::string_view url, StaticRankingsStruct& ranker) {
