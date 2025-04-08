@@ -18,6 +18,8 @@ public:
     void moveNext() override;
     data::docid_t currentDocID() const override;
     void seekToDocID(data::docid_t target_doc_id) override;
+    IndexStreamReader* get(std::size_t i);
+    std::size_t numReaders() const;
 
 private:
     std::vector<std::unique_ptr<IndexStreamReader>> readers_;
