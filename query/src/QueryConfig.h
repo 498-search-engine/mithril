@@ -10,6 +10,23 @@ class QueryConfig {
 public:
 
     inline static std::string IndexPath = "";
+    inline static size_t max_doc_id; 
+    inline static bool max_doc_id_set = false; 
+    inline static bool index_path_set = false; 
+
+    static std::string GetIndexPath() {
+        if (!index_path_set) {
+            throw std::runtime_error("Index path is not set");
+        }
+        return IndexPath;
+    }
+
+    static size_t GetMaxDocId() {
+        if (!max_doc_id_set) {
+            throw std::runtime_error("Max doc id is not set");
+        }
+        return max_doc_id;
+    }
 
     static const std::unordered_set<std::string>& GetValidFields() {
         static const std::unordered_set<std::string> fields = {
