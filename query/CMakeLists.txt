@@ -19,10 +19,10 @@ target_link_libraries(mithril_lexer PRIVATE
 )
 
 
-add_executable(mithril_child
-    src/mithril_child.cpp
+add_executable(mithril_worker
+    src/mithril_worker.cpp
 )
-target_link_libraries(mithril_child PRIVATE
+target_link_libraries(mithril_worker PRIVATE
     spdlog::spdlog
     query
     index
