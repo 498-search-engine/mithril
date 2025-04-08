@@ -53,6 +53,10 @@ auto main(int argc, char* argv[]) -> int {
         printUsage(argv[0]);
         return 1;
     }
+
+    DocumentMapReader doc_reader(indexPath);
+    query::QueryConfig::max_doc_id = doc_reader.documentCount();
+    query::QueryConfig::max_doc_id_set = true;
     
     // Set the index path in the QueryConfig
     query::QueryConfig::IndexPath = indexPath;
