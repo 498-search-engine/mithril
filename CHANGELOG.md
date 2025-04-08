@@ -55,7 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - old middle queue host cooldown combined with rate limit (#117)
 - introduced static ranking (#115)
 - add pagerank support for index (#118)
-- crawler deployment updates (#120)
+- crawler deployment updates (#120, #122)
 - init dynamic ranker (#121)
 
 ### Fixed
