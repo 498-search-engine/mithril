@@ -1,6 +1,7 @@
 #ifndef QUERY_CONFIG_H_
 #define QUERY_CONFIG_H_
 
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 
