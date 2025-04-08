@@ -19,6 +19,15 @@ target_link_libraries(mithril_lexer PRIVATE
 )
 
 
+add_executable(mithril_coordinator
+    src/mithril_coordinator.cpp
+)
+target_link_libraries(mithril_coordinator PRIVATE
+    spdlog::spdlog
+    query
+)
+
+
 add_executable(mithril_worker
     src/mithril_worker.cpp
 )
