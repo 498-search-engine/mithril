@@ -39,14 +39,41 @@ constexpr unsigned int URLHighScoreCutoff = 90;        // Score >= 90 is "high"
 constexpr unsigned int URLHighScoreQueuePercent = 90;  // Take from "high" scoring urls 90% of the time
 
 constexpr size_t MaxFreshURLsBatch = 50000;
+constexpr unsigned int FullGrowthRate = 10000;
+
+bool RandomAdmit(unsigned int bp) {
+    return rand() % FullGrowthRate < bp;
+}
+
+template<typename T>
+void SampleVectorInPlace(std::vector<T>& vec, unsigned int growthRateBp) {
+    if (growthRateBp >= FullGrowthRate) {
+        return;
+    }
+
+    size_t writeIdx = 0;
+    for (size_t readIdx = 0; readIdx < vec.size(); readIdx++) {
+        if (RandomAdmit(growthRateBp)) {
+            if (writeIdx != readIdx) {
+                vec[writeIdx] = std::move(vec[readIdx]);
+            }
+            writeIdx++;
+        }
+    }
+
+    vec.erase(vec.begin() + writeIdx, vec.end());
+}
+
 
 }  //  namespace
 
 UrlFrontier::UrlFrontier(HostRateLimiter* limiter,
                          const std::string& frontierDirectory,
+                         unsigned int growthRateBp,
                          size_t concurrentRobotsRequests,
                          size_t robotsCacheSize)
     : urlQueue_(frontierDirectory, URLHighScoreCutoff, URLHighScoreQueuePercent),
+      growthRateBp_(growthRateBp),
       robotRulesCache_(concurrentRobotsRequests, limiter, robotsCacheSize),
       delayCache_(robotsCacheSize) {}
 
@@ -103,11 +130,6 @@ void UrlFrontier::RobotsRequestsThread(ThreadSync& sync) {
 }
 
 void UrlFrontier::FreshURLsThread(ThreadSync& sync) {
-    {
-        core::LockGuard lock(urlQueueMu_);
-        FrontierSize.Set(urlQueue_.TotalSize());
-        FrontierQueueSize.Set(urlQueue_.Size());
-    }
     {
         core::LockGuard lock(freshURLsMu_);
         FrontierFreshURLs.Set(freshURLs_.size());
@@ -245,14 +267,35 @@ void UrlFrontier::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
     GetURLsFiltered(sync, max, out, [](std::string_view) { return true; }, atLeastOne);
 }
 
-void UrlFrontier::PushURL(std::string u) {
+void UrlFrontier::PushURL(std::string u, bool always) {
+    if (!always) {
+        if (growthRateBp_ == 0) {
+            return;
+        } else if (growthRateBp_ < FullGrowthRate) {
+            if (!RandomAdmit(growthRateBp_)) {
+                return;
+            }
+        }
+    }
+
     core::LockGuard lock(freshURLsMu_);
     freshURLs_.push_back(std::move(u));
     FrontierFreshURLs.Set(freshURLs_.size());
     freshURLsCv_.Signal();
 }
 
-void UrlFrontier::PushURLs(std::vector<std::string>& urls) {
+void UrlFrontier::PushURLs(std::vector<std::string>& urls, bool always) {
+    if (!always) {
+        if (growthRateBp_ == 0) {
+            return;
+        }
+        SampleVectorInPlace(urls, growthRateBp_);
+    }
+
+    if (urls.empty()) {
+        return;
+    }
+
     core::LockGuard lock(freshURLsMu_);
     for (auto& url : urls) {
         freshURLs_.push_back(std::move(url));

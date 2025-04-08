@@ -87,8 +87,11 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     state_ = core::MakeUnique<LiveState>();
 
     docQueue_ = core::MakeUnique<DocumentQueue>(state_->threadSync);
-    frontier_ = core::MakeUnique<UrlFrontier>(
-        limiter_.Get(), frontierDirectory_, config.concurrent_robots_requests, config.robots_cache_size);
+    frontier_ = core::MakeUnique<UrlFrontier>(limiter_.Get(),
+                                              frontierDirectory_,
+                                              config.frontier_growth_rate_bp,
+                                              config.concurrent_robots_requests,
+                                              config.robots_cache_size);
     requestManager_ = core::MakeUnique<RequestManager>(
         frontier_.Get(), limiter_.Get(), docQueue_.Get(), config, blacklistedHostsTrie_);
 
@@ -98,7 +101,7 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
     RegisterCrawlerMetrics(*metricsServer_);
     RegisterCommonMetrics(*metricsServer_);
 
-    RecoverState(StatePath());
+    RecoverState(StatePath(), config_.frontier_growth_rate_bp > 0);
 }
 
 void Coordinator::Run() {
@@ -106,7 +109,7 @@ void Coordinator::Run() {
         spdlog::info("frontier is fresh - seeding with {} seed URLs", config_.seed_urls.size());
         // Add all seed URLs
         for (const auto& url : config_.seed_urls) {
-            frontier_->PushURL(url);
+            frontier_->PushURL(url, true);
         }
     } else {
         spdlog::info("resuming crawl with {} documents in frontier", frontier_->TotalSize());
@@ -133,8 +136,14 @@ void Coordinator::Run() {
     ++threadCount;
     core::Thread robotsThread([&] { frontier_->RobotsRequestsThread(state_->threadSync); });
     ++threadCount;
-    core::Thread freshURLsThread([&] { frontier_->FreshURLsThread(state_->threadSync); });
-    ++threadCount;
+
+    core::UniquePtr<core::Thread> freshURLsThread;
+    if (config_.frontier_growth_rate_bp > 0) {
+        freshURLsThread = core::MakeUnique<core::Thread>([&] { frontier_->FreshURLsThread(state_->threadSync); });
+        ++threadCount;
+    } else {
+        spdlog::warn("config grow_frontier is disabled, will skip collecting new urls");
+    }
 
     core::Thread metricsThread([&] { metricsServer_->Run(state_->threadSync); });
     core::Thread snapshotThread([this, threadCount] { this->SnapshotThreadEntry(threadCount); });
@@ -159,7 +168,9 @@ void Coordinator::Run() {
     // Wait for threads to finish
     requestThread.Join();
     robotsThread.Join();
-    freshURLsThread.Join();
+    if (freshURLsThread) {
+        freshURLsThread->Join();
+    }
     for (auto& t : workerThreads) {
         t.Join();
     }
@@ -217,7 +228,7 @@ void Coordinator::DumpState(const std::string& file) {
     }
 }
 
-void Coordinator::RecoverState(const std::string& file) {
+void Coordinator::RecoverState(const std::string& file, bool growFrontier) {
     if (!FileExists(file.c_str())) {
         spdlog::info("no state file found at {}", file);
         return;
@@ -234,7 +245,9 @@ void Coordinator::RecoverState(const std::string& file) {
     spdlog::debug("loaded state: active crawl url count = {}", state.activeCrawlURLs.size());
 
     state_->nextDocumentID.store(state.nextDocumentID);
-    frontier_->PushURLs(state.pendingURLs);
+    if (growFrontier) {
+        frontier_->PushURLs(state.pendingURLs);
+    }
     requestManager_->RestoreQueuedURLs(state.activeCrawlURLs);
 }
 
