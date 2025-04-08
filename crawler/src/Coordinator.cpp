@@ -24,9 +24,11 @@
 #include <cerrno>
 #include <csignal>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <pthread.h>
 #include <string>
 #include <unistd.h>
@@ -189,6 +191,13 @@ void Coordinator::DumpState(const std::string& file) {
     frontier_->DumpPendingURLs(state.pendingURLs);
     requestManager_->DumpQueuedURLs(state.activeCrawlURLs);
     docQueue_->DumpCompletedURLs(state.activeCrawlURLs);
+
+    while (state.pendingURLs.size() > std::numeric_limits<uint32_t>::max()) {
+        state.pendingURLs.pop_back();
+    }
+    while (state.activeCrawlURLs.size() > std::numeric_limits<uint32_t>::max()) {
+        state.activeCrawlURLs.pop_back();
+    }
 
     spdlog::debug("saved state: next document id = {}", state.nextDocumentID);
     spdlog::debug("saved state: pending url count = {}", state.pendingURLs.size());
