@@ -8,12 +8,23 @@
 namespace query {
 
 class QueryConfig {
-public:
 
+private:
     inline static std::string IndexPath = "";
-    inline static size_t max_doc_id; 
-    inline static bool max_doc_id_set = false; 
-    inline static bool index_path_set = false; 
+    inline static size_t max_doc_id;
+    inline static bool max_doc_id_set = false;
+    inline static bool index_path_set = false;
+
+public:
+    static void SetIndexPath(const std::string& path) {
+        IndexPath = path;
+        index_path_set = true;
+    }
+
+    static void SetMaxDocId(size_t doc_id) {
+        max_doc_id = doc_id;
+        max_doc_id_set = true;
+    }
 
     static std::string GetIndexPath() {
         if (!index_path_set) {
