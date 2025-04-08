@@ -3,7 +3,8 @@
 #ifndef QUERY_H_
 #define QUERY_H_
 
-#include <_types/_uint32_t.h>
+#include <cstdint>
+// #include <_types/_uint32_t.h>
 #include <memory>
 #include <vector>
 #include <utility>
