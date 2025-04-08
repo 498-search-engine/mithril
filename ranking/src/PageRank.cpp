@@ -151,7 +151,8 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     double max = *maxit;
     double range = max - min;
 
-    constexpr double Power = 0.5;  // Square root to spread lower values
+    // Square root twice to spread lower values more
+    constexpr double Power = 0.5 * 0.5;
     for (int i = 0; i < N; ++i) {
         (*StandardizedResults)[i] = static_cast<float>(std::pow(((temp[i] - min) / range), Power));
     }
