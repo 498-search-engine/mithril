@@ -70,11 +70,17 @@ bool CopyFile(const char* src, const char* dst) {
         return false;
     }
 
-    int dstFd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    posix_fadvise(srcFd, 0, 0, POSIX_FADV_SEQUENTIAL);
+
+    int dstFd = open(dst, O_WRONLY | O_CREAT | O_TRUNC | O_DIRECT, 0644);
     if (dstFd == -1) {
-        spdlog::error("copy file: create dst: {}", strerror(errno));
-        close(srcFd);
-        return false;
+        // Fall back to normal mode if O_DIRECT fails
+        dstFd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (dstFd == -1) {
+            spdlog::error("copy file: create dst: {}", strerror(errno));
+            close(srcFd);
+            return false;
+        }
     }
 
     // Get source file size
@@ -121,12 +127,14 @@ bool CopyFile(const char* src, const char* dst) {
         }
 
         // Calculate size of this data segment
-        size_t segmentSize = holeOffset - dataOffset;
+        long segmentSize = holeOffset - dataOffset;
+
+        posix_fadvise(srcFd, dataOffset, segmentSize, POSIX_FADV_WILLNEED);
 
         // Copy the data segment using sendfile
         off_t offset = dataOffset;
         ssize_t bytesSent;
-        size_t remaining = segmentSize;
+        long remaining = segmentSize;
 
         // Position destination file pointer
         if (lseek(dstFd, dataOffset, SEEK_SET) == -1) {
@@ -156,6 +164,8 @@ bool CopyFile(const char* src, const char* dst) {
         // Move to next potential data segment
         dataOffset = holeOffset;
     }
+
+    posix_fadvise(dstFd, 0, 0, POSIX_FADV_DONTNEED);
 
     close(srcFd);
     close(dstFd);

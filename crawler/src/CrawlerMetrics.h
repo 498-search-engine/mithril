@@ -104,7 +104,6 @@ inline auto DocumentQueueSizeMetric = Metric{
     "Number of documents in document queue waiting to be processed by a worker",
 };
 
-
 inline auto MiddleQueueTotalQueuedURLs = Metric{
     "crawler_middle_queue_total_queued_urls",
     MetricTypeGauge,
@@ -177,6 +176,54 @@ inline auto CrawlDelayLookupLockSuccesses = Metric{
     "Number of times acquiring the robots cache lock succeeded when looking up crawl delay",
 };
 
+inline auto ProcessFreshURLsCounter = Metric{
+    "crawler_process_fresh_urls_counter",
+    MetricTypeCounter,
+    "Number of times fresh URLs were processed",
+};
+
+inline auto ProcessRobotsRequestsCounter = Metric{
+    "crawler_process_robots_requests_counter",
+    MetricTypeCounter,
+    "Number of times robots requests were processed",
+};
+
+inline auto FreshURLsStepMove = HistogramMetric{
+    "crawler_fresh_urls_step_move",
+    "Move/Copy fresh URLs step duration",
+    ExponentialBuckets(0.001, 2, 14),
+};
+
+inline auto FreshURLsStepValidate = HistogramMetric{
+    "crawler_fresh_urls_step_validate",
+    "Validate fresh URLs step duration",
+    ExponentialBuckets(0.001, 2, 14),
+};
+
+inline auto FreshURLsStepDeduplicate = HistogramMetric{
+    "crawler_fresh_urls_step_deduplicate",
+    "Deduplicate fresh URLs step duration",
+    ExponentialBuckets(0.001, 2, 14),
+};
+
+inline auto FreshURLsStepLookUpRobots = HistogramMetric{
+    "crawler_fresh_urls_step_look_up_robots",
+    "Look up robots fresh URLs step duration",
+    ExponentialBuckets(0.001, 2, 14),
+};
+
+inline auto FreshURLsStepEnqueue = HistogramMetric{
+    "crawler_fresh_urls_step_enqueue",
+    "Enqueue fresh URLs step duration",
+    ExponentialBuckets(0.001, 2, 14),
+};
+
+inline auto FreshURLsStepPush = HistogramMetric{
+    "crawler_fresh_urls_step_push",
+    "Push fresh URLs step duration",
+    ExponentialBuckets(0.001, 2, 14),
+};
+
 inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&TotalDocumentCorpusSizeMetric);
     server.Register(&DocumentsProcessedMetric);
@@ -206,6 +253,14 @@ inline auto RegisterCrawlerMetrics(MetricsServer& server) {
     server.Register(&FrontierFreshURLs);
     server.Register(&CrawlDelayLookupLockFailures);
     server.Register(&CrawlDelayLookupLockSuccesses);
+    server.Register(&ProcessFreshURLsCounter);
+    server.Register(&ProcessRobotsRequestsCounter);
+    server.Register(&FreshURLsStepMove);
+    server.Register(&FreshURLsStepValidate);
+    server.Register(&FreshURLsStepDeduplicate);
+    server.Register(&FreshURLsStepLookUpRobots);
+    server.Register(&FreshURLsStepEnqueue);
+    server.Register(&FreshURLsStepPush);
 }
 
 }  // namespace mithril

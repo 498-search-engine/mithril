@@ -68,9 +68,6 @@ void MetricsServer::Run(ThreadSync& sync) {
     socklen_t talkingAddressLen = sizeof(talkingAddress);
 
     fd_set readfds;
-    struct timeval timeout {
-        .tv_sec = 0, .tv_usec = 500 * 1000,
-    };
 
     spdlog::info("metrics server listening at :{}", port_);
 
@@ -78,6 +75,9 @@ void MetricsServer::Run(ThreadSync& sync) {
         FD_ZERO(&readfds);
         FD_SET(sock_, &readfds);
 
+        struct timeval timeout {
+            .tv_sec = 0, .tv_usec = 500 * 1000,
+        };
         int activity = select(sock_ + 1, &readfds, nullptr, nullptr, &timeout);
         if (activity == -1) {
             spdlog::error("select on socket: {}", strerror(errno));

@@ -397,11 +397,16 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
     if (entry == nullptr) {
         cache_.Insert({canonicalHost.url, RobotCacheEntry{}});
         QueueFetch(canonicalHost, priority);
-        RobotRulesCacheMisses.Inc();
         return nullptr;
     }
 
     if (entry->second.expiresAt == 0) {
+        if (priority && !priorityQueuedFetches_.contains(canonicalHost)) {
+            // Make priority
+            queuedFetches_.erase(canonicalHost);
+            priorityQueuedFetches_.insert(canonicalHost);
+        }
+
         // Already fetching
         return nullptr;
     }
@@ -410,7 +415,6 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
     if (now >= entry->second.expiresAt) {
         entry->second.expiresAt = 0;  // Mark as already fetching
         QueueFetch(canonicalHost, priority);
-        RobotRulesCacheMisses.Inc();
         return nullptr;
     }
 
@@ -419,17 +423,21 @@ const RobotRules* RobotRulesCache::GetOrFetch(const http::CanonicalHost& canonic
 }
 
 void RobotRulesCache::QueueFetch(const http::CanonicalHost& canonicalHost, bool priority) {
-    if (alreadyQueued_.contains(canonicalHost)) {
+    auto insertion = alreadyQueued_.insert(canonicalHost);
+
+    if (priority && !insertion.second && !priorityQueuedFetches_.contains(canonicalHost)) {
+        // Already in queue, but needs to be made priority
+        queuedFetches_.erase(canonicalHost);
+        priorityQueuedFetches_.insert(canonicalHost);
         return;
     }
 
-    alreadyQueued_.insert(canonicalHost);
     if (priority) {
-        queuedFetches_.erase(canonicalHost);
         priorityQueuedFetches_.insert(canonicalHost);
     } else {
         queuedFetches_.insert(canonicalHost);
     }
+    RobotRulesCacheMisses.Inc();
 }
 
 void RobotRulesCache::Fetch(const http::CanonicalHost& canonicalHost) {
@@ -544,6 +552,7 @@ long RobotRulesCache::ProcessPendingRequests() {
         failed.clear();
     }
 
+    InFlightRobotsRequestsMetric.Set(executor_.InFlightRequests());
     return 0;
 }
 

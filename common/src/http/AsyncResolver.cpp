@@ -2,6 +2,7 @@
 
 #include "core/locks.h"
 #include "http/Resolver.h"
+#include "metrics/CommonMetrics.h"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
@@ -71,6 +72,7 @@ bool AsyncResolver::Resolve(const std::string& host, const std::string& port, Re
     if (res == nullptr) {
         results_[key] = std::nullopt;
         lock.Unlock();
+        DNSCacheMisses.Inc();
         StartResolve(host, port, key);
         return false;
     }
@@ -80,6 +82,7 @@ bool AsyncResolver::Resolve(const std::string& host, const std::string& port, Re
         return false;
     }
 
+    DNSCacheHits.Inc();
     result = *res->second;
     return true;
 }

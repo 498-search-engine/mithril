@@ -159,7 +159,7 @@ void MiddleQueue::GetURLs(ThreadSync& sync, size_t max, std::vector<std::string>
 
         if (readyCount == 0 && atLeastOne && waitDuration != std::numeric_limits<long>::max()) {
             // We are waiting for the next delayed crawl to be ready.
-            usleep(waitDuration * 1000 / 2);
+            usleep(core::min(waitDuration, 5L) * 1000L);  // up to 5ms
         }
     }
 

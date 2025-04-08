@@ -17,6 +17,7 @@
 #include "data/Reader.h"
 #include "data/Serialize.h"
 #include "data/Writer.h"
+#include "metrics/CommonMetrics.h"
 #include "metrics/MetricsServer.h"
 
 #include <algorithm>
@@ -93,6 +94,7 @@ Coordinator::Coordinator(const CrawlerConfig& config) : config_(config) {
 
     frontier_->InitSync(state_->threadSync);
     RegisterCrawlerMetrics(*metricsServer_);
+    RegisterCommonMetrics(*metricsServer_);
 
     RecoverState(StatePath());
 }
@@ -229,6 +231,11 @@ void Coordinator::RecoverState(const std::string& file) {
 
 void Coordinator::SnapshotThreadEntry(size_t n) {
     auto start = MonotonicTime();
+    if (config_.snapshot_period_seconds > (60L * 30L)) {
+        start -= static_cast<long>(config_.snapshot_period_seconds);
+        start += 60L * 30L;
+    }
+
     while (!state_->threadSync.ShouldShutdown()) {
         sleep(1);
         if (state_->threadSync.ShouldShutdown()) {

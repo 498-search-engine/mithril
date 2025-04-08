@@ -203,6 +203,7 @@ void Worker::ProcessHTMLDocument(const http::Request& req, const http::Response&
 
     if (followLinks && !followURLs.empty()) {
         // Push links found on page into frontier
+        spdlog::debug("pushing {} urls to frontier from {}", followURLs.size(), req.Url().url);
         frontier_->PushURLs(followURLs);
     }
 }
