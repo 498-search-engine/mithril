@@ -12,7 +12,7 @@ using std::size_t;
 
 // Simple merge-based intersection algorithm
 // Time complexity: O(m + n) where m and n are the sizes of the arrays
-std::vector<uint32_t> intersect_simple(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) {
+inline std::vector<uint32_t> intersect_simple(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) {
     std::vector<uint32_t> result;
     result.reserve(std::min(a.size(), b.size()));  // Best case scenario
     
@@ -34,7 +34,7 @@ std::vector<uint32_t> intersect_simple(const std::vector<uint32_t>& a, const std
 
 // Union of two sorted arrays - returns sorted array with no duplicates
 // Time complexity: O(m + n) where m and n are the sizes of the arrays
-std::vector<uint32_t> union_simple(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) {
+inline std::vector<uint32_t> union_simple(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) {
     std::vector<uint32_t> result;
     result.reserve(a.size() + b.size());  // Worst case scenario
     
