@@ -35,6 +35,20 @@ if(USE_JEMALLOC)
     endif()
 endif()
 
+# Setup bin pipeline
+set(DESTINATION_DIR "${CMAKE_BINARY_DIR}/../bin")
+file(MAKE_DIRECTORY ${DESTINATION_DIR})
+function(add_executable_with_copy target)
+    add_executable(${target} ${ARGN})
+    add_custom_command(
+        TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            $<TARGET_FILE:${target}>
+            ${DESTINATION_DIR}
+        COMMENT "Copying ${target} to ${DESTINATION_DIR}"
+    )
+endfunction()
+
 # Add subdirectories
 add_subdirectory(external)
 add_subdirectory(lib)

@@ -17,36 +17,36 @@ target_link_libraries(index PUBLIC
     common
 )
 
-add_executable(mithril_indexer
+add_executable_with_copy(mithril_indexer
     src/main.cpp
 )
 target_link_libraries(mithril_indexer PRIVATE
     index
 )
 
-# add_executable(index_debug
+# add_executable_with_copy(index_debug
 #     src/debugPrintIndex.cpp
 # )
 # target_link_libraries(index_debug PRIVATE
 #     index
 # )
 
-add_executable(test_docReader
+add_executable_with_copy(test_docReader
     src/test_docReader.cpp
 )
 target_link_libraries(test_docReader PRIVATE
     index
 )
 
-add_executable(test_termReader
+add_executable_with_copy(test_termReader
     src/test_termReader.cpp
 )
 target_link_libraries(test_termReader PRIVATE
     index
 )
 
-add_executable(test_termOR src/test_termOR.cpp)
+add_executable_with_copy(test_termOR src/test_termOR.cpp)
 target_link_libraries(test_termOR PRIVATE index)
 
-add_executable(test_termAND src/test_termAND.cpp)
+add_executable_with_copy(test_termAND src/test_termAND.cpp)
 target_link_libraries(test_termAND PRIVATE index)
