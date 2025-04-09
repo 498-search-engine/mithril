@@ -13,7 +13,7 @@ protected:
     
     void SetUp() override {
         // Store original index path
-        original_index_path = query::QueryConfig::IndexPath;
+        original_index_path = query::QueryConfig::GetIndexPath();
         
         // Create a random index path for testing
         std::random_device rd;
@@ -22,12 +22,13 @@ protected:
         test_index_path = ss.str();
         
         // Update QueryConfig to use our test index path
-        const_cast<std::string&>(query::QueryConfig::IndexPath) = test_index_path;
+        query::QueryConfig::SetIndexPath(test_index_path);
     }
     
     void TearDown() override {
         // Restore original index path
-        const_cast<std::string&>(query::QueryConfig::IndexPath) = original_index_path;
+        // const_cast<std::string&>(query::QueryConfig::IndexPath) = original_index_path;
+        query::QueryConfig::SetIndexPath(original_index_path);
     }
     
     // Helper to create a Token with the given value
@@ -84,19 +85,21 @@ TEST_F(QueryTest, EmptyTokenValue) {
 // Test that QueryConfig path is properly updated
 TEST_F(QueryTest, QueryConfigPathUpdated) {
     // Verify that QueryConfig is using our test index path
-    EXPECT_EQ(query::QueryConfig::IndexPath, test_index_path);
+    EXPECT_EQ(query::QueryConfig::GetIndexPath(), test_index_path);
 }
 
 // Test with different random paths
 TEST_F(QueryTest, MultipleRandomPaths) {
     // Test with first random path
-    const_cast<std::string&>(query::QueryConfig::IndexPath) = "random_path_1";
+    // const_cast<std::string&>(query::QueryConfig::GetIndexPath() ) = "random_path_1";
+    query::QueryConfig::SetIndexPath("random_path_1");
     TermQuery query1(CreateToken("test"));
     auto results1 = query1.evaluate();
     EXPECT_TRUE(results1.empty());
     
     // Test with second random path
-    const_cast<std::string&>(query::QueryConfig::IndexPath) = "random_path_2";
+    // const_cast<std::string&>(query::QueryConfig::GetIndexPath()) = "random_path_2";
+    query::QueryConfig::SetIndexPath("random_path_2");
     TermQuery query2(CreateToken("test"));
     auto results2 = query2.evaluate();
     EXPECT_TRUE(results2.empty());

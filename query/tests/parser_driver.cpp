@@ -53,10 +53,12 @@ auto main(int argc, char* argv[]) -> int {
         printUsage(argv[0]);
         return 1;
     }
+
+    DocumentMapReader doc_reader(indexPath);
     
     // Set the index path in the QueryConfig
-    query::QueryConfig::IndexPath = indexPath;
-    std::cout << "Using index path: " << query::QueryConfig::IndexPath << std::endl;
+    query::QueryConfig::SetIndexPath(indexPath);
+    std::cout << "Using index path: " << query::QueryConfig::GetIndexPath() << std::endl;
     
     // If query terms were provided, join them as input
     if (!queryArgs.empty()) {

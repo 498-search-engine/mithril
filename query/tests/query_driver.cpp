@@ -1,8 +1,9 @@
 #include "../src/Query.h"
-#include "../src/Token.h"
 #include "../src/QueryConfig.h"
+#include "../src/Token.h"
 
-#include <_types/_uint32_t.h>
+#include <cstdint>
+// #include <_types/_uint32_t.h>
 #include <chrono>
 #include <filesystem>
 #include <iomanip>
@@ -68,10 +69,10 @@ int main(int argc, char* argv[]) {
     }
 
     // Set the index path directly
-    query::QueryConfig::IndexPath = std::string(argv[1]);
+    query::QueryConfig::SetIndexPath(std::string(argv[1]));
     const std::string term = argv[2];
     
-    spdlog::info("Using index at: '{}'", query::QueryConfig::IndexPath);
+    spdlog::info("Using index at: '{}'", query::QueryConfig::GetIndexPath());
     spdlog::info("Searching for term: '{}'", term);
     
     try {

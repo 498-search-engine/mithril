@@ -1,3 +1,184 @@
+
+while (1):
+    socket code
+    get the query 
+        broadcast here
+        keep checking when counter == k for queue[0]
+        aggregate and send bac
+
+
+k threads (number of indexes)
+ - current_query = [ (query, false)   ]
+    - mutex and a cv
+
+    - will broadast to all the threads to wakeup 
+    - the queue has an element
+    - execute query -> query engine logic
+    - then do ranking logic 
+    - put results inot designated vector
+    - then udpate counter by 1
+
+
+
+
+
+
+worker.conf
+    index path 1
+    index path 2
+    ...
+
+
+We should contain a structure to store like index related data
+
+
+read in worker.con 
+
+setup index data
+setup threads 
+
+struct SingleIndexData:
+    std::strign index path
+    QueryEngine class for each of these
+    results []
+
+map: 
+    indexpath -> vector<results>
+
+
+each thread could have an id 
+          t1     t2     t3     t4  ...   tn
+array [   Status     Status    Status     Status        Status  ]
+
+Status:
+    true/false 
+
+
+aggregation: 
+- k sorted arrays and we need to aggregate 
+- O(n log k)
+- We do need all of the 
+
+
+queue: [(query, atomic_counter)]
+
+
+while (1):
+    socket code
+    get the query 
+    update the queue
+    continue its work 
+    
+
+manager thread: 
+
+while(1):
+    check the queue
+    broadcast here
+    keep checking when counter == k for queue[0]
+
+    then we can send back to client 
+
+
+
+while (1):
+    socket code
+    get the query 
+        broadcast here
+        keep checking when counter == k for queue[0]
+        aggregate and send bac
+
+
+k threads (number of indexes)
+ - current_query = [ (query, false)   ]
+    - mutex and a cv
+
+    - will broadast to all the threads to wakeup 
+    - the queue has an element
+    - execute query -> query engine logic
+    - then do ranking logic 
+    - put results inot designated vector
+    - then udpate counter by 1
+
+
+
+
+
+ 
+
+
+
+
+query 2: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Setup
+## General
+`mkdir build`
+
+`cmake -DCMAKE_BUILD_TYPE=Release -S . -B build`
+
+`cmake --build build`
+
+`git submodule update --init --recursive`
+
+`cd build`
+
+## Crawl (for a few minutes)
+`mkdir data`
+
+`mkdir data/snapshot`
+
+`mkdir data/docs`
+
+`mkdir data/state`
+
+`./crawler/mithril_crawler ../crawler/crawler.conf`
+
+control-C when you want to stop 
+
+## Build Index
+`./index/mithril_indexer data`
+
+## Run Query Engine
+There are many scripts here, you can find them all in `build/query`, however I will only cover how to set up the general coordinator and workers and other important scripts
+
+`/query/parser-driver`: super helpful for testing single queries
+
+Go to `query/src/server.conf` where we define the mithril worker server ip and ports
+
+Run: 
+
+`./query/mithril_worker --index index_output --port <some_port>`
+
+make sure the port lines up with what is in `server.conf`
+In another terminal, do: 
+
+`./query/mithril_coordinator --conf ../query/server.conf`
+
+Then you can send queries from the coordinator to the worker! 
+
+
+
+
+# Other
+
+
+
+./query/mithril_coordinator --conf ../query/server.conf 
+
 <!-- Second Pass -->
 
 # Simpler Query Language

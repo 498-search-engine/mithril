@@ -1,0 +1,73 @@
+#ifndef QUERYENGINE_H
+#define QUERYENGINE_H
+
+#include "../../index/src/DocumentMapReader.h"
+#include "Parser.h"
+#include "Query.h"
+#include "QueryConfig.h"
+
+#include <iostream>
+#include <memory>
+#include <vector>
+
+
+using namespace mithril;
+
+
+class QueryEngine {
+public:
+    QueryEngine(const std::string& index_dir) : map_reader_(index_dir) {
+        query::QueryConfig::SetIndexPath(index_dir);
+        query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
+
+        std::cout << "Query engine initialized\n";
+    }
+
+    static auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
+        Parser parser(input);
+        return std::move(parser.parse());
+    }
+
+    std::vector<Token> GetTokens(const std::string& input) {
+        Parser parser(input);
+        return parser.get_tokens();
+    }
+
+    std::vector<uint32_t> EvaluateQuery(std::string input) { 
+        Parser parser(input);
+        auto queryTree = parser.parse();
+        if (!queryTree) {
+            std::cerr << "Failed to parse query: " << input << std::endl;
+            return {};
+        }
+        std::cout << "Parsed Query Structure:" << std::endl;
+        return queryTree->evaluate(); 
+    }
+
+    void DisplayTokens(const std::vector<Token>& tokens) const {
+        std::cout << "Tokens:" << std::endl;
+        for (size_t i = 0; i < tokens.size(); ++i) {
+            std::cout << "  " << i + 1 << ": " << tokens[i].toString() << std::endl;
+        }
+    }
+
+    void DisplayResults(const std::vector<uint32_t>& results, size_t max_display = 10) const {
+        std::cout << "Query returned " << results.size() << " results." << std::endl;
+        if (!results.empty()) {
+            std::cout << "First " << std::min(max_display, results.size()) << " document IDs:" << std::endl;
+            for (size_t i = 0; i < std::min(max_display, results.size()); ++i) {
+                std::cout << "  " << results[i];
+                if (i < std::min(max_display, results.size()) - 1) {
+                    std::cout << ", ";
+                }
+            }
+            std::cout << std::endl;
+        }
+    }
+    
+private:
+    mithril::DocumentMapReader map_reader_;
+};
+
+
+#endif /* QUERYENGINE_H */

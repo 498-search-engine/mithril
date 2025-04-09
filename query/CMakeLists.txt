@@ -1,6 +1,8 @@
 add_library(query STATIC
     src/Lexer.cpp
     src/intersect.cpp
+    src/network.cpp
+    src/QueryCoordinator.cpp
 )
 target_include_directories(query PUBLIC src)
 target_link_libraries(query PUBLIC
@@ -15,6 +17,25 @@ add_executable(mithril_lexer
 target_link_libraries(mithril_lexer PRIVATE
     spdlog::spdlog
     query
+)
+
+
+add_executable(mithril_coordinator
+    src/mithril_coordinator.cpp
+)
+target_link_libraries(mithril_coordinator PRIVATE
+    spdlog::spdlog
+    query
+)
+
+
+add_executable(mithril_worker
+    src/mithril_worker.cpp
+)
+target_link_libraries(mithril_worker PRIVATE
+    spdlog::spdlog
+    query
+    index
 )
 
 # Add test executable
