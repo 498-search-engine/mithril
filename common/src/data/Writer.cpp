@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <fcntl.h>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -67,6 +68,13 @@ void FileWriter::Close() {
         fclose(file_);
         file_ = nullptr;
     }
+}
+
+void FileWriter::DontNeed() {
+#if defined(__linux__) || defined(__unix__)
+    auto fd = fileno(file_);
+    posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+#endif
 }
 
 void BufferWriter::Write(const void* data, size_t size) {

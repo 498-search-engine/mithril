@@ -56,7 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - old middle queue host cooldown combined with rate limit (#117)
 - introduced static ranking (#115)
 - add pagerank support for index (#118)
-- crawler deployment updates (#120)
+- crawler deployment updates (#120, #122)
 - init dynamic ranker (#121)
 
 ### Fixed
@@ -88,6 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - cleanup ranking & tests directory w.r.t to ranking tests (#116)
 - fixed domain name whitelist being penalized + add `en.wikipedia.org` to whitelist for Crawler URL ranking (#115)
 - normalize Static Ranker + fix some small issues (#119)
+- only use fadvise dontneed on linux (#123)
 - added command line option for specifying directory for `./pagerank_sim` (#124)
 
 ## [0.1.0] - 2025-02-07

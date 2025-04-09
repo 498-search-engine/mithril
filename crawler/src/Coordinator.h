@@ -29,7 +29,7 @@ private:
     std::string StatePath() const;
 
     void DumpState(const std::string& file);
-    void RecoverState(const std::string& file);
+    void RecoverState(const std::string& file, bool growFrontier);
 
     const CrawlerConfig config_;
     StringTrie blacklistedHostsTrie_;
