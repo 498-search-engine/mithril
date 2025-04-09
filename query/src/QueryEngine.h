@@ -2,6 +2,7 @@
 #define QUERYENGINE_H
 
 #include "../../index/src/DocumentMapReader.h"
+#include "../../index/src/TermDictionary.h"
 #include "Parser.h"
 #include "Query.h"
 #include "QueryConfig.h"
@@ -16,25 +17,27 @@ using namespace mithril;
 
 class QueryEngine {
 public:
-    QueryEngine(const std::string& index_dir) : map_reader_(index_dir) {
+    QueryEngine(const std::string& index_dir)
+        : map_reader_(index_dir), term_dict_(index_dir)
+    {
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
 
         std::cout << "Query engine initialized\n";
     }
 
-    static auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
-        Parser parser(input);
+    auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
+        Parser parser(input, term_dict_);
         return std::move(parser.parse());
     }
 
     std::vector<Token> GetTokens(const std::string& input) {
-        Parser parser(input);
+        Parser parser(input, term_dict_);
         return parser.get_tokens();
     }
 
     std::vector<uint32_t> EvaluateQuery(std::string input) { 
-        Parser parser(input);
+        Parser parser(input, term_dict_);
         auto queryTree = parser.parse();
         if (!queryTree) {
             std::cerr << "Failed to parse query: " << input << std::endl;
@@ -67,6 +70,7 @@ public:
     
 private:
     mithril::DocumentMapReader map_reader_;
+    mithril::TermDictionary term_dict_;
 };
 
 
