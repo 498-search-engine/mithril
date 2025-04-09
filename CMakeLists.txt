@@ -13,11 +13,11 @@ add_compile_definitions(
 )
 
 # Add subdirectories
+add_subdirectory(tests)
 add_subdirectory(external)
 add_subdirectory(lib)
 add_subdirectory(common)
 add_subdirectory(crawler)
 add_subdirectory(index)
 add_subdirectory(ranking)
-add_subdirectory(tests)
 add_subdirectory(query)

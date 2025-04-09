@@ -69,6 +69,15 @@ target_link_libraries(parser_driver PRIVATE
     index
 )
 
+# Add test executable
+add_executable(manager_driver
+    tests/manager_driver.cpp
+)
+target_link_libraries(manager_driver PRIVATE
+    query
+    spdlog::spdlog
+    index
+)
 
 
 # Add lexer driver executable
