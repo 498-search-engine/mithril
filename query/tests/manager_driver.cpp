@@ -32,7 +32,9 @@ int main(int argc, char** argv) {
         spdlog::info("Serving query {}...", query);
         auto result = qm.AnswerQuery(query);
         spdlog::info("Found {} matches", result.size());
-        std::cout << "Best: doc " << result[0] << "\n\n";
+        if (result.size() > 0) {
+            std::cout << "Best: doc " << result[0] << "\n\n";
+        }
     }
 
     return 0;
