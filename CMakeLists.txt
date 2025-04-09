@@ -50,6 +50,7 @@ function(add_executable_with_copy target)
 endfunction()
 
 # Add subdirectories
+add_subdirectory(tests)
 add_subdirectory(external)
 add_subdirectory(lib)
 add_subdirectory(common)
