@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+
 - redirect support, crawler config reading, improve url parsing, normalization (#15)
 - robots.txt handling (#25)
 - google test capabilities (#28)
@@ -24,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - async name resolution (#62)
 - periodic crawler state snapshots (#63)
 - index querying support with (docMapReader, ISRs, sep opt positions idx, termReader, termDict) etc and more index niceties (#60)
-    - more details mostly in a index handoff doc soon
+  - more details mostly in a index handoff doc soon
 - parser improvements and html entity decoding (#66)
 - url encoding and decoding, canonicalization (#68)
 - add gzip support to requests (#69)
@@ -49,7 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - global and robust host-level rate limiting (#107)
 - dns-level rate limiting over host-level (#111)
 - add bm25 stats support in index for stastic ranking and dev POC, actually fix tired merge, improve position (add field tags) and core indexing (performance, cleanup) (#112)
-   - anubhav will finish this!
+  - anubhav will finish this!
 - more config and metrics for rate limits and caching (#113)
 - more metrics and attempts at improvements (#114)
 - old middle queue host cooldown combined with rate limit (#117)
@@ -59,6 +60,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - init dynamic ranker (#121)
 
 ### Fixed
+
 - Fix copying body data from buffer (#24)
 - Improve performance by splitting one lock into many (#34)
 - improve robots.txt throughput (probably) (#54)
@@ -75,7 +77,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - ensure valid status code range (#84)
 - small header and cmake version fix to compile and get work on gcp vm (#86)
 - gcp vm build, only use doc metadata in saving doc map to reduce mem use, ty @dsage (#90)
-- fix: termReader freq, positions decoding as index encoded now  (#91)
+- fix: termReader freq, positions decoding as index encoded now (#91)
 - fix connection eof empty headers bug (#92)
 - perf-improvement: halve position index size + double throughput by more aggressive `shouldStorePos` + dsage invertedIdx `std::move(doc)` (#93)
 - have anu's page rank stuff compile on VM (#95)
@@ -86,20 +88,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - cleanup ranking & tests directory w.r.t to ranking tests (#116)
 - fixed domain name whitelist being penalized + add `en.wikipedia.org` to whitelist for Crawler URL ranking (#115)
 - normalize Static Ranker + fix some small issues (#119)
+- added command line option for specifying directory for `./pagerank_sim` (#124)
 
 ## [0.1.0] - 2025-02-07
 
 ### Added
+
 - Basic in-memory crawler (#1).
 - Non-blocking connect and SSL_connect (#11).
 - Adjust URL frontier public API (#9).
 
 ### Fixed
+
 - Don't add 1 to result of `EndingOfTag` without checking for `nullptr` (#10).
 
 ### Updated
+
 - Update `lib` submodule and test include (#8).
 
 ### Infrastructure
+
 - Initialize project structure.
 - Add `clang-format` and `clang-tidy` configuration.
