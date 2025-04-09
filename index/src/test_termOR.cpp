@@ -1,6 +1,7 @@
 #include "DocumentMapReader.h"
 #include "TermOR.h"
 #include "TermReader.h"
+#include "TermDictionary.h"
 
 #include <iostream>
 #include <memory>
@@ -17,11 +18,14 @@ int main(int argc, char* argv[]) {
     try {
         std::cout << "Starting program" << std::endl;
 
+        // Create term dict
+        mithril::TermDictionary term_dict(index_dir);
+
         // Create readers for each term
         std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
         for (int i = 2; i < argc; ++i) {
             std::cout << "Creating TermReader for term '" << argv[i] << "'" << std::endl;
-            readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i]));
+            readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i], term_dict));
         }
 
         // Create the OR constraint

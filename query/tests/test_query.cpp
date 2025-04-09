@@ -1,4 +1,5 @@
 #include "../src/Query.h"
+#include "TermDictionary.h"
 #include <gtest/gtest.h>
 #include <string>
 #include <random>
@@ -20,7 +21,7 @@ protected:
         std::stringstream ss;
         ss << "index_random_" << rd();
         test_index_path = ss.str();
-        
+
         // Update QueryConfig to use our test index path
         query::QueryConfig::SetIndexPath(test_index_path);
     }
@@ -40,8 +41,10 @@ protected:
 
 // Test that TermQuery can be constructed and evaluated
 TEST_F(QueryTest, TermQueryConstruction) {
+    mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
+
     // Create a TermQuery
-    TermQuery query(CreateToken("example"));
+    TermQuery query(CreateToken("example"), term_dict);
     
     // We expect an empty result since the index path is random
     auto results = query.evaluate();
@@ -52,8 +55,9 @@ TEST_F(QueryTest, TermQueryConstruction) {
 
 // Test that basic Query methods work
 TEST_F(QueryTest, BaseQueryMethods) {
+    mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
     // The base Query virtual destructor should be callable
-    Query* query = new TermQuery(CreateToken("test"));
+    Query* query = new TermQuery(CreateToken("test"), term_dict);
     delete query;
     
     // Base Query's Evaluate should return empty vector
@@ -64,20 +68,22 @@ TEST_F(QueryTest, BaseQueryMethods) {
 
 // Test with different token types
 TEST_F(QueryTest, DifferentTokenTypes) {
+    mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
     // Test with WORD token
-    TermQuery word_query(CreateToken("wordtoken", TokenType::WORD));
+    TermQuery word_query(CreateToken("wordtoken", TokenType::WORD), term_dict);
     auto word_results = word_query.evaluate();
     EXPECT_TRUE(word_results.empty());
     
     // Test with PHRASE token
-    TermQuery phrase_query(CreateToken("phrase token", TokenType::PHRASE));
+    TermQuery phrase_query(CreateToken("phrase token", TokenType::PHRASE), term_dict);
     auto phrase_results = phrase_query.evaluate();
     EXPECT_TRUE(phrase_results.empty());
 }
 
 // Test with empty token value
 TEST_F(QueryTest, EmptyTokenValue) {
-    TermQuery empty_query(CreateToken(""));
+    mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
+    TermQuery empty_query(CreateToken(""), term_dict);
     auto results = empty_query.evaluate();
     EXPECT_TRUE(results.empty());
 }
@@ -90,32 +96,35 @@ TEST_F(QueryTest, QueryConfigPathUpdated) {
 
 // Test with different random paths
 TEST_F(QueryTest, MultipleRandomPaths) {
+    mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
     // Test with first random path
     // const_cast<std::string&>(query::QueryConfig::GetIndexPath() ) = "random_path_1";
     query::QueryConfig::SetIndexPath("random_path_1");
-    TermQuery query1(CreateToken("test"));
+    TermQuery query1(CreateToken("test"), term_dict);
     auto results1 = query1.evaluate();
     EXPECT_TRUE(results1.empty());
     
     // Test with second random path
     // const_cast<std::string&>(query::QueryConfig::GetIndexPath()) = "random_path_2";
     query::QueryConfig::SetIndexPath("random_path_2");
-    TermQuery query2(CreateToken("test"));
+    TermQuery query2(CreateToken("test"), term_dict);
     auto results2 = query2.evaluate();
     EXPECT_TRUE(results2.empty());
 }
 
 // Test with special characters in token
 TEST_F(QueryTest, SpecialCharactersInToken) {
-    TermQuery query(CreateToken("special!@#$%^&*()"));
+    mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
+    TermQuery query(CreateToken("special!@#$%^&*()"), term_dict);
     auto results = query.evaluate();
     EXPECT_TRUE(results.empty());
 }
 
 // Test with very long token
 TEST_F(QueryTest, VeryLongToken) {
+    mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
     std::string long_token(1000, 'a'); // 1000 'a' characters
-    TermQuery query(CreateToken(long_token));
+    TermQuery query(CreateToken(long_token), term_dict);
     auto results = query.evaluate();
     EXPECT_TRUE(results.empty());
 }

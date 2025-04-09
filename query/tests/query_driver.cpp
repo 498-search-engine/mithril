@@ -1,6 +1,7 @@
 #include "../src/Query.h"
 #include "../src/QueryConfig.h"
 #include "../src/Token.h"
+#include "TermDictionary.h"
 
 #include <cstdint>
 // #include <_types/_uint32_t.h>
@@ -71,6 +72,8 @@ int main(int argc, char* argv[]) {
     // Set the index path directly
     query::QueryConfig::SetIndexPath(std::string(argv[1]));
     const std::string term = argv[2];
+
+    mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
     
     spdlog::info("Using index at: '{}'", query::QueryConfig::GetIndexPath());
     spdlog::info("Searching for term: '{}'", term);
@@ -83,7 +86,7 @@ int main(int argc, char* argv[]) {
         auto query_start = std::chrono::steady_clock::now();
         
         // Create and evaluate query
-        TermQuery query(token);
+        TermQuery query(token, term_dict);
         auto docIDs = query.evaluate();
         
         // Print timing information

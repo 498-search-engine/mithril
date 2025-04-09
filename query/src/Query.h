@@ -14,6 +14,7 @@
 #include "../../index/src/TermAND.h"
 #include "../../index/src/TermOR.h"
 #include "../../index/src/NotIndexStreamReader.h"
+#include "../../index/src/TermDictionary.h"
 #include "QueryConfig.h"
 #include "intersect.h"
 #include <unordered_map>
@@ -57,13 +58,13 @@ private:
 
 class TermQuery : public Query {
 public:
-    TermQuery(Token token) : token_(std::move(token)) {
-    }
+    TermQuery(Token token, TermDictionary& term_dict)
+        : token_(std::move(token)), term_dict_(term_dict) {}
 
     Token get_token() { return token_; }
 
     std::vector<uint32_t> evaluate() const override {
-        mithril::TermReader term(query::QueryConfig::GetIndexPath() , token_.value);
+        mithril::TermReader term(query::QueryConfig::GetIndexPath(), token_.value, term_dict_);
 
         std::vector<uint32_t> results;
         results.reserve(MAX_DOCUMENTS);
@@ -92,6 +93,7 @@ public:
 private:
     Token token_;
     static constexpr int MAX_DOCUMENTS = 100000;
+    TermDictionary& term_dict_;
 };
 
 

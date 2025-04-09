@@ -15,7 +15,7 @@ namespace mithril {
 
 class TermReader : public IndexStreamReader {
 public:
-    TermReader(const std::string& index_path, const std::string& term);
+    TermReader(const std::string& index_path, const std::string& term, TermDictionary& term_dict);
     ~TermReader();
 
     // ISR
@@ -34,6 +34,7 @@ public:
     std::vector<uint32_t> currentPositions() const;
 
 private:
+    TermDictionary& term_dict_;
     std::string term_;
     std::string index_path_;
     std::ifstream index_file_;

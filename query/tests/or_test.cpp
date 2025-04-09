@@ -1,4 +1,7 @@
 #include "../src/Query.h"
+
+#include "TermDictionary.h"
+
 #include <iostream>
 #include <string>
 #include <chrono>
@@ -69,6 +72,8 @@ int main(int argc, char* argv[]) {
     
     // Set the index path
     query::QueryConfig::GetIndexPath() = std::string(argv[1]);
+
+    mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
     
     // Determine which mode to run
     std::string mode = argv[4];
@@ -84,8 +89,8 @@ int main(int argc, char* argv[]) {
     
     try {
         // Create two term queries from command line arguments
-        TermQuery* term1 = new TermQuery(Token(TokenType::WORD, argv[2]));
-        TermQuery* term2 = new TermQuery(Token(TokenType::WORD, argv[3]));
+        TermQuery* term1 = new TermQuery(Token(TokenType::WORD, argv[2]), term_dict);
+        TermQuery* term2 = new TermQuery(Token(TokenType::WORD, argv[3]), term_dict);
         
         // Create an OR query combining both terms
         OrQuery orQuery(term1, term2);

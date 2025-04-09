@@ -7,8 +7,8 @@
 
 namespace mithril {
 
-TermReader::TermReader(const std::string& index_path, const std::string& term)
-    : term_(term), index_path_(index_path + "/final_index.data") {
+TermReader::TermReader(const std::string& index_path, const std::string& term, TermDictionary& term_dict)
+    : term_dict_(term_dict), term_(term), index_path_(index_path + "/final_index.data") {
 
     // Open the index file
     index_file_.open(index_path_, std::ios::binary);
@@ -16,11 +16,8 @@ TermReader::TermReader(const std::string& index_path, const std::string& term)
         throw std::runtime_error("Failed to open index file: " + index_path_);
     }
 
-    // Create dictionary once
-    TermDictionary dictionary(index_path);
-
-    if (dictionary.is_loaded()) {
-        found_term_ = findTermWithDict(term, dictionary);
+    if (term_dict_.is_loaded()) {
+        found_term_ = findTermWithDict(term, term_dict_);
     } else {
         // Fall back to sequential scan
         // found_term_ = findTerm(term);

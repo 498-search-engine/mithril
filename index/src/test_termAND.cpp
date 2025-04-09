@@ -1,6 +1,7 @@
 #include "DocumentMapReader.h"
 #include "TermAND.h"
 #include "TermReader.h"
+#include "TermDictionary.h"
 
 #include <iostream>
 #include <memory>
@@ -75,16 +76,19 @@ int main(int argc, char* argv[]) {
     bool phrase_mode = (argc > 3 && std::string(argv[argc - 1]) == "--phrase");
 
     try {
+        // Make term dict
+        mithril::TermDictionary term_dict(index_dir);
+
         // Create readers for each term
         std::vector<std::unique_ptr<mithril::IndexStreamReader>> isr_readers;
         std::vector<std::unique_ptr<mithril::TermReader>> term_readers;
 
         for (int i = 2; i < argc - (phrase_mode ? 1 : 0); ++i) {
             // Create TermReader for position checking
-            term_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i]));
+            term_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i], term_dict));
 
             // Create another TermReader for the AND operation
-            isr_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i]));
+            isr_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i], term_dict));
         }
 
         mithril::TermAND and_reader(std::move(isr_readers));

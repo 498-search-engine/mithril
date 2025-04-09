@@ -8,11 +8,11 @@
 namespace mithril {
 
 TermQuote::TermQuote(DocumentMapReader& doc_reader, const std::string& index_path,
-                     const std::vector<std::string>& quote)
-    : doc_reader_(doc_reader), index_path_(index_path), quote_(quote)
+                     const std::vector<std::string>& quote, TermDictionary& term_dict)
+    : doc_reader_(doc_reader), index_path_(index_path), quote_(quote), term_dict_(term_dict)
 {
     std::vector<std::unique_ptr<TermReader>> term_readers;
-    for (const auto& term: quote) term_readers.emplace_back(index_path_, term);
+    for (const auto& term: quote) term_readers.emplace_back(index_path_, term, term_dict_);
     for (const auto& term_reader: term_readers) term_readers_.push_back(term_reader.get());
     stream_reader_ = std::make_unique<TermAND>(std::move(term_readers));
 
