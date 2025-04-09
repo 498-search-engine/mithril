@@ -113,23 +113,34 @@ bool TermAND::findNextMatch() {
 }
 
 void TermAND::sortReadersByFrequency() {
-    // Sort readers by document frequency (if available) for query optimization
-    // This puts the rarest terms first, which minimizes the number of documents we need to check
-
     std::stable_sort(readers_.begin(),
                      readers_.end(),
                      [](const std::unique_ptr<IndexStreamReader>& a, const std::unique_ptr<IndexStreamReader>& b) {
-                         // Try to cast to TermReader to get frequency information
                          const TermReader* term_reader_a = dynamic_cast<const TermReader*>(a.get());
                          const TermReader* term_reader_b = dynamic_cast<const TermReader*>(b.get());
 
-                         // If frequency information is available, use it for init ranking
+                         // If both are TermReaders, use document count and frequency
                          if (term_reader_a && term_reader_b) {
-                             return term_reader_a->getDocumentCount() < term_reader_b->getDocumentCount();
+                             // Sort by document count primarily
+                             uint32_t count_a = term_reader_a->getDocumentCount();
+                             uint32_t count_b = term_reader_b->getDocumentCount();
+
+                             if (count_a != count_b) {
+                                 return count_a < count_b;  // Smaller first
+                             }
+
+                             // Secondary sort by average frequency for better cache locality
+                             return term_reader_a->getAverageFrequency() < term_reader_b->getAverageFrequency();
                          }
 
-                         // Otherwise, default ordering
-                         return false;
+                         // If only one is a TermReader, prioritize it
+                         if (term_reader_a)
+                             return true;
+                         if (term_reader_b)
+                             return false;
+
+                         // Default case - compare pointers for stable sort
+                         return a.get() < b.get();
                      });
 }
 
