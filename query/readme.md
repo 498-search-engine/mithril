@@ -1,4 +1,129 @@
 
+while (1):
+    socket code
+    get the query 
+        broadcast here
+        keep checking when counter == k for queue[0]
+        aggregate and send bac
+
+
+k threads (number of indexes)
+ - current_query = [ (query, false)   ]
+    - mutex and a cv
+
+    - will broadast to all the threads to wakeup 
+    - the queue has an element
+    - execute query -> query engine logic
+    - then do ranking logic 
+    - put results inot designated vector
+    - then udpate counter by 1
+
+
+
+
+
+
+worker.conf
+    index path 1
+    index path 2
+    ...
+
+
+We should contain a structure to store like index related data
+
+
+read in worker.con 
+
+setup index data
+setup threads 
+
+struct SingleIndexData:
+    std::strign index path
+    QueryEngine class for each of these
+    results []
+
+map: 
+    indexpath -> vector<results>
+
+
+each thread could have an id 
+          t1     t2     t3     t4  ...   tn
+array [   Status     Status    Status     Status        Status  ]
+
+Status:
+    true/false 
+
+
+aggregation: 
+- k sorted arrays and we need to aggregate 
+- O(n log k)
+- We do need all of the 
+
+
+queue: [(query, atomic_counter)]
+
+
+while (1):
+    socket code
+    get the query 
+    update the queue
+    continue its work 
+    
+
+manager thread: 
+
+while(1):
+    check the queue
+    broadcast here
+    keep checking when counter == k for queue[0]
+
+    then we can send back to client 
+
+
+
+while (1):
+    socket code
+    get the query 
+        broadcast here
+        keep checking when counter == k for queue[0]
+        aggregate and send bac
+
+
+k threads (number of indexes)
+ - current_query = [ (query, false)   ]
+    - mutex and a cv
+
+    - will broadast to all the threads to wakeup 
+    - the queue has an element
+    - execute query -> query engine logic
+    - then do ranking logic 
+    - put results inot designated vector
+    - then udpate counter by 1
+
+
+
+
+
+ 
+
+
+
+
+query 2: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Setup
 ## General
 `mkdir build`

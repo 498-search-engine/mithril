@@ -5,6 +5,8 @@
 #include <iostream>
 #include <string>
 
+
+
 constexpr int BUFFER_SIZE = 1024;
 
 void printUsage(const char* programName) {
@@ -39,7 +41,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-
     int server_fd = create_server_sockfd(port, 10);
 
     if (server_fd == -1) {
@@ -65,6 +66,7 @@ int main(int argc, char* argv[]) {
 
         Receive data(client_fd);
 
+        // This code runs the query on one index 
         if (data.data.size() > 0) {
             std::cout << "Received message: " << data.data << std::endl;
 
