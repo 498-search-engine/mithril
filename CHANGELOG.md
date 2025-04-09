@@ -90,6 +90,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - normalize Static Ranker + fix some small issues (#119)
 - only use fadvise dontneed on linux (#123)
 - added command line option for specifying directory for `./pagerank_sim` (#124)
+- index housekeeping to improve perf (now 100k in 40s), use sync points, termAnd improve (#125)
 
 ## [0.1.0] - 2025-02-07
 

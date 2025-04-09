@@ -3,6 +3,7 @@
 
 #include "IndexStreamReader.h"
 #include "PositionIndex.h"
+#include "PostingBlock.h"
 #include "TermDictionary.h"
 
 #include <fstream>
@@ -29,6 +30,8 @@ public:
     std::string getTerm() const { return term_; }
     uint32_t getDocumentCount() const { return postings_.size(); }
 
+    double getAverageFrequency() const;
+
     // postion specific funcs
     bool hasPositions() const;
     std::vector<uint16_t> currentPositions() const;
@@ -43,8 +46,12 @@ private:
     // Current posting state
     std::vector<std::pair<uint32_t, uint32_t>> postings_;  // doc_id, freq pairs
     size_t current_posting_index_{0};
+    std::vector<SyncPoint> sync_points_;
 
     mutable std::shared_ptr<PositionIndex> position_index_;
+
+    mutable double avg_frequency_{0.0};
+    mutable bool avg_frequency_computed_{false};
 
     bool findTerm(const std::string& term);
     bool findTermWithDict(const std::string& term, const TermDictionary& dictionary);

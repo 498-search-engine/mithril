@@ -247,16 +247,14 @@ void IndexBuilder::process_document(Document doc) {
         {
             std::unique_lock<std::mutex> lock(document_mutex_);
             url_to_id_[doc.url] = doc.id;
-            document_metadata_.push_back({
-                doc.id,
-                doc.url,
-                doc.title,
-                static_cast<uint32_t>(doc.words.size()),
-                static_cast<uint32_t>(doc.title.size()),
-                static_cast<uint32_t>(url_tokens.size()),
-                static_cast<uint32_t>(doc.description.size()),
-                pagerank_reader_.GetDocumentPageRank(doc.id)
-            });
+            document_metadata_.push_back({doc.id,
+                                          doc.url,
+                                          doc.title,
+                                          static_cast<uint32_t>(doc.words.size()),
+                                          static_cast<uint32_t>(doc.title.size()),
+                                          static_cast<uint32_t>(url_tokens.size()),
+                                          static_cast<uint32_t>(doc.description.size()),
+                                          pagerank_reader_.GetDocumentPageRank(doc.id)});
         }
 
         // position indexing batching

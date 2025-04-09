@@ -44,8 +44,8 @@ bool TermReader::findTermWithDict(const std::string& term, const TermDictionary&
         return false;
     }
 
-    // calc abs file position (skip past term count)
-    std::streampos term_start_pos = sizeof(uint32_t);  // Skip term count
+    // Calculate abs file position (skip past term count)
+    std::streampos term_start_pos = sizeof(uint32_t);
     std::streampos absolute_pos = term_start_pos + static_cast<std::streampos>(entry_opt->index_offset);
 
     // Seek directly to the term position
@@ -66,12 +66,15 @@ bool TermReader::findTermWithDict(const std::string& term, const TermDictionary&
     uint32_t postings_size;
     index_file_.read(reinterpret_cast<char*>(&postings_size), sizeof(postings_size));
 
-    // Read sync points size
+    // Read sync points
     uint32_t sync_points_size;
     index_file_.read(reinterpret_cast<char*>(&sync_points_size), sizeof(sync_points_size));
 
-    // Skip sync points
-    index_file_.seekg(sync_points_size * sizeof(SyncPoint), std::ios::cur);
+    // Load sync points
+    sync_points_.resize(sync_points_size);
+    if (sync_points_size > 0) {
+        index_file_.read(reinterpret_cast<char*>(sync_points_.data()), sync_points_size * sizeof(SyncPoint));
+    }
 
     // Read postings
     postings_.clear();
@@ -159,17 +162,48 @@ void TermReader::seekToDocID(data::docid_t target_doc_id) {
         return;
     }
 
-    // If we're already past the target, we need to reset
-    if (current_posting_index_ >= postings_.size() || postings_[current_posting_index_].first > target_doc_id) {
-        current_posting_index_ = 0;
+    // 1. Check if we're already at or past the target
+    if (current_posting_index_ < postings_.size() && postings_[current_posting_index_].first >= target_doc_id) {
+        return;  // Already at or past target
     }
 
-    // Scan forward to find target or next greater
+    // 2. Check if we need to skip to the end
+    if (target_doc_id > postings_.back().first) {
+        current_posting_index_ = postings_.size();
+        at_end_ = true;
+        return;
+    }
+
+    // 3. Binary search using sync points if available
+    if (!sync_points_.empty()) {
+        // Find largest sync point with doc_id <= target_doc_id
+        size_t left = 0;
+        size_t right = sync_points_.size() - 1;
+        size_t best_idx = 0;
+
+        while (left <= right) {
+            size_t mid = left + (right - left) / 2;
+
+            if (sync_points_[mid].doc_id <= target_doc_id) {
+                best_idx = mid;
+                left = mid + 1;
+            } else {
+                if (mid == 0)
+                    break;
+                right = mid - 1;
+            }
+        }
+
+        // Start from the closest sync point
+        current_posting_index_ = sync_points_[best_idx].plist_offset;
+    }
+
+    // 4. Linear scan from current position to target
     while (current_posting_index_ < postings_.size() && postings_[current_posting_index_].first < target_doc_id) {
         current_posting_index_++;
     }
 
-    // Check if we reached the end
+    // 5. Check if we've reached the end
     if (current_posting_index_ >= postings_.size()) {
         at_end_ = true;
     }
@@ -202,6 +236,26 @@ std::vector<uint16_t> TermReader::currentPositions() const {
         position_index_ = std::make_shared<PositionIndex>(index_path_);
     }
     return position_index_->getPositions(term_, currentDocID());
+}
+
+double TermReader::getAverageFrequency() const {
+    if (avg_frequency_computed_) {
+        return avg_frequency_;
+    }
+
+    double total_freq = 0.0;
+    for (const auto& posting : postings_) {
+        total_freq += posting.second;
+    }
+
+    if (!postings_.empty()) {
+        avg_frequency_ = total_freq / postings_.size();
+    } else {
+        avg_frequency_ = 0.0;
+    }
+
+    avg_frequency_computed_ = true;
+    return avg_frequency_;
 }
 
 }  // namespace mithril

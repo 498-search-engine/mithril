@@ -3,8 +3,8 @@
 
 #include "TermStore.h"
 #include "TextPreprocessor.h"
-#include "ranking/PageRankReader.h"
 #include "data/Document.h"
+#include "ranking/PageRankReader.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -24,7 +24,7 @@ using Document = data::Document;
 using docid_t = data::docid_t;
 
 // Constants
-constexpr size_t DEFAULT_MAX_TERMS_PER_BLOCK = 1000000;
+constexpr size_t DEFAULT_MAX_TERMS_PER_BLOCK = 250000;
 constexpr size_t DEFAULT_MERGE_FACTOR = 16;
 
 struct DocumentMetadata {
@@ -70,7 +70,7 @@ struct IndexStatistics {
 class IndexBuilder {
 public:
     explicit IndexBuilder(const std::string& output_dir,
-                          size_t num_threads = std::thread::hardware_concurrency() * 3 / 2,
+                          size_t num_threads = std::thread::hardware_concurrency() * 2,
                           size_t max_terms_per_block = DEFAULT_MAX_TERMS_PER_BLOCK);
 
     ~IndexBuilder();
