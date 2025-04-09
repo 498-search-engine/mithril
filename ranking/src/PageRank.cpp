@@ -158,7 +158,7 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     }
 }
 
-void PerformPageRank() {
+void PerformPageRank(const std::string& inputDirectory) {
     std::unordered_map<std::string, data::docid_t> linkToNode;
 
     spdlog::info("Starting page rank...");
@@ -168,7 +168,7 @@ void PerformPageRank() {
     // Read PageRank info related info from all documents and setup info needed to form the CSR Matrix
     std::vector<std::string> documentPaths;
 
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(InputDirectory)) {
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(inputDirectory)) {
         if (!entry.is_regular_file()) {
             continue;  // skip chunk dir
         }

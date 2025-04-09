@@ -12,6 +12,7 @@ core::Config Config = core::Config("tests.conf");
 const std::string InputDirectory = std::string(Config.GetString("simulation_input_index_data_folder").Cstr());
 const std::string OutputFile = std::string(Config.GetString("pagerank_sim_out").Cstr());
 const bool WriteToFile = Config.GetInt("write_results_to_file") != 0;
+std::string UseInputDirectory = InputDirectory;
 
 void WriteBackToFile() {
     spdlog::info("Writing to human readable output file {}...", OutputFile);
@@ -44,8 +45,7 @@ void WriteBackToFile() {
 
         outFile << mithril::pagerank::ProcessLink((*mithril::pagerank::NodeToDocument)[node].url)
                 << " (docid: " << (*mithril::pagerank::NodeToDocument)[node].id
-                << "): " << (*mithril::pagerank::StandardizedResults)[node] << " (" << scores[node] << ")"
-                << std::endl;
+                << "): " << (*mithril::pagerank::StandardizedResults)[node] << " (" << scores[node] << ")" << std::endl;
     }
 
     outFile.close();
@@ -55,8 +55,13 @@ void WriteBackToFile() {
 
 }  // namespace
 
-int main(int /*argc*/, char* /*argv*/[]) {
-    mithril::pagerank::PerformPageRank();
+int main(int argc, char* argv[]) {
+    if (argc > 1) {
+        UseInputDirectory = std::string(argv[1]);
+    }
+
+    spdlog::info("Using input crawler data from: {}", UseInputDirectory);
+    mithril::pagerank::PerformPageRank(UseInputDirectory);
 
     if (WriteToFile) {
         WriteBackToFile();
