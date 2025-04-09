@@ -33,7 +33,7 @@ private:
 private:
     std::vector<std::thread> threads_;
     std::vector<std::unique_ptr<QueryEngine>> query_engines_;
-    std::vector<QueryResult> maginal_results_;
+    std::vector<QueryResult> marginal_results_;
 
     std::mutex mtx_;
     std::condition_variable main_cv_;
