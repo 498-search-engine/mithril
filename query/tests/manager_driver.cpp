@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <string>
 #include <vector>
+#include <iostream>
 
 int main(int argc, char** argv) {
     // Configure logging
@@ -25,5 +26,14 @@ int main(int argc, char** argv) {
     QueryManager qm(index_dirs);
     spdlog::info("Constructed Query Manager with {} workers", index_dirs.size());
     spdlog::info("Now serving queries. Enter below...");
+
+    std::string query;
+    while (std::getline(std::cin, query)) {
+        spdlog::info("Serving query {}...", query);
+        auto result = qm.AnswerQuery(query);
+        spdlog::info("Found {} matches", result.size());
+        std::cout << "Best: doc " << result[0] << "\n\n";
+    }
+
     return 0;
 }
