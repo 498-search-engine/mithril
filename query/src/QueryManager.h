@@ -40,7 +40,7 @@ private:
     std::condition_variable worker_cv_;
 
     bool stop_;
-    bool query_available_;
+    std::vector<char> query_available_; // just vector<bool>, but vec<bool> doesn't work
     std::string current_query_;
     size_t worker_completion_count_;
 }
