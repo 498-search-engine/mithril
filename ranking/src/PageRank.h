@@ -18,7 +18,7 @@ namespace mithril::pagerank {
 /**
     @brief Process any links as necessary (e.g for DomainRank.)
 */
-std::string ProcessLink(const std::string &link);
+std::string ProcessLink(const std::string& link);
 
 /**
     @brief Performs page rank on a CSR Matrix and number of nodes and stores it in Results.
@@ -34,11 +34,6 @@ int GetLinkNode(const std::string& link);
     @brief Writes PageRank info per docID to a file in byte format (big endian)
 */
 void Write();
-
-/**
-    @brief Builds the CSR matrix and performs page rank on it.
-*/
-void PerformPageRank();
 
 /**
     @brief Cleanup all associated memory with PageRank.
@@ -65,6 +60,11 @@ extern size_t DocumentCount;
 static core::Config Config = core::Config("pagerank.conf");
 const static inline std::string InputDirectory = std::string(Config.GetString("document_folder").Cstr());
 const static inline std::string OutputFile = std::string(Config.GetString("output_file").Cstr());
+
+/**
+    @brief Builds the CSR matrix and performs page rank on it.
+*/
+void PerformPageRank(const std::string& inputDirectory = InputDirectory);
 
 };  // namespace mithril::pagerank
 #endif
