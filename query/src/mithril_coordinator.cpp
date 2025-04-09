@@ -36,13 +36,15 @@ int main(int argc, char* argv[]) {
     }
 
     mithril::QueryCoordinator queryCoordinator(confPath);
+
     queryCoordinator.print_server_configs();
     
     std::string query;
+
     while (true) {
         std::cout << "Enter your search query (or 'Ctrl-C' to quit): ";
         std::getline(std::cin, query);
-        
+ 
         if (query.empty()) {
             continue;
         }

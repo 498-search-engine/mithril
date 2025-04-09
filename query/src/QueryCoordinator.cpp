@@ -66,7 +66,7 @@ void mithril::QueryCoordinator::send_query_to_workers(const std::string& query) 
         threads.emplace_back(handle_worker_response, server_configs_[i], std::ref(worker_results[i]), normalized_query);
     }
     
-    // Wait for all threads to complete
+    // Wait for all threads to completimage.pnge
     for (auto& thread : threads) {
         thread.Join();
     }
