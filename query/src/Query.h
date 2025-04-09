@@ -58,7 +58,7 @@ private:
 
 class TermQuery : public Query {
 public:
-    TermQuery(Token token, TermDictionary& term_dict)
+    TermQuery(Token token, mithril::TermDictionary& term_dict)
         : token_(std::move(token)), term_dict_(term_dict) {}
 
     Token get_token() { return token_; }
@@ -79,7 +79,7 @@ public:
     }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        return std::make_unique<mithril::TermReader>(query::QueryConfig::GetIndexPath(), token_.value);
+        return std::make_unique<mithril::TermReader>(query::QueryConfig::GetIndexPath(), token_.value, term_dict_);
     }
 
     [[nodiscard]] std::string to_string() const override {
@@ -93,7 +93,7 @@ public:
 private:
     Token token_;
     static constexpr int MAX_DOCUMENTS = 100000;
-    TermDictionary& term_dict_;
+    mithril::TermDictionary& term_dict_;
 };
 
 

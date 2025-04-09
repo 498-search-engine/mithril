@@ -59,6 +59,8 @@ auto main(int argc, char* argv[]) -> int {
     // Set the index path in the QueryConfig
     query::QueryConfig::SetIndexPath(indexPath);
     std::cout << "Using index path: " << query::QueryConfig::GetIndexPath() << std::endl;
+
+    TermDictionary term_dict(indexPath);
     
     // If query terms were provided, join them as input
     if (!queryArgs.empty()) {
@@ -81,7 +83,7 @@ auto main(int argc, char* argv[]) -> int {
         
         try {
             // Create parser with the input
-            Parser parser(input);
+            Parser parser(input, term_dict);
       
             // Display tokens for reference
             std::cout << "Tokens:" << std::endl;

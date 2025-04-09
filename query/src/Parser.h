@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include "QueryConfig.h"
+#include "../../index/src/TermDictionary.h"
 
 namespace mithril {
 
@@ -20,8 +21,9 @@ public:
 class Parser {
 public:
     // Updated constructor to take a string and tokenize it using Lexer
-    explicit Parser(const std::string& input) : 
-        input_(input), 
+    explicit Parser(const std::string& input, TermDictionary& term_dict) : 
+        input_(input),
+        term_dict_(term_dict),
         current_position_(0) {
 
         Lexer lexer(input);
@@ -147,7 +149,7 @@ private:
         
         // Handle keywords (simple terms)
         if (match(TokenType::WORD)) {
-            return std::make_unique<TermQuery>(Token(TokenType::WORD, tokens_[current_position_ - 1].value));
+            return std::make_unique<TermQuery>(Token(TokenType::WORD, tokens_[current_position_ - 1].value), term_dict_);
         }
         
         // Handle exact matches (quoted terms)
@@ -155,7 +157,7 @@ private:
             // When you implement PhraseQuery, uncomment this:
             // return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1].value);
             // For now, create a term query with the phrase content
-            return std::make_unique<TermQuery>(Token(TokenType::PHRASE, tokens_[current_position_ - 1].value));
+            return std::make_unique<TermQuery>(Token(TokenType::PHRASE, tokens_[current_position_ - 1].value), term_dict_);
         }
         
         // Handle grouped expressions
@@ -185,6 +187,7 @@ private:
     }
     
     std::string input_;  // Store the original input string
+    TermDictionary& term_dict_;
     std::vector<Token> tokens_;
     size_t current_position_;
 };
