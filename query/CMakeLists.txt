@@ -3,6 +3,7 @@ add_library(query STATIC
     src/intersect.cpp
     src/network.cpp
     src/QueryCoordinator.cpp
+    src/QueryManager.cpp
 )
 target_include_directories(query PUBLIC src)
 target_link_libraries(query PUBLIC
