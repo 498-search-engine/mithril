@@ -9,7 +9,7 @@ namespace mithril {
 using QueryResult_t = QueryManager::QueryResult;
 
 QueryManager::QueryManager(const std::vector<std::string>& index_dirs)
-    : stop_(false), query_available_(false), worker_completion_count_(0)
+    : stop_(false), query_available_(index_dirs.size(), 0), worker_completion_count_(0)
 {
     const auto num_workers = index_dirs.size();
     marginal_results_.resize(num_workers);
@@ -41,7 +41,8 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         worker_completion_count_ = 0;
         for (auto& result: marginal_results_)
             result.clear();
-        query_available_ = true;
+        for (auto& flag: query_available_)
+            flag = 1;
         worker_cv_.notify_all();
     }
 
@@ -51,7 +52,8 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         main_cv_.wait(lock, [this]() {
             return worker_completion_count_ == threads_.size();
         });
-        query_available_ = false;
+        for (auto& flag: query_available_) // TODO: this is redundant but safer
+            flag = 0;
     }
 
     // aggregate results
@@ -69,8 +71,8 @@ void QueryManager::WorkerThread(size_t worker_id) {
         // wait for new query
         {
             std::unique_lock lock{mtx_};
-            worker_cv_.wait(lock, [this]() {
-                return query_available_ || stop_; // FIXME: account for spurious wakeups?
+            worker_cv_.wait(lock, [this,worker_id]() {
+                return query_available_[worker_id] == 1 || stop_;
             });
             if (stop_) break;
             query_to_run = current_query_;
@@ -87,6 +89,9 @@ void QueryManager::WorkerThread(size_t worker_id) {
             if (worker_completion_count_ == threads_.size())
                 main_cv_.notify_one();
         }
+
+        // record that worker finished current query
+        query_available_[worker_id] = 0;
     }
 }
 
