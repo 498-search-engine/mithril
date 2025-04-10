@@ -58,6 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add pagerank support for index (#118)
 - crawler deployment updates (#120, #122)
 - init dynamic ranker (#121)
+- first pass of querycoordinator integration (w searchplugin impl) in client server, better js, etc (#127)
 
 ### Fixed
 
