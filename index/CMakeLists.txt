@@ -8,6 +8,8 @@ add_library(index STATIC
     src/IndexStreamReader.cpp
     src/TermOR.cpp
     src/TermAND.cpp
+    src/TermPhrase.cpp
+    src/TermQuote.cpp
     src/PositionIndex.cpp
 )
 target_include_directories(index PUBLIC src)
@@ -50,3 +52,9 @@ target_link_libraries(test_termOR PRIVATE index)
 
 add_executable_with_copy(test_termAND src/test_termAND.cpp)
 target_link_libraries(test_termAND PRIVATE index)
+
+add_executable(test_termQuote src/test_termQuote.cpp)
+target_link_libraries(test_termQuote PRIVATE index)
+
+add_executable(test_termPhrase src/test_termPhrase.cpp)
+target_link_libraries(test_termPhrase PRIVATE index)

@@ -40,6 +40,7 @@ private:
     TermDictionary& term_dict_;
     std::string term_;
     std::string index_path_;
+    std::string index_dir_;
     std::ifstream index_file_;
     bool found_term_{false};
     bool at_end_{false};

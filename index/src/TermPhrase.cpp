@@ -14,9 +14,12 @@ TermPhrase::TermPhrase(DocumentMapReader& doc_reader, const std::string& index_p
                      const std::vector<std::string>& phrase, TermDictionary& term_dict)
     : doc_reader_(doc_reader), index_path_(index_path), phrase_(phrase), term_dict_(term_dict)
 {
-    std::vector<std::unique_ptr<TermReader>> term_readers;
-    for (const auto& term: phrase) term_readers.emplace_back(index_path_, term, term_dict_);
-    for (const auto& term_reader: term_readers) term_readers_.push_back(term_reader.get());
+    std::vector<std::unique_ptr<IndexStreamReader>> term_readers;
+    for (const auto& term: phrase) {
+        auto ptr = new TermReader(index_path_, term, term_dict_);
+        term_readers_.push_back(ptr); // maintain for ourselves
+        term_readers.emplace_back(reinterpret_cast<IndexStreamReader*>(ptr)); // what we pass to TermAND
+    }
     stream_reader_ = std::make_unique<TermAND>(std::move(term_readers));
 
     // set into valid initial state
