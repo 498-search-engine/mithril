@@ -68,7 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - catch exceptions around string parsing (#61)
 - use spec-compliant header parsing in connection machinery (#67)
 - fix: allow gzip reads of size 0 (#72)
-- remove problematic alloca for const_cast (#74)
+- remove problematic alloca for `const_cast` (#74)
 - support desc field in commmon/doc, also test phrase searching (and based on position), make shouldstore pos less restrictive (#77)
 - improve HTML parser handling of elements with attributes and comments (#78)
 - make HTTP response header parsing more robust (#78)
@@ -91,6 +91,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - only use fadvise dontneed on linux (#123)
 - added command line option for specifying directory for `./pagerank_sim` (#124)
 - index housekeeping to improve perf (now 100k in 40s), use sync points, termAnd improve (#125)
+- fix compile issue on VM, use globalstopwords dict (does give some postnsize idx decrease), lib compile bug fix (#126)
 
 ## [0.1.0] - 2025-02-07
 

@@ -104,10 +104,8 @@ bool PositionIndex::shouldStorePositions(const std::string& term, uint32_t freq,
         }
     }
 
-    // 2. Stopword filtering (should extend)
-    static constexpr std::array stop_terms = {
-        "the", "a", "an", "of", "in", "for", "on", "to", "with", "by", "at", "and", "or", "us", "have", "has"};
-    if (std::find(stop_terms.begin(), stop_terms.end(), term) != stop_terms.end()) {
+    // 2. Stopword filtering
+    if (StopwordFilter::isStopword(term)) {
         return false;
     }
 
