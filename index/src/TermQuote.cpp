@@ -29,7 +29,7 @@ TermQuote::TermQuote(DocumentMapReader& doc_reader, const std::string& index_pat
 }
 
 bool TermQuote::hasNext() const {
-    return !(at_end_ || stream_reader_->hasNext());
+    return !at_end_;
 }
 
 void TermQuote::moveNext() {
@@ -56,7 +56,7 @@ bool TermQuote::findNextMatch() {
             bool all_match = true;
             for (size_t i = 1; i < term_readers_.size(); ++i) {
                 const auto& positions = term_readers_[i]->currentPositions();
-                if (!std::binary_search(positions.begin(), positions.end(), x + 1)) {
+                if (!std::binary_search(positions.begin(), positions.end(), x + i)) {
                     all_match = false;
                     break;
                 }

@@ -31,7 +31,7 @@ TermPhrase::TermPhrase(DocumentMapReader& doc_reader, const std::string& index_p
 }
 
 bool TermPhrase::hasNext() const {
-    return !(at_end_ || stream_reader_->hasNext());
+    return !at_end_;
 }
 
 void TermPhrase::moveNext() {
