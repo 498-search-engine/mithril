@@ -13,6 +13,7 @@
 #include "../../index/src/TermReader.h"
 #include "../../index/src/TermAND.h"
 #include "../../index/src/TermOR.h"
+#include "../../index/src/TermQuote.h"
 #include "../../index/src/NotIndexStreamReader.h"
 #include "../../index/src/TermDictionary.h"
 #include "QueryConfig.h"
@@ -229,6 +230,31 @@ private:
     Query* expression_;
     std::unique_ptr<mithril::NotISR> not_isr_;
 };
+
+// class QuoteQuery : public Query {
+// public:
+//     QuoteQuery
+//     ~QuoteQuery() = default;
+
+//     // Evaluates everything in one go 
+//     [[nodiscard]] std::vector<uint32_t> evaluate() const;
+
+//     // Helps us do some more fine grained stream reading
+//     uint32_t get_next_doc() const;
+//     bool has_next() const;
+    
+//     [[nodiscard]] std::unique_ptr<mithril::IndexStreamReader> generate_isr() const;
+
+//     // Returns a string representation of the query for debugging/display
+//     [[nodiscard]] virtual std::string to_string() const;
+    
+//     // Optional: Get query type as string
+//     [[nodiscard]] virtual std::string get_type() const {
+//         return "Quote";
+//     }
+
+// private: 
+// };
 
 // }  // namespace mithril
 
