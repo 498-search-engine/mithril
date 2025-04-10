@@ -5,6 +5,7 @@
 #include "DocumentMapReader.h"
 #include "data/Document.h"
 #include "TermAND.h"
+#include "TermDictionary.h"
 
 #include <memory>
 #include <string>
@@ -15,7 +16,7 @@ namespace mithril {
 class TermPhrase : public IndexStreamReader {
 public:
     explicit TermPhrase(DocumentMapReader& doc_reader, const std::string& index_path,
-                       const std::vector<std::string>& quote);
+                       const std::vector<std::string>& phrase, TermDictionary& term_dict);
 
     TermPhrase(const TermPhrase&) = delete;
     TermPhrase& operator=(const TermPhrase&) = delete;
@@ -34,7 +35,8 @@ private:
 private:
     DocumentMapReader& doc_reader_;
     const std::string& index_path_;
-    const std::vector<std::string>& quote_;
+    const std::vector<std::string>& phrase_;
+    TermDictionary& term_dict_;
     std::vector<TermReader*> term_readers_; // sketchy
     std::unique_ptr<TermAND> stream_reader_;
     data::docid_t current_doc_id_{0};
