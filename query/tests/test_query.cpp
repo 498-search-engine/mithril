@@ -74,8 +74,8 @@ TEST_F(QueryTest, DifferentTokenTypes) {
     auto word_results = word_query.evaluate();
     EXPECT_TRUE(word_results.empty());
     
-    // Test with PHRASE token
-    TermQuery phrase_query(CreateToken("phrase token", TokenType::PHRASE), term_dict);
+    // Test with QUOTE token
+    TermQuery phrase_query(CreateToken("quote token", TokenType::QUOTE), term_dict);
     auto phrase_results = phrase_query.evaluate();
     EXPECT_TRUE(phrase_results.empty());
 }

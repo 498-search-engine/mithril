@@ -7,7 +7,7 @@
 auto TokenTypeToString(TokenType type) -> std::string {
     switch (type) {
         case TokenType::WORD:     return "WORD";
-        case TokenType::PHRASE:   return "PHRASE";
+        case TokenType::QUOTE:   return "QUOTE";
         case TokenType::FIELD:    return "FIELD";
         case TokenType::COLON:    return "COLON";
         case TokenType::OPERATOR: return "OPERATOR";

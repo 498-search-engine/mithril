@@ -117,7 +117,7 @@ private:
                 } 
                 // If there's no operator but we have another component, treat as implicit AND
                 else if (peek().type == TokenType::WORD || 
-                         peek().type == TokenType::PHRASE || 
+                         peek().type == TokenType::QUOTE || 
                          peek().type == TokenType::FIELD || 
                          peek().type == TokenType::LPAREN) {
                     auto rightComponent = parseQueryComponent();
@@ -153,11 +153,11 @@ private:
         }
         
         // Handle exact matches (quoted terms)
-        if (match(TokenType::PHRASE)) {
+        if (match(TokenType::QUOTE)) {
             // When you implement PhraseQuery, uncomment this:
             // return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1].value);
             // For now, create a term query with the phrase content
-            return std::make_unique<TermQuery>(Token(TokenType::PHRASE, tokens_[current_position_ - 1].value), term_dict_);
+            return std::make_unique<TermQuery>(Token(TokenType::QUOTE, tokens_[current_position_ - 1].value), term_dict_);
         }
         
         // Handle grouped expressions
@@ -174,7 +174,7 @@ private:
         Token field = tokens_[current_position_ - 1];
         if (match(TokenType::COLON)) {
             // Now we need either a keyword or exact match
-            if (match(TokenType::WORD) || match(TokenType::PHRASE)) {
+            if (match(TokenType::WORD) || match(TokenType::QUOTE)) {
                 Token term = tokens_[current_position_ - 1];
                 // When you implement FieldQuery, uncomment this:
                 // return std::make_unique<FieldQuery>(field.value, 

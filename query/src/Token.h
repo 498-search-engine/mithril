@@ -5,13 +5,14 @@
 
 enum class TokenType {
     WORD,       // simple_term: alphanumeric word
-    PHRASE,     // quoted_term: quoted phrase
+    QUOTE,      // quoted_term: quoted phrase
+    // PHRASE,     // Fuzzy phrase matching, looser than QUOTE
     FIELD,      // TITLE or TEXT
     COLON,      // ':'
     OPERATOR,   // AND, OR, NOT, or implicit SPACE
     LPAREN,     // '('
     RPAREN,     // ')'
-    EOFTOKEN   // end of input
+    EOFTOKEN    // end of input
 };
 
 struct Token {
@@ -28,8 +29,8 @@ struct Token {
             case TokenType::WORD:
                 typeStr = "WORD";
                 break;
-            case TokenType::PHRASE:
-                typeStr = "PHRASE";
+            case TokenType::QUOTE:
+                typeStr = "QUOTE";
                 break;
             case TokenType::FIELD:
                 typeStr = "FIELD";

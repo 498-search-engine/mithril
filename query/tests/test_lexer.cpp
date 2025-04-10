@@ -61,15 +61,15 @@ TEST_F(LexerTest, WordTokens) {
 
 // Test quoted phrases
 TEST_F(LexerTest, QuotedPhrases) {
-    Lexer lexer("\"hello world\" \"another phrase\"");
+    Lexer lexer("\"hello world\" \"another quote\"");
     
     Token token1 = lexer.NextToken();
-    EXPECT_EQ(token1.type, TokenType::PHRASE);
+    EXPECT_EQ(token1.type, TokenType::QUOTE);
     EXPECT_EQ(token1.value, "hello world");
     
     Token token2 = lexer.NextToken();
-    EXPECT_EQ(token2.type, TokenType::PHRASE);
-    EXPECT_EQ(token2.value, "another phrase");
+    EXPECT_EQ(token2.type, TokenType::QUOTE);
+    EXPECT_EQ(token2.value, "another quote");
     
     EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
 }
@@ -125,7 +125,7 @@ TEST_F(LexerTest, WhitespaceHandling) {
 
 // Test mixed query
 TEST_F(LexerTest, MixedQuery) {
-    Lexer lexer("TITLE:\"search phrase\" AND (TEXT:term OR NOT something)");
+    Lexer lexer("TITLE:\"search quote\" AND (TEXT:term OR NOT something)");
     
     // TITLE
     Token token1 = lexer.NextToken();
@@ -136,10 +136,10 @@ TEST_F(LexerTest, MixedQuery) {
     Token token2 = lexer.NextToken();
     EXPECT_EQ(token2.type, TokenType::COLON);
     
-    // "search phrase"
+    // "search quote"
     Token token3 = lexer.NextToken();
-    EXPECT_EQ(token3.type, TokenType::PHRASE);
-    EXPECT_EQ(token3.value, "search phrase");
+    EXPECT_EQ(token3.type, TokenType::QUOTE);
+    EXPECT_EQ(token3.value, "search quote");
     
     // AND
     Token token4 = lexer.NextToken();
@@ -218,7 +218,7 @@ TEST_F(LexerTest, KeywordCaseSensitivity) {
 TEST_F(LexerTest, QuotedPhraseWithInnerQuote) {
     Lexer lexer("\"hello \\\"world\\\" again\"");
     Token token = lexer.NextToken();
-    EXPECT_EQ(token.type, TokenType::PHRASE);
+    EXPECT_EQ(token.type, TokenType::QUOTE);
     EXPECT_EQ(token.value, "hello \\\"world\\\" again"); // Or actual unescaped
 }
 
@@ -236,7 +236,7 @@ TEST_F(LexerTest, OperatorSurroundedByInsaneWhitespace) {
 TEST_F(LexerTest, WeirdlySpacedQuery) {
     Lexer lexer(" (  TITLE : \"x\"  OR   TEXT : y ) ");
     std::vector<TokenType> expected = {
-        TokenType::LPAREN, TokenType::FIELD, TokenType::COLON, TokenType::PHRASE,
+        TokenType::LPAREN, TokenType::FIELD, TokenType::COLON, TokenType::QUOTE,
         TokenType::OPERATOR, TokenType::FIELD, TokenType::COLON, TokenType::WORD,
         TokenType::RPAREN, TokenType::EOFTOKEN
     };
@@ -289,7 +289,7 @@ TEST_F(LexerTest, TokensWithoutSpace) {
     Lexer lexer("TITLE:\"foo\"ANDbar");
     EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
     EXPECT_EQ(lexer.NextToken().type, TokenType::COLON);
-    EXPECT_EQ(lexer.NextToken().type, TokenType::PHRASE);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::QUOTE);
     EXPECT_EQ(lexer.NextToken().type, TokenType::WORD); // ANDbar is not "AND"
 }
 

@@ -112,7 +112,7 @@ Token Lexer::LexQuotedPhrase() {
     while (position_ < input_.length()) {
         char const c = GetChar();
         if (c == '"') {
-            return Token{TokenType::PHRASE, phrase};
+            return Token{TokenType::QUOTE, phrase};
         }
         phrase += c;
     }
