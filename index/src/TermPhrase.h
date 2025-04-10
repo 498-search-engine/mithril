@@ -6,6 +6,7 @@
 #include "data/Document.h"
 #include "TermAND.h"
 #include "TermDictionary.h"
+#include "TermReader.h"
 
 #include <memory>
 #include <string>
