@@ -1,5 +1,7 @@
 #include "SearchPlugin.h"
 
+#include "QueryManager.h"
+
 #include <algorithm>
 #include <chrono>
 #include <future>
@@ -21,7 +23,8 @@ SearchPlugin::SearchPlugin(const std::string& server_config_path, const std::str
     // Initialize local query engine
     if (!index_path.empty()) {
         try {
-            query_engine_ = std::make_unique<QueryEngine>(index_path);
+            std::vector<std::string> index_dirs = {index_path};
+            query_manager_ = std::make_unique<QueryManager>(index_dirs);
             engine_initialized_ = true;
             spdlog::info("Local QueryEngine initialized with index: {}", index_path);
         } catch (const std::exception& e) {
@@ -39,7 +42,7 @@ SearchPlugin::SearchPlugin(const std::string& server_config_path, const std::str
 
 SearchPlugin::~SearchPlugin() {
     query_coordinator_.reset();
-    query_engine_.reset();
+    query_manager_.reset();
 }
 
 bool SearchPlugin::TryInitializeCoordinator() {
@@ -209,8 +212,16 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
         if (engine_initialized_) {
             spdlog::info("Executing local query: '{}'", query_text);
 
-            auto doc_ids = query_engine_->EvaluateQuery(query_text);
+            auto results = query_manager_->AnswerQuery(query_text);
             size_t num_results = std::min(doc_ids.size(), static_cast<size_t>(max_results));
+
+            // TODO: account for ranking
+            std::vector<uint32_t> doc_ids;
+            doc_ids.resize(results.size());
+
+            for (auto& result : results) {
+                doc_ids.push_back(result.first);
+            }
 
             json = GenerateJsonResults(doc_ids, num_results, false);
             return json;
@@ -272,7 +283,7 @@ std::string SearchPlugin::GenerateJsonResults(const std::vector<uint32_t>& doc_i
 
         // Handle document metadata based on mode
         if (!demo_mode && engine_initialized_) {
-            auto doc_opt = query_engine_->GetDocument(doc_id);
+            auto doc_opt = query_manager_->query_engines_[0]->GetDocument(doc_id);
 
             if (doc_opt) {
                 json += ",\"url\":\"" + EscapeJsonString(SanitizeText(doc_opt->url)) + "\"";

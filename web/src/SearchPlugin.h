@@ -4,6 +4,7 @@
 #include "Plugin.h"
 #include "QueryCoordinator.h"
 #include "QueryEngine.h"
+#include "QueryManager.h"
 
 #include <chrono>
 #include <memory>
@@ -35,7 +36,7 @@ public:
 
 private:
     std::unique_ptr<mithril::QueryCoordinator> query_coordinator_;
-    std::unique_ptr<QueryEngine> query_engine_;
+    std::unique_ptr<QueryManager> query_manager_;
     bool coordinator_initialized_ = false;
     bool engine_initialized_ = false;
     std::string config_path_;

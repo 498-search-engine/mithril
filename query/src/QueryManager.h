@@ -52,14 +52,13 @@ public:
      */
     QueryResult AnswerQuery(const std::string& query);
 
+    std::vector<std::unique_ptr<QueryEngine>> query_engines_;
+
 private:
     void WorkerThread(size_t worker_id);
-    QueryResult HandleRanking(std::vector<uint32_t>& matches);
+    QueryResult HandleRanking(const std::string& query, std::vector<uint32_t>& matches);
 
-
-private:
     std::vector<std::thread> threads_;
-    std::vector<std::unique_ptr<QueryEngine>> query_engines_;
     std::vector<QueryResult> marginal_results_;
 
     std::mutex mtx_;
