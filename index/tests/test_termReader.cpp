@@ -1,4 +1,5 @@
 #include "DocumentMapReader.h"
+#include "TermDictionary.h"
 #include "TermReader.h"
 
 #include <iomanip>
@@ -13,6 +14,8 @@ int main(int argc, char* argv[]) {
     std::string index_dir = argv[1];
     std::string term = argv[2];
 
+    mithril::TermDictionary term_dict(index_dir);
+
     try {
         std::cout << "Starting program" << std::endl;
 
@@ -21,7 +24,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Loaded document map with " << doc_reader.documentCount() << " documents." << std::endl;
 
         std::cout << "Creating TermReader for term '" << term << "'" << std::endl;
-        mithril::TermReader term_reader(index_dir, term);
+        mithril::TermReader term_reader(index_dir, term, term_dict);
 
         std::cout << "Searching for term: \"" << term << "\"" << std::endl;
 

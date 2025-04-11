@@ -4,12 +4,12 @@
 #include "TextPreprocessor.h"
 #include "Utils.h"
 
+#include <array>
 #include <fstream>
 #include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <array>
 
 namespace mithril {
 

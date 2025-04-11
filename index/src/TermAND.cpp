@@ -144,4 +144,12 @@ void TermAND::sortReadersByFrequency() {
                      });
 }
 
+IndexStreamReader* TermAND::get(std::size_t i) {
+    return i < readers_.size() ? readers_[i].get() : nullptr;
+}
+
+std::size_t TermAND::numReaders() const {
+    return readers_.size();
+}
+
 }  // namespace mithril

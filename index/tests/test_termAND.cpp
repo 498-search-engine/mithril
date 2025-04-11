@@ -1,5 +1,6 @@
 #include "DocumentMapReader.h"
 #include "TermAND.h"
+#include "TermDictionary.h"
 #include "TermReader.h"
 
 #include <iostream>
@@ -20,8 +21,8 @@ bool check_phrase_positions(const std::vector<std::unique_ptr<mithril::TermReade
     std::vector<uint16_t> positions = readers[0]->currentPositions();
 
     // Debug output
-    std::cout << "Term '" << readers[0]->getTerm() << "' has " << positions.size() << " positions in doc " << doc_id
-              << std::endl;
+    // std::cout << "Term '" << readers[0]->getTerm() << "' has " << positions.size() << " positions in doc " << doc_id
+    //           << std::endl;
 
     // For each position of the first term, check if remaining terms follow within proximity
     for (uint32_t start_pos : positions) {
@@ -39,8 +40,8 @@ bool check_phrase_positions(const std::vector<std::unique_ptr<mithril::TermReade
             // Get positions for this term
             std::vector<uint16_t> term_positions = readers[i]->currentPositions();
 
-            std::cout << "  Term '" << readers[i]->getTerm() << "' has " << term_positions.size()
-                      << " positions in doc " << doc_id << std::endl;
+            // std::cout << "  Term '" << readers[i]->getTerm() << "' has " << term_positions.size()
+            //           << " positions in doc " << doc_id << std::endl;
 
             // Find the first position that comes after last_pos within max_distance
             bool found_match = false;
@@ -75,16 +76,19 @@ int main(int argc, char* argv[]) {
     bool phrase_mode = (argc > 3 && std::string(argv[argc - 1]) == "--phrase");
 
     try {
+        // Make term dict
+        mithril::TermDictionary term_dict(index_dir);
+
         // Create readers for each term
         std::vector<std::unique_ptr<mithril::IndexStreamReader>> isr_readers;
         std::vector<std::unique_ptr<mithril::TermReader>> term_readers;
 
         for (int i = 2; i < argc - (phrase_mode ? 1 : 0); ++i) {
             // Create TermReader for position checking
-            term_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i]));
+            term_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i], term_dict));
 
             // Create another TermReader for the AND operation
-            isr_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i]));
+            isr_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i], term_dict));
         }
 
         mithril::TermAND and_reader(std::move(isr_readers));
