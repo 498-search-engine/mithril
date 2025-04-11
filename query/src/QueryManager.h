@@ -30,7 +30,7 @@ namespace mithril {
  */
 class QueryManager {
 public:
-    using QueryResult = std::vector<uint32_t>;
+    using QueryResult = std::vector<std::pair<uint32_t, uint32_t>>;
 
     /**
      * @brief Construct a new Query Manager object
@@ -54,7 +54,7 @@ public:
 
 private:
     void WorkerThread(size_t worker_id);
-    void HandleRanking(QueryResult& matches);
+    QueryResult HandleRanking(std::vector<uint32_t>& matches);
 
 
 private:

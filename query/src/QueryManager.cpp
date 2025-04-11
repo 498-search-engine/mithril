@@ -77,10 +77,11 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
+        QueryResult_t result_ranked = HandleRanking(result);
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
-            marginal_results_[worker_id] = std::move(result);
+            marginal_results_[worker_id] = std::move(result_ranked);
             ++worker_completion_count_;  // TODO: change this to std::atomic increment?
             // if finished, tell main thread
             if (worker_completion_count_ == threads_.size())
@@ -92,8 +93,15 @@ void QueryManager::WorkerThread(size_t worker_id) {
     }
 }
 
-void QueryManager::HandleRanking(QueryResult& matches) {
-    // TODO: handle ranking here
+QueryResult_t QueryManager::HandleRanking(std::vector<uint32_t>& matches) {
+    QueryResult_t ranked_matches;
+    ranked_matches.reserve(matches.size());
+
+    for (uint32_t match : matches) {
+        ranked_matches.push_back({match, 0});  // TODO: replace 0 with actual score
+    }
+
+    return ranked_matches;
 }
 
 }  // namespace mithril
