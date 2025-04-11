@@ -9,11 +9,10 @@
 #ifndef LEXER_H_
 #define LEXER_H_
 
+#include "Token.h"
+
 #include <string>
 #include <utility>
-
-
-#include "Token.h"
 
 class Lexer {
 public:
@@ -40,27 +39,27 @@ public:
     [[nodiscard]] auto EndOfInput() -> bool;
 
 private:
-    std::string input_;  // The input string to be tokenized
-    size_t position_ = 0;  // Current position in the input string
+    std::string input_;                                   // The input string to be tokenized
+    size_t position_ = 0;                                 // Current position in the input string
     Token peekedToken_ = Token(TokenType::EOFTOKEN, "");  // Token that has been peeked
-    bool hasPeeked_ = false;  // Flag to indicate if a token has been peeked
+    bool hasPeeked_ = false;                              // Flag to indicate if a token has been peeked
 
     // Core lexing helpers
     void SkipWhitespace();  // Skips any whitespace characters in the input
 
-    [[nodiscard]] auto PeekChar() const -> char;  // Returns the current character without consuming it
-    auto GetChar() -> char;  // Consumes and returns the current character
-    auto MatchChar(char expected) -> bool;  // Matches the current character with the expected character
+    [[nodiscard]] auto PeekChar() const -> char;       // Returns the current character without consuming it
+    auto GetChar() -> char;                            // Consumes and returns the current character
+    auto MatchChar(char expected) -> bool;             // Matches the current character with the expected character
     [[nodiscard]] auto IsAlpha(char c) const -> bool;  // Checks if a character is an alphabetic character
     [[nodiscard]] auto IsAlnum(char c) const -> bool;  // Checks if a character is alphanumeric
-    [[nodiscard]] auto IsOperatorKeyword(const std::string& word) const -> bool;  // Checks if a word is an operator keyword
+    [[nodiscard]] auto IsOperatorKeyword(const std::string& word) const
+        -> bool;  // Checks if a word is an operator keyword
     [[nodiscard]] auto IsFieldKeyword(const std::string& word) const -> bool;  // Checks if a word is a field keyword
 
     // Token lexing functions
-    auto LexWordOrKeyword() -> Token;      // Lexes a word or keyword and returns the corresponding token
-    auto LexQuotedPhrase() -> Token;       // Lexes a quoted phrase and returns the corresponding token
-    auto LexSymbol() -> Token;             // Lexes symbols (COLON, LPAREN, RPAREN) and returns the corresponding token
+    auto LexWordOrKeyword() -> Token;  // Lexes a word or keyword and returns the corresponding token
+    auto LexQuotedPhrase() -> Token;   // Lexes a quoted phrase and returns the corresponding token
+    auto LexSymbol() -> Token;         // Lexes symbols (COLON, LPAREN, RPAREN) and returns the corresponding token
 };
 
-#endif // LEXER_H_
-
+#endif  // LEXER_H_

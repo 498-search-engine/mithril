@@ -17,34 +17,23 @@ namespace mithril {
 class NotISR : public IndexStreamReader {
 public:
     explicit NotISR(std::unique_ptr<IndexStreamReader> reader_in, size_t document_count_in)
-        : reader_(std::move(reader_in))
-        , current_doc_id_(0)
-        , doc_at_end_(false)
-        , max_doc_id_(document_count_in)
-    {
-    }
+        : reader_(std::move(reader_in)), current_doc_id_(0), doc_at_end_(false), max_doc_id_(document_count_in) {}
 
-    ~NotISR() override {
-        return;
-    }
+    ~NotISR() override { return; }
 
 
     // ISR
 
-    size_t get_boundary_doc_id(){
-        if (doc_at_end_){
-            return max_doc_id_; 
+    size_t get_boundary_doc_id() {
+        if (doc_at_end_) {
+            return max_doc_id_;
         }
         return reader_->currentDocID();
     }
 
-    bool atEnd() const { 
-        return doc_at_end_;
-    }
+    bool atEnd() const { return doc_at_end_; }
 
-    bool hasNext() const override{
-        return !atEnd();
-    }
+    bool hasNext() const override { return !atEnd(); }
 
     void move_reader_next() {
         if (!reader_->hasNext()) {
@@ -72,10 +61,10 @@ public:
     }
 
     data::docid_t currentDocID() const override {
-        if (current_doc_id_ > max_doc_id_){
+        if (current_doc_id_ > max_doc_id_) {
             throw std::runtime_error("Current document ID exceeds maximum document ID.");
         }
-        return current_doc_id_; 
+        return current_doc_id_;
     }
 
 
@@ -108,12 +97,10 @@ public:
     // std::vector<uint32_t> currentPositions() const;
 
 private:
-
     std::unique_ptr<IndexStreamReader> reader_;
     data::docid_t current_doc_id_;
     data::docid_t max_doc_id_;
     bool doc_at_end_;
-
 };
 
 }  // namespace mithril

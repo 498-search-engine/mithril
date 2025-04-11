@@ -41,19 +41,12 @@ public:
     }
 
     static const std::unordered_set<std::string>& GetValidFields() {
-        static const std::unordered_set<std::string> fields = {
-            "TITLE",
-            "TEXT"
-        };
+        static const std::unordered_set<std::string> fields = {"TITLE", "TEXT"};
         return fields;
     }
 
     static const std::unordered_set<std::string>& GetValidOperators() {
-        static const std::unordered_set<std::string> operators = {
-            "AND",
-            "OR",
-            "NOT"
-        };
+        static const std::unordered_set<std::string> operators = {"AND", "OR", "NOT"};
         return operators;
     }
 
@@ -69,6 +62,6 @@ public:
     }
 };
 
-} // namespace query
+}  // namespace query
 
-#endif // QUERY_CONFIG_H_
+#endif  // QUERY_CONFIG_H_

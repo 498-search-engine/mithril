@@ -1,13 +1,12 @@
 #ifndef INTERSECT_H
 #define INTERSECT_H
 
-#include <vector>
 #include <cstdint>
+#include <vector>
 
 using u32 = std::uint32_t;
-using std::vector;
 using std::size_t;
-
+using std::vector;
 
 
 // Simple merge-based intersection algorithm
@@ -15,7 +14,7 @@ using std::size_t;
 inline std::vector<uint32_t> intersect_simple(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) {
     std::vector<uint32_t> result;
     result.reserve(std::min(a.size(), b.size()));  // Best case scenario
-    
+
     size_t i = 0, j = 0;
     while (i < a.size() && j < b.size()) {
         if (a[i] == b[j]) {
@@ -28,7 +27,7 @@ inline std::vector<uint32_t> intersect_simple(const std::vector<uint32_t>& a, co
             j++;
         }
     }
-    
+
     return result;
 }
 
@@ -37,41 +36,39 @@ inline std::vector<uint32_t> intersect_simple(const std::vector<uint32_t>& a, co
 inline std::vector<uint32_t> union_simple(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) {
     std::vector<uint32_t> result;
     result.reserve(a.size() + b.size());  // Worst case scenario
-    
+
     size_t i = 0, j = 0;
-    
+
     // Process both arrays until we reach the end of one
     while (i < a.size() && j < b.size()) {
         if (a[i] < b[j]) {
             // Add element from first array
             result.push_back(a[i]);
             i++;
-        } 
-        else if (b[j] < a[i]) {
+        } else if (b[j] < a[i]) {
             // Add element from second array
             result.push_back(b[j]);
             j++;
-        }
-        else {
+        } else {
             // Equal elements - add only once
             result.push_back(a[i]);
             i++;
             j++;
         }
     }
-    
+
     // Add remaining elements from first array
     while (i < a.size()) {
         result.push_back(a[i]);
         i++;
     }
-    
+
     // Add remaining elements from second array
     while (j < b.size()) {
         result.push_back(b[j]);
         j++;
     }
-    
+
     return result;
 }
 

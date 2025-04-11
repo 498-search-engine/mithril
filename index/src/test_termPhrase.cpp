@@ -1,5 +1,3 @@
 #include "TermPhrase.h"
 
-int main() {
-    
-}
+int main() {}

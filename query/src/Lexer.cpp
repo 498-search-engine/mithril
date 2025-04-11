@@ -1,10 +1,11 @@
 #include "Lexer.h"
+
 #include "QueryConfig.h"
+
 #include <cctype>
 #include <stdexcept>
 
-Lexer::Lexer(const std::string& input)
-    : input_(input), position_(0), hasPeeked_(false) {}
+Lexer::Lexer(const std::string& input) : input_(input), position_(0), hasPeeked_(false) {}
 
 // * ------- Public API -------
 
@@ -124,10 +125,13 @@ Token Lexer::LexSymbol() {
     char const c = GetChar();
 
     switch (c) {
-        case ':': return {TokenType::COLON, ":"};
-        case '(': return {TokenType::LPAREN, "("};
-        case ')': return {TokenType::RPAREN, ")"};
-        default:
-            throw std::runtime_error(std::string("Unexpected symbol: ") + c);
+    case ':':
+        return {TokenType::COLON, ":"};
+    case '(':
+        return {TokenType::LPAREN, "("};
+    case ')':
+        return {TokenType::RPAREN, ")"};
+    default:
+        throw std::runtime_error(std::string("Unexpected symbol: ") + c);
     }
 }

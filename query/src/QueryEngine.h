@@ -17,9 +17,7 @@ using namespace mithril;
 
 class QueryEngine {
 public:
-    QueryEngine(const std::string& index_dir)
-        : map_reader_(index_dir), term_dict_(index_dir)
-    {
+    QueryEngine(const std::string& index_dir) : map_reader_(index_dir), term_dict_(index_dir) {
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
 
@@ -36,7 +34,7 @@ public:
         return parser.get_tokens();
     }
 
-    std::vector<uint32_t> EvaluateQuery(std::string input) { 
+    std::vector<uint32_t> EvaluateQuery(std::string input) {
         Parser parser(input, term_dict_);
         auto queryTree = parser.parse();
         if (!queryTree) {
@@ -44,7 +42,7 @@ public:
             return {};
         }
         std::cout << "Parsed Query Structure:" << std::endl;
-        return queryTree->evaluate(); 
+        return queryTree->evaluate();
     }
 
     void DisplayTokens(const std::vector<Token>& tokens) const {
@@ -67,7 +65,7 @@ public:
             std::cout << std::endl;
         }
     }
-    
+
 private:
     mithril::DocumentMapReader map_reader_;
     mithril::TermDictionary term_dict_;

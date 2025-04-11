@@ -1,7 +1,7 @@
 #include "DocumentMapReader.h"
 #include "TermAND.h"
-#include "TermReader.h"
 #include "TermDictionary.h"
+#include "TermReader.h"
 
 #include <iostream>
 #include <memory>

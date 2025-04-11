@@ -1,6 +1,6 @@
 #include "DocumentMapReader.h"
-#include "TermReader.h"
 #include "TermDictionary.h"
+#include "TermReader.h"
 
 #include <iomanip>
 #include <iostream>

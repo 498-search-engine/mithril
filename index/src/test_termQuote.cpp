@@ -4,8 +4,8 @@
 
 #include <iostream>
 // #include <spdlog/spdlog.h>
-#include <vector>
 #include <string>
+#include <vector>
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {

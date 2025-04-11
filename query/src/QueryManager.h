@@ -4,9 +4,9 @@
  * @brief Query Manager: serves queries for local machine
  * @version 0.9
  * @date 2025-04-10
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
 #ifndef QUERY_QUERYMANAGER_H
@@ -14,19 +14,19 @@
 
 #include "QueryEngine.h"
 
-#include <vector>
+#include <condition_variable>
+#include <cstdint>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
-#include <memory>
-#include <cstdint>
-#include <mutex>
-#include <condition_variable>
+#include <vector>
 
 namespace mithril {
 
 /**
  * @brief Serves queries for local machine
- * 
+ *
  */
 class QueryManager {
 public:
@@ -34,7 +34,7 @@ public:
 
     /**
      * @brief Construct a new Query Manager object
-     * 
+     *
      * @param index_dirs; spawns a worker thread to serve each index
      */
     QueryManager(const std::vector<std::string>& index_dirs);
@@ -46,7 +46,7 @@ public:
 
     /**
      * @brief Solves query string over all shards on local machine
-     * 
+     *
      * @param query : query in string form from user
      * @return QueryResult : list of doc id matches
      */
@@ -55,7 +55,7 @@ public:
 private:
     void WorkerThread(size_t worker_id);
     void HandleRanking(QueryResult& matches);
-    
+
 
 private:
     std::vector<std::thread> threads_;
@@ -67,7 +67,7 @@ private:
     std::condition_variable worker_cv_;
 
     bool stop_;
-    std::vector<char> query_available_; // just vector<bool>, but vec<bool> doesn't work
+    std::vector<char> query_available_;  // just vector<bool>, but vec<bool> doesn't work
     std::string current_query_;
     size_t worker_completion_count_;
 };
