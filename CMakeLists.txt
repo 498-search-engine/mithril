@@ -50,6 +50,7 @@ function(add_executable_with_copy target)
 endfunction()
 
 # Add subdirectories
+add_subdirectory(tests)
 add_subdirectory(external)
 add_subdirectory(lib)
 add_subdirectory(common)
@@ -57,4 +58,4 @@ add_subdirectory(crawler)
 add_subdirectory(index)
 add_subdirectory(ranking)
 add_subdirectory(web)
-add_subdirectory(tests)
+add_subdirectory(query)
