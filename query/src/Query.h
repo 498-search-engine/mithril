@@ -5,13 +5,13 @@
 
 #include <cstdint>
 // #include <_types/_uint32_t.h>
-#include "../../index/src/NotIndexStreamReader.h"
-#include "../../index/src/TermAND.h"
-#include "../../index/src/TermDictionary.h"
-#include "../../index/src/TermOR.h"
-#include "../../index/src/TermQuote.h"
-#include "../../index/src/TermReader.h"
+#include "NotIndexStreamReader.h"
 #include "QueryConfig.h"
+#include "TermAND.h"
+#include "TermDictionary.h"
+#include "TermOR.h"
+#include "TermQuote.h"
+#include "TermReader.h"
 #include "Token.h"
 #include "intersect.h"
 

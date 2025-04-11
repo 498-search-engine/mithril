@@ -44,13 +44,15 @@ public:
 
     void print_server_configs() const;
 
-    void send_query_to_workers(const std::string& query);
+    std::vector<uint32_t> send_query_to_workers(const std::string& query);
 
     static void
     handle_worker_response(const ServerConfig& server_config, std::vector<uint32_t>& results, const std::string& query);
 
 private:
     std::vector<ServerConfig> server_configs_;
+
+    static std::vector<uint32_t> handle_worker_response(const ServerConfig& server_config, const std::string& query);
 
     // TODO: Add caching for frequently executed queries
     // TODO: Add query suggestion/autocomplete functionality

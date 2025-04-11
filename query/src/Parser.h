@@ -1,10 +1,10 @@
 #ifndef GRAMMAR_H_
 #define GRAMMAR_H_
 
-#include "../../index/src/TermDictionary.h"
 #include "Lexer.h"
 #include "Query.h"
 #include "QueryConfig.h"
+#include "TermDictionary.h"
 #include "Token.h"
 
 #include <memory>

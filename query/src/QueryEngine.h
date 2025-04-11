@@ -1,19 +1,17 @@
 #ifndef QUERYENGINE_H
 #define QUERYENGINE_H
 
-#include "../../index/src/DocumentMapReader.h"
-#include "../../index/src/TermDictionary.h"
+#include "DocumentMapReader.h"
 #include "Parser.h"
 #include "Query.h"
 #include "QueryConfig.h"
+#include "TermDictionary.h"
 
 #include <iostream>
 #include <memory>
 #include <vector>
 
-
 using namespace mithril;
-
 
 class QueryEngine {
 public:
@@ -41,7 +39,6 @@ public:
             std::cerr << "Failed to parse query: " << input << std::endl;
             return {};
         }
-        std::cout << "Parsed Query Structure:" << std::endl;
         return queryTree->evaluate();
     }
 
@@ -66,10 +63,11 @@ public:
         }
     }
 
+    std::optional<data::Document> GetDocument(uint32_t doc_id) const { return map_reader_.getDocument(doc_id); }
+
 private:
     mithril::DocumentMapReader map_reader_;
     mithril::TermDictionary term_dict_;
 };
-
 
 #endif /* QUERYENGINE_H */

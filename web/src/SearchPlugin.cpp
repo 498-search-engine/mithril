@@ -1,40 +1,56 @@
 #include "SearchPlugin.h"
 
+#include <algorithm>
 #include <chrono>
-#include <fstream>
 #include <future>
-#include <memory>
 #include <spdlog/spdlog.h>
 
-SearchPlugin::SearchPlugin(const std::string& server_config_path) : config_path_(server_config_path) {
+using namespace std::chrono_literals;
+
+const std::vector<std::pair<std::string, std::string>> SearchPlugin::MOCK_RESULTS = {
+    {       "https://example.com/search-intro",   "Introduction to Search Engines"},
+    {   "https://example.com/cpp-optimization",     "C++ Performance Optimization"},
+    {"https://example.com/distributed-systems", "Distributed Systems Architecture"}
+};
+
+SearchPlugin::SearchPlugin(const std::string& server_config_path, const std::string& index_path)
+    : config_path_(server_config_path), index_path_(index_path) {
 
     spdlog::info("Initializing search plugin with config: {}", server_config_path);
+
+    // Initialize local query engine
+    if (!index_path.empty()) {
+        try {
+            query_engine_ = std::make_unique<QueryEngine>(index_path);
+            engine_initialized_ = true;
+            spdlog::info("Local QueryEngine initialized with index: {}", index_path);
+        } catch (const std::exception& e) {
+            spdlog::error("Failed to initialize local QueryEngine: {}", e.what());
+        }
+    }
+
+    // Initialize coordinator
     coordinator_initialized_ = TryInitializeCoordinator();
 
-    if (!coordinator_initialized_) {
-        spdlog::warn("Running in DEMO mode with mock results - no worker servers available");
+    if (!coordinator_initialized_ && !engine_initialized_) {
+        spdlog::warn("Running in DEMO mode with mock results - no query engine available");
     }
 }
 
 SearchPlugin::~SearchPlugin() {
-    // Make sure we clean up any resources
     query_coordinator_.reset();
+    query_engine_.reset();
 }
 
 bool SearchPlugin::TryInitializeCoordinator() {
     try {
-        // Check if config file exists
         std::ifstream config_file(config_path_);
         if (!config_file.good()) {
             spdlog::error("Server config file not found: {}", config_path_);
             return false;
         }
 
-        // Attempt to initialize the coordinator
         query_coordinator_ = std::make_unique<mithril::QueryCoordinator>(config_path_);
-
-        // Test connectivity to at least one server, could be implemented if QueryCoordinator has a test method
-
         return true;
     } catch (const std::exception& e) {
         spdlog::error("Failed to initialize QueryCoordinator: {}", e.what());
@@ -52,10 +68,25 @@ std::string SearchPlugin::DecodeUrlString(const std::string& encoded) {
 
     for (size_t i = 0; i < encoded.length(); ++i) {
         if (encoded[i] == '%' && i + 2 < encoded.length()) {
-            int value = 0;
-            sscanf(encoded.substr(i + 1, 2).c_str(), "%x", &value);
-            decoded += static_cast<char>(value);
-            i += 2;
+            auto hex_to_char = [](char c) -> int {
+                if (c >= '0' && c <= '9')
+                    return c - '0';
+                if (c >= 'A' && c <= 'F')
+                    return c - 'A' + 10;
+                if (c >= 'a' && c <= 'f')
+                    return c - 'a' + 10;
+                return -1;
+            };
+
+            int high = hex_to_char(encoded[i + 1]);
+            int low = hex_to_char(encoded[i + 2]);
+
+            if (high != -1 && low != -1) {
+                decoded += static_cast<char>((high << 4) | low);
+                i += 2;
+            } else {
+                decoded += encoded[i];
+            }
         } else if (encoded[i] == '+') {
             decoded += ' ';
         } else {
@@ -94,10 +125,8 @@ std::string SearchPlugin::ProcessRequest(std::string request) {
 
         try {
             max_results = std::stoi(request.substr(max_pos + 4, max_end - max_pos - 4));
-            // Cap max_results to a reasonable value
             max_results = std::min(max_results, 100);
         } catch (...) {
-            // If parsing fails, keep default
             max_results = 50;
         }
     }
@@ -109,7 +138,6 @@ std::string SearchPlugin::ProcessRequest(std::string request) {
 
         auto it = query_cache_.find(query_text);
         if (it != query_cache_.end()) {
-            // Return cached result but update timestamp
             it->second.timestamp = std::chrono::steady_clock::now();
             return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + it->second.result;
         }
@@ -117,131 +145,253 @@ std::string SearchPlugin::ProcessRequest(std::string request) {
 
     // Execute query with timeout
     auto start_time = std::chrono::steady_clock::now();
+
+    std::string json_result;
     auto result_future = std::async(
         std::launch::async, [this, &query_text, max_results]() { return ExecuteQuery(query_text, max_results); });
 
     // Wait for result with timeout
-    nlohmann::json result_json;
     auto status = result_future.wait_for(QUERY_TIMEOUT);
+
     if (status == std::future_status::ready) {
-        result_json = result_future.get();
+        json_result = result_future.get();
     } else {
         spdlog::warn("Query timed out after {} seconds: '{}'", QUERY_TIMEOUT.count(), query_text);
-        result_json["error"] = "Query timed out";
-        result_json["results"] = nlohmann::json::array();
-        result_json["total"] = 0;
+        json_result = "{\"results\":[],\"total\":0,\"time_ms\":0,\"error\":\"Query timed out\"}";
     }
 
+    // Add query time to JSON result
     auto end_time = std::chrono::steady_clock::now();
     auto query_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    result_json["time_ms"] = query_time_ms;
 
-    std::string response_json = result_json.dump();
+    // Replace time_ms placeholder
+    size_t time_pos = json_result.find("\"time_ms\":");
+    if (time_pos != std::string::npos) {
+        size_t value_start = time_pos + 10;
+        size_t value_end = json_result.find_first_of(",}", value_start);
+        if (value_end != std::string::npos) {
+            json_result.replace(value_start, value_end - value_start, std::to_string(query_time_ms));
+        }
+    }
 
     // Cache the result
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
-        // LRU eviction
+
+        // LRU eviction if needed
         if (query_cache_.size() >= MAX_CACHE_SIZE) {
             auto oldest = std::min_element(query_cache_.begin(), query_cache_.end(), [](const auto& a, const auto& b) {
                 return a.second.timestamp < b.second.timestamp;
             });
+
             if (oldest != query_cache_.end()) {
                 query_cache_.erase(oldest);
             }
         }
 
-        query_cache_[query_text] = {response_json, std::chrono::steady_clock::now()};
+        query_cache_[query_text] = {json_result, std::chrono::steady_clock::now()};
     }
 
-    return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + response_json;
+    return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + json_result;
 }
 
-const std::vector<nlohmann::json> SearchPlugin::MOCK_RESULTS = {
-    {{"id", 1},
-     {"title", "Introduction to Search Engines"},
-     {"url", "https://example.com/search-intro"},
-     {"snippet", "A comprehensive guide to how search engines work, including indexing and query processing."}       },
-
-    {{"id", 2},
-     {"title", "C++ Performance Optimization"},
-     {"url", "https://example.com/cpp-optimization"},
-     {"snippet", "Learn advanced techniques for optimizing C++ code, including memory layout and SIMD instructions."}},
-
-    {{"id", 3},
-     {"title", "Distributed Systems Architecture"},
-     {"url", "https://example.com/distributed-systems"},
-     {"snippet", "Design patterns for building scalable and reliable distributed systems in the cloud."}             }
-};
-
-nlohmann::json SearchPlugin::ExecuteQuery(const std::string& query_text, int max_results) {
-    nlohmann::json result;
+std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_results) {
+    std::string json;
+    json.reserve(1024);  // Pre-allocate a reasonable buffer
 
     if (query_text.empty()) {
-        result["results"] = nlohmann::json::array();
-        result["total"] = 0;
-        return result;
+        json = "{\"results\":[],\"total\":0,\"time_ms\":0}";
+        return json;
     }
 
     try {
-        if (!coordinator_initialized_) {
-            // Return mock results in dev mode
-            spdlog::info("Using mock results for query: '{}'", query_text);
+        // Local query engine
+        if (engine_initialized_) {
+            spdlog::info("Executing local query: '{}'", query_text);
 
-            nlohmann::json results = nlohmann::json::array();
-            size_t num_results = std::min(MOCK_RESULTS.size(), static_cast<size_t>(max_results));
+            auto doc_ids = query_engine_->EvaluateQuery(query_text);
+            size_t num_results = std::min(doc_ids.size(), static_cast<size_t>(max_results));
 
-            for (size_t i = 0; i < num_results; i++) {
-                results.push_back(MOCK_RESULTS[i]);
-            }
-
-            result["results"] = results;
-            result["total"] = MOCK_RESULTS.size();
-            result["demo_mode"] = true;
-            return result;
+            json = GenerateJsonResults(doc_ids, num_results, false);
+            return json;
         }
 
-        // Attempt to execute real query
-        auto query_results = query_coordinator_->send_query_to_workers(query_text);
+        // Distributed query
+        if (coordinator_initialized_) {
+            spdlog::info("Executing distributed query: '{}'", query_text);
 
-        // Format results
-        nlohmann::json results = nlohmann::json::array();
-        size_t result_count = std::min(static_cast<size_t>(max_results), query_results.size());
+            auto doc_ids = query_coordinator_->send_query_to_workers(query_text);
+            size_t num_results = std::min(doc_ids.size(), static_cast<size_t>(max_results));
 
-        for (size_t i = 0; i < result_count; i++) {
-            auto doc_id = query_results[i];
-
-            // In production, you would fetch document details from a shared store
-            nlohmann::json result_item;
-            result_item["id"] = doc_id;
-            result_item["title"] = "Document " + std::to_string(doc_id);
-            result_item["url"] = "https://example.com/" + std::to_string(doc_id);
-            result_item["snippet"] = "Content for document " + std::to_string(doc_id);
-
-            results.push_back(result_item);
+            json = GenerateJsonResults(doc_ids, num_results, false);
+            return json;
         }
 
-        result["results"] = results;
-        result["total"] = query_results.size();
+        // Demo mode with mock results
+        spdlog::info("Using mock results for query: '{}'", query_text);
+
+        std::vector<uint32_t> mock_ids;
+        for (size_t i = 0; i < MOCK_RESULTS.size(); i++) {
+            mock_ids.push_back(i + 1);
+        }
+
+        json = GenerateJsonResults(mock_ids, std::min(mock_ids.size(), static_cast<size_t>(max_results)), true);
+        return json;
 
     } catch (const std::exception& e) {
         spdlog::error("Error executing query: {}", e.what());
 
-        // Fallback to mock results on error
-        nlohmann::json results = nlohmann::json::array();
-        size_t num_results = std::min(MOCK_RESULTS.size(), static_cast<size_t>(max_results));
-
-        for (size_t i = 0; i < num_results; i++) {
-            results.push_back(MOCK_RESULTS[i]);
+        // Fallback to mock results
+        std::vector<uint32_t> mock_ids;
+        for (size_t i = 0; i < MOCK_RESULTS.size(); i++) {
+            mock_ids.push_back(i + 1);
         }
 
-        result["results"] = results;
-        result["total"] = MOCK_RESULTS.size();
-        result["error"] = e.what();
-        result["fallback"] = true;
+        json =
+            GenerateJsonResults(mock_ids, std::min(mock_ids.size(), static_cast<size_t>(max_results)), true, e.what());
+        return json;
+    }
+}
+
+std::string SearchPlugin::GenerateJsonResults(const std::vector<uint32_t>& doc_ids,
+                                              size_t num_results,
+                                              bool demo_mode,
+                                              const std::string& error) {
+    std::string json;
+    json.reserve(1024 + num_results * 256);  // Pre-allocate based on result count
+
+    json = "{\"results\":[";
+
+    for (size_t i = 0; i < num_results; i++) {
+        uint32_t doc_id = doc_ids[i];
+
+        if (i > 0)
+            json += ",";
+
+        json += "{\"id\":" + std::to_string(doc_id);
+
+        // Handle document metadata based on mode
+        if (!demo_mode && engine_initialized_) {
+            auto doc_opt = query_engine_->GetDocument(doc_id);
+
+            if (doc_opt) {
+                json += ",\"url\":\"" + EscapeJsonString(SanitizeText(doc_opt->url)) + "\"";
+
+                std::string title = FormatDocumentTitle(doc_opt->title);
+                json += ",\"title\":\"" + EscapeJsonString(SanitizeText(title)) + "\"";
+
+                json += ",\"snippet\":\"Document #" + std::to_string(doc_id) + "\"";
+            } else {
+                json += ",\"url\":\"http://example.com/doc/" + std::to_string(doc_id) + "\"";
+                json += ",\"title\":\"Document " + std::to_string(doc_id) + "\"";
+                json += ",\"snippet\":\"Document metadata not available\"";
+            }
+        } else {
+            // Use mock results or placeholders
+            size_t mock_index = (doc_id - 1) % MOCK_RESULTS.size();
+
+            json += ",\"url\":\"" + EscapeJsonString(MOCK_RESULTS[mock_index].first) + "\"";
+            json += ",\"title\":\"" + EscapeJsonString(MOCK_RESULTS[mock_index].second) + "\"";
+            std::string snippet_type = demo_mode ? "demo" : "fallback";
+            json += ",\"snippet\":\"This is a " + snippet_type + " search result.\"";
+        }
+
+        json += "}";
     }
 
-    return result;
+    json += "],\"total\":" + std::to_string(doc_ids.size());
+    json += ",\"time_ms\":0";  // Placeholder to be replaced with actual timing
+
+    if (demo_mode)
+        json += ",\"demo_mode\":true";
+    if (!error.empty())
+        json += ",\"error\":\"" + EscapeJsonString(error) + "\"";
+
+    json += "}";
+    return json;
+}
+
+std::string SearchPlugin::EscapeJsonString(const std::string& input) {
+    std::string output;
+    output.reserve(input.size() * 2);
+
+    for (char c : input) {
+        switch (c) {
+        case '\"':
+            output += "\\\"";
+            break;
+        case '\\':
+            output += "\\\\";
+            break;
+        case '\b':
+            output += "\\b";
+            break;
+        case '\f':
+            output += "\\f";
+            break;
+        case '\n':
+            output += "\\n";
+            break;
+        case '\r':
+            output += "\\r";
+            break;
+        case '\t':
+            output += "\\t";
+            break;
+        default:
+            if (c < 32) {
+                char buffer[8];
+                snprintf(buffer, sizeof(buffer), "\\u%04x", static_cast<unsigned char>(c));
+                output += buffer;
+            } else {
+                output += c;
+            }
+        }
+    }
+
+    return output;
+}
+
+std::string SearchPlugin::FormatDocumentTitle(const std::vector<std::string>& title_words) {
+    if (title_words.empty())
+        return "Untitled Document";
+
+    // Calculate total length for pre-allocation
+    size_t total_len = 0;
+    for (const auto& word : title_words) {
+        total_len += word.size() + 1;  // +1 for space
+    }
+
+    std::string title;
+    title.reserve(total_len);
+
+    for (const auto& word : title_words) {
+        if (!title.empty())
+            title += ' ';
+        title += word;
+    }
+
+    return title;
+}
+
+std::string SearchPlugin::SanitizeText(const std::string& input) {
+    std::string output;
+    output.reserve(input.size());
+
+    for (unsigned char c : input) {
+        // Keep ASCII printable and valid UTF-8 start bytes
+        if ((c >= 0x20 && c <= 0x7E) || (c >= 0xC2 && c <= 0xF4)) {
+            output += c;
+        } else {
+            // Replace invalid characters with space
+            // Avoid consecutive spaces
+            if (output.empty() || output.back() != ' ') {
+                output += ' ';
+            }
+        }
+    }
+
+    return output;
 }
 
 void SearchPlugin::CleanExpiredCache() {

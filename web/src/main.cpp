@@ -21,8 +21,8 @@ void signal_handler(int signal) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " <port> <web_root> <server_config_path>" << std::endl;
+    if (argc != 5) {
+        std::cerr << "Usage: " << argv[0] << " <port> <web_root> <server_config_path> <index_path>" << std::endl;
         return 1;
     }
 
@@ -30,27 +30,23 @@ int main(int argc, char** argv) {
         int port = std::stoi(argv[1]);
         std::string web_root = argv[2];
         std::string server_config_path = argv[3];
+        std::string index_path = argv[4];
 
         // Initialize logging
         spdlog::set_level(spdlog::level::info);
         spdlog::info("Starting mithril web server on port {}", port);
         spdlog::info("Web root: {}", web_root);
         spdlog::info("Server config: {}", server_config_path);
+        spdlog::info("Index path: {}", index_path);
 
+        // Check paths exist
         if (!std::filesystem::exists(web_root)) {
             spdlog::error("Web root directory doesn't exist: {}", web_root);
             return 1;
         }
 
-        // Check if server config exists (will operate in demo mode if not)
-        if (!std::filesystem::exists(server_config_path)) {
-            spdlog::warn("Server config file not found: {}\n running in DEMO mode", server_config_path);
-        } else {
-            spdlog::info("Using server config file with worker servers");
-        }
-
-        // Create and init search plugin
-        auto search_plugin = new SearchPlugin(server_config_path);
+        // Create and init search plugin with both paths
+        auto search_plugin = new SearchPlugin(server_config_path, index_path);
         mithril::Plugin = search_plugin;
         spdlog::info("Search plugin initialized");
 
