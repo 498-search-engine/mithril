@@ -88,11 +88,16 @@ void QueryManager::WorkerThread(size_t worker_id) {
             // if finished, tell main thread
             if (worker_completion_count_ == threads_.size())
                 main_cv_.notify_one();
+
+            // record that worker finished current query
+            query_available_[worker_id] = 0;
         }
 
-        // record that worker finished current query
-        query_available_[worker_id] = 0;
     }
+}
+
+void QueryManager::HandleRanking(QueryResult& matches) {
+    // TODO: handle ranking here
 }
 
 }  // namespace mithril

@@ -1,3 +1,14 @@
+/**
+ * @file QueryManager.h
+ * @author Christopher Davis
+ * @brief Query Manager: serves queries for local machine
+ * @version 0.9
+ * @date 2025-04-10
+ * 
+ * @copyright Copyright (c) 2025
+ * 
+ */
+
 #ifndef QUERY_QUERYMANAGER_H
 #define QUERY_QUERYMANAGER_H
 
@@ -13,10 +24,19 @@
 
 namespace mithril {
 
+/**
+ * @brief Serves queries for local machine
+ * 
+ */
 class QueryManager {
 public:
     using QueryResult = std::vector<uint32_t>;
 
+    /**
+     * @brief Construct a new Query Manager object
+     * 
+     * @param index_dirs; spawns a worker thread to serve each index
+     */
     QueryManager(const std::vector<std::string>& index_dirs);
 
     QueryManager(const QueryManager&) = delete;
@@ -24,10 +44,17 @@ public:
 
     ~QueryManager();
 
+    /**
+     * @brief Solves query string over all shards on local machine
+     * 
+     * @param query : query in string form from user
+     * @return QueryResult : list of doc id matches
+     */
     QueryResult AnswerQuery(const std::string& query);
 
 private:
     void WorkerThread(size_t worker_id);
+    void HandleRanking(QueryResult& matches);
     
 
 private:
