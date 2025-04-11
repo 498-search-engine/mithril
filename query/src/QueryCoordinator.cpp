@@ -1,11 +1,12 @@
 #include "QueryCoordinator.h"
 
-#include "../../index/src/TextPreprocessor.h"
 #include "NetworkHelper.h"
+#include "TextPreprocessor.h"
 #include "network.h"
 
+#include <algorithm>
 #include <core/thread.h>
-
+#include <spdlog/spdlog.h>
 
 using namespace core;
 using namespace mithril;
@@ -45,59 +46,102 @@ mithril::QueryCoordinator::QueryCoordinator(const std::string& conf_path) {
         throw std::runtime_error("Failed to load server configuration: " + std::string(e.what()));
     }
 }
+
 void mithril::QueryCoordinator::print_server_configs() const {
     for (const auto& config : server_configs_) {
-        std::cout << "Server IP: " << config.ip << ", Port: " << config.port << std::endl;
+        spdlog::info("Server IP: {}, Port: {}", config.ip, config.port);
     }
 }
-void mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
 
+std::vector<uint32_t> mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
     mithril::TokenNormalizer token_normalizer;
     std::string normalized_query = token_normalizer.normalize(query);
 
     if (normalized_query.empty()) {
-        std::cout << "Normalized query is empty" << std::endl;
-        return;
+        spdlog::warn("Normalized query is empty");
+        return {};
     }
 
-    std::vector<std::vector<uint32_t>> worker_results(server_configs_.size());
-    std::vector<core::Thread> threads;
-    threads.reserve(server_configs_.size());
+    std::vector<std::vector<uint32_t>> worker_results;
+    std::vector<std::future<std::vector<uint32_t>>> futures;
 
-    // Create all threads
-    for (size_t i = 0; i < server_configs_.size(); ++i) {
-        threads.emplace_back(handle_worker_response, server_configs_[i], std::ref(worker_results[i]), normalized_query);
+    // Create futures for each worker
+    for (const auto& config : server_configs_) {
+        // gotta use a lambda as handle_worker_response is not a static method
+        futures.push_back(std::async(std::launch::async, [this, config, normalized_query]() {
+            return this->handle_worker_response(config, normalized_query);
+        }));
     }
 
-    // Wait for all threads to completimage.pnge
-    for (auto& thread : threads) {
-        thread.Join();
-    }
-
-    // Print all results for each array
-    for (size_t i = 0; i < worker_results.size(); ++i) {
-        std::cout << "Worker " << i << " results: ";
-        for (const auto& result : worker_results[i]) {
-            std::cout << result << " ";
+    // Collect results
+    for (auto& future : futures) {
+        try {
+            auto results = future.get();
+            worker_results.push_back(std::move(results));
+        } catch (const std::exception& e) {
+            spdlog::error("Worker error: {}", e.what());
         }
-        std::cout << std::endl;
     }
 
-    // Now worker_results contains all the results from each worker
-    // TODO: Process or combine results as needed
+    // Aggregate all results
+    std::vector<uint32_t> all_results;
+    for (const auto& results : worker_results) {
+        all_results.insert(all_results.end(), results.begin(), results.end());
+    }
+
+    // Sort and remove duplicates (unneeded imo as diff shards)
+    // std::sort(all_results.begin(), all_results.end());
+    // auto last = std::unique(all_results.begin(), all_results.end());
+    // all_results.erase(last, all_results.end());
+
+    spdlog::info("Aggregated {} results from {} workers", all_results.size(), worker_results.size());
+
+    return all_results;
 }
 
-void mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
-                                                       std::vector<uint32_t>& results,
-                                                       const std::string& query) {
+std::vector<uint32_t> mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
+                                                                        const std::string& query) {
 
-    int client_fd = create_client_sockfd(server_config.ip.c_str(), server_config.port);
-    if (client_fd == -1) {
-        throw std::runtime_error("Failed to create client socket");
+    std::vector<uint32_t> results;
+
+    try {
+        int client_fd = create_client_sockfd(server_config.ip.c_str(), server_config.port);
+        if (client_fd == -1) {
+            throw std::runtime_error("Failed to create client socket");
+        }
+
+        // Binary protocol
+        // 1. Send query length
+        uint32_t query_length = query.length();
+        send(client_fd, &query_length, sizeof(uint32_t), 0);
+
+        // 2. Send query string
+        send(client_fd, query.c_str(), query_length, 0);
+
+        // 3. Receive result count
+        uint32_t result_count = 0;
+        ssize_t bytes_read = recv(client_fd, &result_count, sizeof(uint32_t), MSG_WAITALL);
+
+        if (bytes_read != sizeof(uint32_t)) {
+            throw std::runtime_error("Failed to read result count");
+        }
+
+        // 4. Receive document IDs
+        if (result_count > 0) {
+            results.resize(result_count);
+            bytes_read = recv(client_fd, results.data(), result_count * sizeof(uint32_t), MSG_WAITALL);
+
+            if (bytes_read != result_count * sizeof(uint32_t)) {
+                throw std::runtime_error("Failed to read full results");
+            }
+        }
+
+        close(client_fd);
+
+        spdlog::info("Received {} results from worker at {}:{}", result_count, server_config.ip, server_config.port);
+    } catch (const std::exception& e) {
+        spdlog::error("Error communicating with worker at {}:{}: {}", server_config.ip, server_config.port, e.what());
     }
 
-    send_message(client_fd, query);
-    Receive data(client_fd);
-    std::string response = data.data;
-    std::cout << "Received response from worker: " << response << std::endl;
+    return results;
 }

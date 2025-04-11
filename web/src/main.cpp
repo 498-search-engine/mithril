@@ -1,7 +1,9 @@
+#include "SearchPlugin.h"
 #include "Server.h"
 
 #include <atomic>
 #include <csignal>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -19,32 +21,53 @@ void signal_handler(int signal) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <port> <web_root>" << std::endl;
+    if (argc != 5) {
+        std::cerr << "Usage: " << argv[0] << " <port> <web_root> <server_config_path> <index_path>" << std::endl;
         return 1;
     }
 
     try {
         int port = std::stoi(argv[1]);
         std::string web_root = argv[2];
+        std::string server_config_path = argv[3];
+        std::string index_path = argv[4];
 
         // Initialize logging
         spdlog::set_level(spdlog::level::info);
-        spdlog::info("Starting mithril web");
+        spdlog::info("Starting mithril web server on port {}", port);
+        spdlog::info("Web root: {}", web_root);
+        spdlog::info("Server config: {}", server_config_path);
+        spdlog::info("Index path: {}", index_path);
 
-        // Register signal handlers
+        // Check paths exist
+        if (!std::filesystem::exists(web_root)) {
+            spdlog::error("Web root directory doesn't exist: {}", web_root);
+            return 1;
+        }
+
+        // Create and init search plugin with both paths
+        auto search_plugin = new SearchPlugin(server_config_path, index_path);
+        mithril::Plugin = search_plugin;
+        spdlog::info("Search plugin initialized");
+
         std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
+        spdlog::info("Signal handlers registered");
 
         // Create HTTP server
         mithril::HttpServer server(port, web_root);
         server_ptr = &server;
 
         // Run the server in a separate thread so we can monitor for shutdown
+        spdlog::info("Starting HTTP server...");
         std::thread server_thread([&server]() { server.Run(); });
 
         // Wait for the server thread to finish (after Stop() is called from signal handler)
         server_thread.join();
+
+        // Clean up resources
+        delete search_plugin;
+        mithril::Plugin = nullptr;
 
         spdlog::info("Server shutdown complete");
         return 0;

@@ -10,6 +10,7 @@ target_link_libraries(query PUBLIC
     spdlog::spdlog
     lib::core
     common
+    index
 )
 
 # Main applications
@@ -24,7 +25,6 @@ target_link_libraries(mithril_worker PRIVATE query index)
 # Test executables
 set(TEST_LIBS
     query
-    GTest::gtest
     GTest::gtest_main
 )
 

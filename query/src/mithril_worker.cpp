@@ -4,9 +4,7 @@
 
 #include <iostream>
 #include <string>
-
-
-constexpr int BUFFER_SIZE = 1024;
+#include <spdlog/spdlog.h>
 
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " --index PATH --port PORT" << std::endl;
@@ -15,11 +13,58 @@ void printUsage(const char* programName) {
     std::cout << "  --port PORT     Set the server port to listen on (required)" << std::endl;
 }
 
+void handle_binary_query(int client_fd, QueryEngine& query_engine) {
+    try {
+        // 1. Receive query length
+        uint32_t query_length = 0;
+        ssize_t bytes_read = recv(client_fd, &query_length, sizeof(uint32_t), MSG_WAITALL);
+
+        if (bytes_read != sizeof(uint32_t)) {
+            spdlog::error("Failed to read query length, received {} bytes", bytes_read);
+            uint32_t result_count = 0;
+            send(client_fd, &result_count, sizeof(uint32_t), 0);
+            return;
+        }
+
+        // 2. Receive query string
+        std::vector<char> query_buffer(query_length + 1, 0);
+        bytes_read = recv(client_fd, query_buffer.data(), query_length, MSG_WAITALL);
+
+        if (bytes_read != query_length) {
+            spdlog::error("Failed to read query, expected {} bytes but got {}", query_length, bytes_read);
+            uint32_t result_count = 0;
+            send(client_fd, &result_count, sizeof(uint32_t), 0);
+            return;
+        }
+
+        std::string query(query_buffer.data(), query_length);
+        spdlog::info("Received binary query: '{}'", query);
+
+        // 3. Execute query
+        auto results = query_engine.EvaluateQuery(query);
+
+        // 4. Send result count
+        uint32_t result_count = results.size();
+        send(client_fd, &result_count, sizeof(uint32_t), 0);
+
+        // 5. Send results
+        if (result_count > 0) {
+            send(client_fd, results.data(), result_count * sizeof(uint32_t), 0);
+        }
+
+        spdlog::info("Sent {} results back to client", result_count);
+    } catch (const std::exception& e) {
+        spdlog::error("Error handling binary query: {}", e.what());
+        uint32_t result_count = 0;
+        send(client_fd, &result_count, sizeof(uint32_t), 0);
+    }
+}
+
 int main(int argc, char* argv[]) {
     std::string indexPath;
     int port = 0;
 
-    // Parse command line arguments
+    // Parse cli
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
 
@@ -57,31 +102,13 @@ int main(int argc, char* argv[]) {
         socklen_t client_len = sizeof(client_addr);
 
         int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
-        std::cout << "Accepted a child connection\n";
+        std::cout << "Accepted a client connection\n";
         if (client_fd < 0) {
             std::cerr << "Failed to accept connection." << std::endl;
             continue;
         }
 
-        Receive data(client_fd);
-
-        // This code runs the query on one index
-        if (data.data.size() > 0) {
-            std::cout << "Received message: " << data.data << std::endl;
-
-            auto tree = queryEngine.ParseQuery(data.data);
-            std::cout << "Query tree: " << tree->to_string() << std::endl;
-            auto query = queryEngine.EvaluateQuery(data.data);
-            queryEngine.DisplayResults(query, 10);
-
-            std::cout << "Query evaluated successfully." << std::endl
-                      << "--------------------" << std::endl
-                      << std::endl;
-
-            std::string response = "Valid Query and successfully evaluated \n";
-            write(client_fd, response.c_str(), response.size());
-        }
-
+        handle_binary_query(client_fd, queryEngine);
         close(client_fd);
     }
 

@@ -157,3 +157,30 @@ footer {
   color: #6b7280;
   font-style: italic;
 }
+
+.demo-indicator {
+  display: inline-block;
+  background-color: #eab308;
+  color: #ffffff;
+  font-size: 0.7em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 10px;
+}
+
+.error {
+  background-color: #fee2e2;
+  border-left: 4px solid #ef4444;
+  padding: 15px;
+  margin: 20px 0;
+  border-radius: 3px;
+  color: #b91c1c;
+}
+
+.no-results {
+  background-color: #f3f4f6;
+  padding: 20px;
+  text-align: center;
+  border-radius: 5px;
+  color: #6b7280;
+}
