@@ -12,140 +12,40 @@ target_link_libraries(query PUBLIC
     common
 )
 
-add_executable(mithril_lexer
-    src/main.cpp
-)
-target_link_libraries(mithril_lexer PRIVATE
-    spdlog::spdlog
-    query
-)
+# Main applications
+add_executable_with_copy(mithril_lexer src/main.cpp)
+add_executable_with_copy(mithril_coordinator src/mithril_coordinator.cpp)
+add_executable_with_copy(mithril_worker src/mithril_worker.cpp)
 
+target_link_libraries(mithril_lexer PRIVATE query)
+target_link_libraries(mithril_coordinator PRIVATE query)
+target_link_libraries(mithril_worker PRIVATE query index)
 
-add_executable(mithril_coordinator
-    src/mithril_coordinator.cpp
-)
-target_link_libraries(mithril_coordinator PRIVATE
-    spdlog::spdlog
-    query
-)
-
-
-add_executable(mithril_worker
-    src/mithril_worker.cpp
-)
-target_link_libraries(mithril_worker PRIVATE
-    spdlog::spdlog
-    query
-    index
-)
-
-# Add test executable
-add_executable(test_lexer
-    tests/test_lexer.cpp
-)
-target_link_libraries(test_lexer PRIVATE
+# Test executables
+set(TEST_LIBS
     query
     GTest::gtest
     GTest::gtest_main
 )
 
-# Add test executable
-add_executable(test_query
-    tests/test_query.cpp
-)
-target_link_libraries(test_query PRIVATE
-    query
-    GTest::gtest
-    GTest::gtest_main
-    index
-)
+add_executable(test_lexer tests/test_lexer.cpp)
+add_executable(test_query tests/test_query.cpp)
+add_executable(parser_driver tests/parser_driver.cpp)
+add_executable(manager_driver tests/manager_driver.cpp)
+add_executable(lexer_driver tests/lexer_driver.cpp)
+add_executable(query_driver tests/query_driver.cpp)
+add_executable(and_test tests/and_test.cpp)
+add_executable(or_test tests/or_test.cpp)
 
-# Add test executable
-add_executable(parser_driver
-    tests/parser_driver.cpp
-)
-target_link_libraries(parser_driver PRIVATE
-    query
-    index
-)
+# Test targets linking
+target_link_libraries(test_lexer PRIVATE ${TEST_LIBS})
+target_link_libraries(test_query PRIVATE ${TEST_LIBS} index)
+target_link_libraries(parser_driver PRIVATE query index)
+target_link_libraries(manager_driver PRIVATE query index)
+target_link_libraries(lexer_driver PRIVATE query)
+target_link_libraries(query_driver PRIVATE query index)
+target_link_libraries(and_test PRIVATE query index common)
+target_link_libraries(or_test PRIVATE query index common)
 
-# Add test executable
-add_executable(manager_driver
-    tests/manager_driver.cpp
-)
-target_link_libraries(manager_driver PRIVATE
-    query
-    spdlog::spdlog
-    index
-)
-
-
-# Add lexer driver executable
-add_executable(lexer_driver
-    tests/lexer_driver.cpp
-)
-target_link_libraries(lexer_driver PRIVATE
-    query
-)
-
-
-# Add query driver executable
-add_executable(query_driver
-    tests/query_driver.cpp
-)
-target_link_libraries(query_driver PRIVATE
-    query
-    index
-)
-
-# Add query driver executable
-add_executable(and_test
-    tests/and_test.cpp
-)
-target_link_libraries(and_test PRIVATE
-    query
-    index
-    common
-)
-
-# Add query driver executable
-add_executable(or_test
-    tests/or_test.cpp
-)
-target_link_libraries(or_test PRIVATE
-    query
-    index
-    common
-)
-
-
-
-# Register the test
+# Tests registration
 add_test(NAME LexerTest COMMAND test_lexer)
-
-# add_executable(index_debug
-#     src/debugPrintIndex.cpp
-# )
-# target_link_libraries(index_debug PRIVATE
-#     index
-# )
-
-# add_executable(test_docReader
-#     src/test_docReader.cpp
-# )
-# target_link_libraries(test_docReader PRIVATE
-#     index
-# )
-
-# add_executable(test_termReader
-#     src/test_termReader.cpp
-# )
-# target_link_libraries(test_termReader PRIVATE
-#     index
-# )
-
-# add_executable(test_termOR src/test_termOR.cpp)
-# target_link_libraries(test_termOR PRIVATE index)
-
-# add_executable(test_termAND src/test_termAND.cpp)
-# target_link_libraries(test_termAND PRIVATE index)

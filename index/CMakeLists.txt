@@ -19,42 +19,28 @@ target_link_libraries(index PUBLIC
     common
 )
 
-add_executable_with_copy(mithril_indexer
-    src/main.cpp
-)
-target_link_libraries(mithril_indexer PRIVATE
-    index
-)
+# Main application 
+add_executable_with_copy(mithril_indexer src/main.cpp)
+target_link_libraries(mithril_indexer PRIVATE index)
 
-# add_executable_with_copy(index_debug
+# Test executables
+add_executable(test_docReader tests/test_docReader.cpp)
+add_executable(test_termReader tests/test_termReader.cpp)
+add_executable(test_termOR tests/test_termOR.cpp)
+add_executable(test_termAND tests/test_termAND.cpp)
+add_executable(test_termQuote tests/test_termQuote.cpp)
+add_executable(test_termPhrase tests/test_termPhrase.cpp)
+
+# Test targets linking
+target_link_libraries(test_docReader PRIVATE index)
+target_link_libraries(test_termReader PRIVATE index)
+target_link_libraries(test_termOR PRIVATE index)
+target_link_libraries(test_termAND PRIVATE index)
+target_link_libraries(test_termQuote PRIVATE index)
+target_link_libraries(test_termPhrase PRIVATE index)
+
+
+# add_executable(index_debug
 #     src/debugPrintIndex.cpp
 # )
-# target_link_libraries(index_debug PRIVATE
-#     index
-# )
-
-add_executable_with_copy(test_docReader
-    src/test_docReader.cpp
-)
-target_link_libraries(test_docReader PRIVATE
-    index
-)
-
-add_executable_with_copy(test_termReader
-    src/test_termReader.cpp
-)
-target_link_libraries(test_termReader PRIVATE
-    index
-)
-
-add_executable_with_copy(test_termOR src/test_termOR.cpp)
-target_link_libraries(test_termOR PRIVATE index)
-
-add_executable_with_copy(test_termAND src/test_termAND.cpp)
-target_link_libraries(test_termAND PRIVATE index)
-
-add_executable(test_termQuote src/test_termQuote.cpp)
-target_link_libraries(test_termQuote PRIVATE index)
-
-add_executable(test_termPhrase src/test_termPhrase.cpp)
-target_link_libraries(test_termPhrase PRIVATE index)
+# target_link_libraries(index_debug PRIVATE index)
