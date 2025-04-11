@@ -213,7 +213,7 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
             spdlog::info("Executing local query: '{}'", query_text);
 
             auto results = query_manager_->AnswerQuery(query_text);
-            size_t num_results = std::min(doc_ids.size(), static_cast<size_t>(max_results));
+            size_t num_results = std::min(results.size(), static_cast<size_t>(max_results));
 
             // TODO: account for ranking
             std::vector<uint32_t> doc_ids;
