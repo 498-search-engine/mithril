@@ -56,7 +56,7 @@ public:
 
 private:
     void WorkerThread(size_t worker_id);
-    QueryResult HandleRanking(const std::string& query, std::vector<uint32_t>& matches);
+    QueryResult HandleRanking(const std::string& query, size_t worker_id, std::vector<uint32_t>& matches);
 
     std::vector<std::thread> threads_;
     std::vector<QueryResult> marginal_results_;

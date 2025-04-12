@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <future>
+#include <string>
 #include <spdlog/spdlog.h>
 
 using namespace std::chrono_literals;
@@ -215,15 +217,7 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
             auto results = query_manager_->AnswerQuery(query_text);
             size_t num_results = std::min(results.size(), static_cast<size_t>(max_results));
 
-            // TODO: account for ranking
-            std::vector<uint32_t> doc_ids;
-            doc_ids.resize(results.size());
-
-            for (auto& result : results) {
-                doc_ids.push_back(result.first);
-            }
-
-            json = GenerateJsonResults(doc_ids, num_results, false);
+            json = GenerateJsonResults(results, num_results, false);
             return json;
         }
 
@@ -264,7 +258,7 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
     }
 }
 
-std::string SearchPlugin::GenerateJsonResults(const std::vector<uint32_t>& doc_ids,
+std::string SearchPlugin::GenerateJsonResults(const std::vector<std::pair<uint32_t, uint32_t>>& doc_ids,
                                               size_t num_results,
                                               bool demo_mode,
                                               const std::string& error) {
@@ -274,7 +268,8 @@ std::string SearchPlugin::GenerateJsonResults(const std::vector<uint32_t>& doc_i
     json = "{\"results\":[";
 
     for (size_t i = 0; i < num_results; i++) {
-        uint32_t doc_id = doc_ids[i];
+        uint32_t doc_id = doc_ids[i].first;
+        uint32_t score = doc_ids[i].second;
 
         if (i > 0)
             json += ",";
@@ -291,7 +286,8 @@ std::string SearchPlugin::GenerateJsonResults(const std::vector<uint32_t>& doc_i
                 std::string title = FormatDocumentTitle(doc_opt->title);
                 json += ",\"title\":\"" + EscapeJsonString(SanitizeText(title)) + "\"";
 
-                json += ",\"snippet\":\"Document #" + std::to_string(doc_id) + "\"";
+                json +=
+                    ",\"snippet\":\"Document #" + std::to_string(doc_id) + ", Score: " + std::to_string(score) + "\"";
             } else {
                 json += ",\"url\":\"http://example.com/doc/" + std::to_string(doc_id) + "\"";
                 json += ",\"title\":\"Document " + std::to_string(doc_id) + "\"";
@@ -320,6 +316,18 @@ std::string SearchPlugin::GenerateJsonResults(const std::vector<uint32_t>& doc_i
 
     json += "}";
     return json;
+}
+
+std::string SearchPlugin::GenerateJsonResults(const std::vector<uint32_t>& doc_ids,
+                                              size_t num_results,
+                                              bool demo_mode,
+                                              const std::string& error) {
+    std::vector<std::pair<uint32_t, uint32_t>> doc_id_pairs;
+    for (size_t i = 0; i < num_results; ++i) {
+        doc_id_pairs.push_back({doc_ids[i], 0});
+    }
+
+    return GenerateJsonResults(doc_id_pairs, num_results, demo_mode, error);
 }
 
 std::string SearchPlugin::EscapeJsonString(const std::string& input) {

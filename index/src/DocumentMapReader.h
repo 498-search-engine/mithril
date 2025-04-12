@@ -53,6 +53,7 @@ public:
     // utils func
     size_t documentCount() const { return doc_count_; }
     const std::vector<DocInfo>& getDocInfos() const { return doc_infos_; }
+    const DocInfo& getDocInfo(data::docid_t id) const { return doc_infos_[id_to_index_.at(id)]; }
 
 private:
     std::vector<DocInfo> doc_infos_;

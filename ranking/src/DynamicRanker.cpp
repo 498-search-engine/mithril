@@ -56,7 +56,7 @@ void Log(const RankerFeatures& features, float total) {
 }
 };  // namespace
 
-float GetUrlDynamicRank(const RankerFeatures& features) {
+uint32_t GetUrlDynamicRank(const RankerFeatures& features) {
     float score = 0.0F;
 
     // Content relevance features
@@ -88,6 +88,6 @@ float GetUrlDynamicRank(const RankerFeatures& features) {
         Log(features, score);
     }
 
-    return (score - MinScore) / ScoreRange;
+    return static_cast<uint32_t>(((score - MinScore) / ScoreRange) * 10000);
 }
 }  // namespace mithril::ranking::dynamic

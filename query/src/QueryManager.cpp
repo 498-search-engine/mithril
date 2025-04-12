@@ -1,8 +1,12 @@
 #include "QueryManager.h"
 
+#include "DynamicRanker.h"
+#include "StaticRanker.h"
+
 #include <algorithm>
 #include <mutex>
 #include <string>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -58,8 +62,14 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     QueryResult_t aggregated;
     for (const auto& marginal : marginal_results_)
         aggregated.insert(aggregated.end(), marginal.begin(), marginal.end());
-    std::sort(aggregated.begin(), aggregated.end());
+    std::sort(aggregated.begin(), aggregated.end(), [](const auto& a, const auto& b) {
+        if (a.second != b.second) {
+            return a.second > b.second;
+        }
+        return a.first > b.first;
+    });
 
+    spdlog::info("Returning results of size: {}", aggregated.size());
     return aggregated;
 }
 
@@ -77,7 +87,8 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
-        QueryResult_t result_ranked = HandleRanking(query_to_run, result);
+
+        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, result);
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
@@ -93,12 +104,28 @@ void QueryManager::WorkerThread(size_t worker_id) {
     }
 }
 
-QueryResult_t QueryManager::HandleRanking(const std::string& query, std::vector<uint32_t>& matches) {
+QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worker_id, std::vector<uint32_t>& matches) {
     QueryResult_t ranked_matches;
     ranked_matches.reserve(matches.size());
 
+    auto& query_engine = query_engines_[worker_id];
+
     for (uint32_t match : matches) {
-        ranked_matches.push_back({match, 0});  // TODO: replace 0 with actual score
+        const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
+        if (!doc_opt.has_value()) {
+            ranked_matches.push_back({match, 0});
+            continue;
+        }
+        const data::Document& doc = doc_opt.value();
+        const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
+
+        ranking::dynamic::RankerFeatures features{
+            .static_rank = static_cast<float>(ranking::GetUrlStaticRank(doc.url)),
+            .pagerank = docInfo.pagerank_score,
+        };
+
+        float score = ranking::dynamic::GetUrlDynamicRank(features);
+        ranked_matches.push_back({match, score});  // TODO: replace 0 with actual score
     }
 
     return ranked_matches;

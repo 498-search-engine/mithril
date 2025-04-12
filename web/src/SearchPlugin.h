@@ -46,6 +46,13 @@ private:
     std::mutex cache_mutex_;
 
     std::string ExecuteQuery(const std::string& query_text, int max_results = 50);
+    std::string GenerateJsonResults(const std::vector<std::pair<uint32_t, uint32_t>>& doc_ids,
+                                    size_t num_results,
+                                    bool demo_mode,
+                                    const std::string& error = "");
+    /**
+     * @deprecated does not account for ranking
+     */
     std::string GenerateJsonResults(const std::vector<uint32_t>& doc_ids,
                                     size_t num_results,
                                     bool demo_mode,

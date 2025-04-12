@@ -65,7 +65,7 @@ static inline const float MaxScore =
     Weights.static_rank + Weights.pagerank;
 static inline const float ScoreRange = MaxScore - MinScore;
 
-float GetUrlDynamicRank(const RankerFeatures& features);
+uint32_t GetUrlDynamicRank(const RankerFeatures& features);
 
 };  // namespace mithril::ranking::dynamic
 #endif
