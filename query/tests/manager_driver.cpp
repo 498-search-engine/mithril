@@ -1,15 +1,15 @@
 #include "QueryManager.h"
 
-#include <spdlog/spdlog.h>
+#include <iostream>
 #include <string>
 #include <vector>
-#include <iostream>
+#include <spdlog/spdlog.h>
 
 int main(int argc, char** argv) {
     // Configure logging
     spdlog::set_pattern("[%H:%M:%S.%e] [%^%l%$] %v");
     spdlog::set_level(spdlog::level::info);
-    
+
     // Check command line arguments
     if (argc == 1) {
         spdlog::error("Usage: {} <index_path> |", argv[0]);
@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
         auto result = qm.AnswerQuery(query);
         spdlog::info("Found {} matches", result.size());
         if (result.size() > 0) {
-            std::cout << "Best: doc " << result[0] << "\n\n";
+            std::cout << "Best: doc " << result[0].first << " with score " << result[0].second << "\n\n";
         }
     }
 

@@ -5,12 +5,16 @@ add_library(query STATIC
     src/QueryCoordinator.cpp
     src/QueryManager.cpp
 )
-target_include_directories(query PUBLIC src)
+target_include_directories(query PUBLIC 
+    src
+    ${CMAKE_SOURCE_DIR}/ranking/src
+)
 target_link_libraries(query PUBLIC
     spdlog::spdlog
     lib::core
     common
     index
+    ranking
 )
 
 # Main applications

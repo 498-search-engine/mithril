@@ -11,5 +11,5 @@ target_link_libraries(web PUBLIC
     pthread
 )
 
-add_executable(mithril_server src/main.cpp)
+add_executable_with_copy(mithril_server src/main.cpp)
 target_link_libraries(mithril_server web)

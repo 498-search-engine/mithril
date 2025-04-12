@@ -64,6 +64,7 @@ public:
     }
 
     std::optional<data::Document> GetDocument(uint32_t doc_id) const { return map_reader_.getDocument(doc_id); }
+    DocInfo GetDocumentInfo(uint32_t doc_id) const { return map_reader_.getDocInfo(doc_id); }
 
 private:
     mithril::DocumentMapReader map_reader_;
