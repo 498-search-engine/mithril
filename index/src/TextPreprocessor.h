@@ -135,11 +135,6 @@ public:
                 return "";  // Filter out stopwords in body text
             }
 
-            if ((field == FieldType::TITLE || field == FieldType::ANCHOR) && StopwordFilter::isStopword(processed) &&
-                processed.length() <= 3) {
-                return "";  // Only filter very short stopwords in titles
-            }
-
             return decorateToken(processed, field);
         }
         return "";

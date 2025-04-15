@@ -13,6 +13,8 @@
 
 namespace mithril {
 
+using TermPositions = std::vector<std::pair<uint32_t, std::pair<uint8_t, std::vector<uint16_t>>>>;
+
 struct PositionMetadata {
     uint64_t data_offset;
     uint32_t doc_count;
@@ -66,10 +68,14 @@ private:
     static std::unordered_map<std::string, std::vector<PositionEntry>> position_buffer_;
     static size_t buffer_size_;
     static int buffer_counter_;
-    static constexpr size_t MAX_BUFFER_SIZE = 512 * 1024 * 1024;
+    static constexpr size_t MAX_BUFFER_SIZE = 128 * 1024 * 1024;
 
     static void flushBuffer(const std::string& output_dir);
     static void mergePositionBuffers(const std::string& output_dir);
+    static bool writeTerm(const std::string& term,
+                          const TermPositions& docs_positions,
+                          std::ofstream& data_out,
+                          std::ofstream& posDict_out);
 };
 
 }  // namespace mithril
