@@ -110,10 +110,10 @@ int main(int argc, char* argv[]) {
 
         size_t processed = 0;
         auto start_time = std::chrono::steady_clock::now();
-
+	std::filesystem::directory_options options = std::filesystem::directory_options::follow_directory_symlink;
         // in the future for xM docs and multiple chunks i could also opt this more to build index per chunk, so one
         // more layer of merging ig
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(input_dir)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(input_dir, options)) {
             if (shutdown_requested) {
                 spdlog::warn("\nShutdown requested. Cleaning up...");
                 break;
@@ -122,7 +122,6 @@ int main(int argc, char* argv[]) {
             if (!entry.is_regular_file()) {
                 continue;  // skip chunk dir
             }
-
             try {
                 builder.add_document(entry.path().string());
                 processed++;

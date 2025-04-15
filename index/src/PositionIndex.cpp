@@ -117,7 +117,7 @@ bool PositionIndex::shouldStorePositions(const std::string& term, uint32_t freq,
     }
 
     // 4. Minimum usefulness threshold
-    return (freq >= 2);
+    return (freq > 2);
 }
 
 void PositionIndex::flushBuffer(const std::string& output_dir) {
