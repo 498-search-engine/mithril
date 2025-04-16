@@ -43,8 +43,6 @@ std::string GetLinkDomain(const std::string& link) {
 namespace mithril::pagerank {
 core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode =
     core::UniquePtr<std::unordered_map<std::string, int>>(new std::unordered_map<std::string, int>());
-core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink =
-    core::UniquePtr<std::unordered_map<int, std::string>>(new std::unordered_map<int, std::string>());
 core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections =
     core::UniquePtr<std::unordered_map<int, std::vector<int>>>(new std::unordered_map<int, std::vector<int>>());
 core::UniquePtr<std::unordered_map<int, PagerankDocument>> NodeToDocument =
@@ -72,7 +70,6 @@ int GetLinkNode(const std::string& link) {
     if (it == LinkToNode->end()) {
         nodeNo = Nodes;
         (*LinkToNode)[processedLink] = nodeNo;
-        (*NodeToLink)[nodeNo] = processedLink;
         Nodes++;
     } else {
         nodeNo = it->second;
@@ -159,8 +156,6 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
 }
 
 void PerformPageRank(const std::string& inputDirectory) {
-    std::unordered_map<std::string, data::docid_t> linkToNode;
-
     spdlog::info("Starting page rank...");
 
     auto start = std::chrono::steady_clock::now();
@@ -200,6 +195,8 @@ void PerformPageRank(const std::string& inputDirectory) {
 
             DocumentCount++;
         }
+
+        DocumentToNode->reserve(DocumentCount);
 
         size_t processed = 0;
         for (const auto& path : documentPaths) {
@@ -242,6 +239,8 @@ void PerformPageRank(const std::string& inputDirectory) {
                              processDuration);
             }
         }
+
+        LinkToNode.Reset(nullptr);
     }
 
     auto end = std::chrono::steady_clock::now();
@@ -270,6 +269,8 @@ void PerformPageRank(const std::string& inputDirectory) {
 
         outDegree[node] = static_cast<float>(value.size());
     }
+
+    NodeConnections.Reset(nullptr);
 
     m.Finalize();
 
@@ -309,9 +310,6 @@ void PerformPageRank(const std::string& inputDirectory) {
 }
 
 void Cleanup() {
-    LinkToNode.Reset(nullptr);
-    NodeToLink.Reset(nullptr);
-    NodeConnections.Reset(nullptr);
     NodeToDocument.Reset(nullptr);
     DocumentToNode.Reset(nullptr);
     Results.Reset(nullptr);
