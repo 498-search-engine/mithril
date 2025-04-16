@@ -2,6 +2,7 @@
 
 #include "core/config.h"
 
+#include <stdexcept>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
@@ -38,6 +39,13 @@ PageRankReader::~PageRankReader() {
 }
 
 float PageRankReader::GetDocumentPageRank(data::docid_t docid) {
+    if (docid < start) {
+        throw std::runtime_error("bad pagerank docid: " + std::to_string(docid));
+    }
+    if (docid >= start + size_) {
+        throw std::runtime_error("bad pagerank docid: " + std::to_string(docid));
+    }
+
     char* data = (reinterpret_cast<char*>(map_) + 4) + ((docid - start) * sizeof(float));
 
     float bytes;
