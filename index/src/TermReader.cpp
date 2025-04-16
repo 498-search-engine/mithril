@@ -7,8 +7,11 @@
 
 namespace mithril {
 
-TermReader::TermReader(const std::string& index_path, const std::string& term, TermDictionary& term_dict)
-    : term_dict_(term_dict), term_(term), index_path_(index_path + "/final_index.data"), index_dir_(index_path) {
+TermReader::TermReader(const std::string& index_path, const std::string& term,
+                       TermDictionary& term_dict, PositionIndex& position_index)
+    : term_dict_(term_dict), term_(term), index_path_(index_path + "/final_index.data"),
+      index_dir_(index_path), position_index_(position_index)
+{
 
     // Open the index file
     index_file_.open(index_path_, std::ios::binary);
@@ -211,28 +214,15 @@ bool TermReader::hasPositions() const {
         return false;
     }
 
-    if (!position_index_) {
-        // // Extract just the dir part of the index path
-        // std::string index_dir = index_path_;
-        // size_t last_slash = index_dir.find_last_of("/\\");
-        // if (last_slash != std::string::npos) {
-        //     index_dir = index_dir.substr(0, last_slash);
-        // }
-
-        position_index_ = std::make_shared<PositionIndex>(index_dir_);
-    }
-
-    return position_index_->hasPositions(term_, currentDocID());
+    return position_index_.hasPositions(term_, currentDocID());
 }
 
 std::vector<uint16_t> TermReader::currentPositions() const {
     if (!found_term_ || at_end_) {
         return {};
     }
-    if (!position_index_) {
-        position_index_ = std::make_shared<PositionIndex>(index_dir_);
-    }
-    return position_index_->getPositions(term_, currentDocID());
+
+    return position_index_.getPositions(term_, currentDocID());
 }
 
 double TermReader::getAverageFrequency() const {
