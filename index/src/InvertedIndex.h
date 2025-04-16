@@ -81,7 +81,7 @@ public:
 
 private:
     // Page rank reader
-    // pagerank::PageRankReader pagerank_reader_;
+    pagerank::PageRankReader pagerank_reader_;
 
     // Doc Metadata Storage
     std::vector<DocumentMetadata> document_metadata_;
