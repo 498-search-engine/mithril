@@ -43,8 +43,8 @@ std::string GetLinkDomain(const std::string& link) {
 namespace mithril::pagerank {
 core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode =
     core::UniquePtr<std::unordered_map<std::string, int>>(new std::unordered_map<std::string, int>());
-core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections =
-    core::UniquePtr<std::unordered_map<int, std::vector<int>>>(new std::unordered_map<int, std::vector<int>>());
+core::UniquePtr<std::vector<std::vector<int>>> NodeConnections =
+    core::UniquePtr<std::vector<std::vector<int>>>(new std::vector<std::vector<int>>);
 core::UniquePtr<std::unordered_map<int, PagerankDocument>> NodeToDocument =
     core::UniquePtr<std::unordered_map<int, PagerankDocument>>(new std::unordered_map<int, PagerankDocument>());
 core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode =
@@ -70,6 +70,7 @@ int GetLinkNode(const std::string& link) {
     if (it == LinkToNode->end()) {
         nodeNo = Nodes;
         (*LinkToNode)[processedLink] = nodeNo;
+        NodeConnections->push_back(std::vector<int>());
         Nodes++;
     } else {
         nodeNo = it->second;
@@ -211,11 +212,12 @@ void PerformPageRank(const std::string& inputDirectory) {
                 }
 
                 int fromNode = GetLinkNode(doc.url);
-                auto& vec = (*NodeConnections)[fromNode];
 
                 for (const std::string& link : doc.forwardLinks) {
-                    vec.push_back(GetLinkNode(link));
+                    int newNode = GetLinkNode(link);
+                    (*NodeConnections)[fromNode].push_back(newNode);
                 }
+                (*NodeConnections)[fromNode].shrink_to_fit();
 
                 (*DocumentToNode)[doc.id] = fromNode;
                 (*NodeToDocument)[fromNode] = PagerankDocument{
@@ -252,7 +254,7 @@ void PerformPageRank(const std::string& inputDirectory) {
 
     // Build CSR Matrix from the above data.
     // This tolerance is dynamic based on number of nodes.
-    const float tol = 1.0 / Nodes;
+    const float tol = 1.0F / static_cast<float>(Nodes);
     spdlog::info("Building CSR Matrix with tolerance {:e}...", tol);
 
     start = std::chrono::steady_clock::now();
@@ -261,7 +263,8 @@ void PerformPageRank(const std::string& inputDirectory) {
     std::vector<float> outDegree(Nodes, 0.0);
 
     size_t edges = 0;
-    for (auto& [node, value] : *NodeConnections) {
+    for (int node = 0; node < Nodes; ++node) {
+        const auto& value = (*NodeConnections)[node];
         for (auto target : value) {
             m.AddEdge(target, node, 1.0);
             edges++;
@@ -269,6 +272,14 @@ void PerformPageRank(const std::string& inputDirectory) {
 
         outDegree[node] = static_cast<float>(value.size());
     }
+    // for (auto& [node, value] : *NodeConnections) {
+    //     for (auto target : value) {
+    //         m.AddEdge(target, node, 1.0);
+    //         edges++;
+    //     }
+
+    //     outDegree[node] = static_cast<float>(value.size());
+    // }
 
     NodeConnections.Reset(nullptr);
 

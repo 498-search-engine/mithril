@@ -50,7 +50,7 @@ void Cleanup();
     unique pointers so memory can be completely freed once this is no longer needed
 */
 extern core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode;
-extern core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections;
+extern core::UniquePtr<std::vector<std::vector<int>>> NodeConnections;
 extern core::UniquePtr<std::unordered_map<int, PagerankDocument>> NodeToDocument;
 extern core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode;
 extern core::UniquePtr<std::vector<float>> Results;
