@@ -99,6 +99,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - added command line option for specifying directory for `./pagerank_sim` (#124)
 - index housekeeping to improve perf (now 100k in 40s), use sync points, termAnd improve (#125)
 - fix compile issue on VM, use globalstopwords dict (does give some postnsize idx decrease), lib compile bug fix (#126)
+- reduce pagerank memory usage (#133)
 
 ## [0.1.0] - 2025-02-07
 

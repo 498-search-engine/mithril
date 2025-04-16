@@ -43,19 +43,18 @@ std::string GetLinkDomain(const std::string& link) {
 namespace mithril::pagerank {
 core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode =
     core::UniquePtr<std::unordered_map<std::string, int>>(new std::unordered_map<std::string, int>());
-core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink =
-    core::UniquePtr<std::unordered_map<int, std::string>>(new std::unordered_map<int, std::string>());
-core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections =
-    core::UniquePtr<std::unordered_map<int, std::vector<int>>>(new std::unordered_map<int, std::vector<int>>());
-core::UniquePtr<std::unordered_map<int, data::Document>> NodeToDocument =
-    core::UniquePtr<std::unordered_map<int, data::Document>>(new std::unordered_map<int, data::Document>());
+core::UniquePtr<std::vector<std::vector<int>>> NodeConnections =
+    core::UniquePtr<std::vector<std::vector<int>>>(new std::vector<std::vector<int>>);
+core::UniquePtr<std::vector<PagerankDocument>> NodeToDocument =
+    core::UniquePtr<std::vector<PagerankDocument>>(new std::vector<PagerankDocument>());
 core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode =
     core::UniquePtr<std::unordered_map<data::docid_t, int>>(new std::unordered_map<data::docid_t, int>());
-core::UniquePtr<std::vector<double>> Results = core::UniquePtr<std::vector<double>>(new std::vector<double>());
+core::UniquePtr<std::vector<float>> Results = core::UniquePtr<std::vector<float>>(new std::vector<float>());
 core::UniquePtr<std::vector<float>> StandardizedResults = core::UniquePtr<std::vector<float>>(new std::vector<float>());
 
 int Nodes = 0;
 size_t DocumentCount = 0;
+size_t StartDocument = 0;
 
 std::string ProcessLink(const std::string& link) {
 #if USE_DOMAIN_RANK == 1
@@ -66,13 +65,18 @@ std::string ProcessLink(const std::string& link) {
 }
 
 int GetLinkNode(const std::string& link) {
+#if USE_DOMAIN_RANK == 1
     std::string processedLink = ProcessLink(link);
+#else
+    const std::string& processedLink = link;
+#endif
     auto it = LinkToNode->find(processedLink);
     int nodeNo;
     if (it == LinkToNode->end()) {
         nodeNo = Nodes;
         (*LinkToNode)[processedLink] = nodeNo;
-        (*NodeToLink)[nodeNo] = processedLink;
+        NodeConnections->push_back(std::vector<int>());
+        NodeToDocument->push_back(PagerankDocument{});
         Nodes++;
     } else {
         nodeNo = it->second;
@@ -88,7 +92,14 @@ void Write() {
     std::vector<float>& scores = *mithril::pagerank::StandardizedResults;
 
     size_t written = 0;
-    for (size_t i = 0; i < DocumentCount; ++i) {
+
+    size_t writeBegin = StartDocument - DocumentCount;
+    spdlog::info("Starting pagerank write at doc id {}", writeBegin);
+
+    uint32_t initialBytes = htonl(static_cast<uint32_t>(writeBegin));
+    fwrite(&initialBytes, sizeof(initialBytes), 1, f);
+
+    for (size_t i = writeBegin; i < StartDocument; ++i) {
         auto it = DocumentToNode->find(static_cast<data::docid_t>(i));
 
         uint32_t bytes;
@@ -111,18 +122,18 @@ void Write() {
 
 void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     int maxIteration = Config.GetInt("max_iterations");
-    double d = Config.GetDouble("decay_factor");
-    double tol = 1.0 / N;
+    float d = Config.GetFloat("decay_factor");
+    float tol = 1.0F / static_cast<float>(N);
 
-    Results->resize(N, 1.0 / N);
+    Results->resize(N, tol);
     StandardizedResults->resize(N);
 
-    std::vector<double> teleport(N, (1.0 - d) / N);
+    std::vector<float> teleport(N, (1.0F - d) / static_cast<float>(N));
 
     for (int iter = 0; iter < maxIteration; ++iter) {
-        std::vector<double> newR = matrix_.Multiply(*Results);
+        std::vector<float> newR = matrix_.Multiply(*Results);
 
-        double diff = 0.0;
+        float diff = 0.0;
 #pragma omp parallel for reduction(+ : diff)
         for (int i = 0; i < N; ++i) {
             newR[i] = d * newR[i] + teleport[i];
@@ -135,9 +146,9 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
         *Results = newR;
     }
 
-    constexpr double Epsilon = 1e-30;  // Avoid log(0)
+    constexpr float Epsilon = 1e-30;  // Avoid log(0)
 
-    std::vector<double> temp;
+    std::vector<float> temp;
     temp.reserve(N);
     StandardizedResults->resize(N);
 
@@ -147,93 +158,112 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
 
     auto [minit, maxit] = std::minmax_element(temp.begin(), temp.end());
 
-    double min = *minit;
-    double max = *maxit;
-    double range = max - min;
+    float min = *minit;
+    float max = *maxit;
+    float range = max - min;
 
     // Square root twice to spread lower values more
-    constexpr double Power = 0.5 * 0.5;
+    constexpr float Power = 0.5 * 0.5;
     for (int i = 0; i < N; ++i) {
-        (*StandardizedResults)[i] = static_cast<float>(std::pow(((temp[i] - min) / range), Power));
+        (*StandardizedResults)[i] = std::pow(((temp[i] - min) / range), Power);
     }
 }
 
 void PerformPageRank(const std::string& inputDirectory) {
-    std::unordered_map<std::string, data::docid_t> linkToNode;
-
     spdlog::info("Starting page rank...");
 
     auto start = std::chrono::steady_clock::now();
 
-    // Read PageRank info related info from all documents and setup info needed to form the CSR Matrix
-    std::vector<std::string> documentPaths;
+    {
+        // Read PageRank info related info from all documents and setup info needed to form the CSR Matrix
 
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(inputDirectory)) {
-        if (!entry.is_regular_file()) {
-            continue;  // skip chunk dir
+        // This scope allows us to nicely clear document path.
+        std::vector<std::string> documentPaths;
+
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(inputDirectory)) {
+            if (!entry.is_regular_file()) {
+                continue;  // skip chunk dir
+            }
+
+            std::string path = entry.path().string();
+            if (path == "/.DS_Store") {
+                continue;
+            }
+            documentPaths.push_back(std::move(path));
         }
+        std::sort(documentPaths.begin(), documentPaths.end());
 
-        std::string path = entry.path().string();
-        if (path == "/.DS_Store") {
-            continue;
-        }
-        documentPaths.push_back(std::move(path));
-    }
-    std::sort(documentPaths.begin(), documentPaths.end());
+        for (const auto& path : documentPaths) {
+            size_t docID = 0;
+            try {
+                docID = stoi(path.substr(path.size() - 10));
+            } catch (std::exception& e) {
+                continue;
+            }
 
-    for (const auto& path : documentPaths) {
-        size_t docID = 0;
-        try {
-            docID = stoi(path.substr(path.size() - 10));
-        } catch (std::exception& e) {
-            continue;
-        }
-
-        if (docID != DocumentCount) {
-            spdlog::error("There is a hole in the documents starting at ID: {}. Ensure all data is present.", docID);
-            exit(1);
-        }
-
-        DocumentCount++;
-    }
-
-    size_t processed = 0;
-    for (const auto& path : documentPaths) {
-        try {
-            data::Document doc;
-            {
-                data::FileReader file{path.c_str()};
-                data::GzipReader gzip{file};
-                if (!data::DeserializeValue(doc, gzip)) {
-                    throw std::runtime_error("Failed to deserialize document: " + path);
+            if (StartDocument != docID) {
+                if (StartDocument == 0) {
+                    StartDocument = docID;
+                    spdlog::warn("Starting document ID: {}.  Ensure all data is present.", StartDocument);
+                } else {
+                    spdlog::error("There is a hole in the documents starting at ID: {}. Ensure all data is present.",
+                                  docID);
+                    exit(1);
                 }
             }
 
-            int fromNode = GetLinkNode(doc.url);
-            auto& vec = (*NodeConnections)[fromNode];
+            DocumentCount++;
+            StartDocument++;
+        }
 
-            for (const std::string& link : doc.forwardLinks) {
-                vec.push_back(GetLinkNode(link));
+        DocumentToNode->reserve(DocumentCount);
+
+        size_t processed = 0;
+        for (const auto& path : documentPaths) {
+            try {
+                data::Document doc;
+                {
+                    data::FileReader file{path.c_str()};
+                    data::GzipReader gzip{file};
+                    if (!data::DeserializeValue(doc, gzip)) {
+                        throw std::runtime_error("Failed to deserialize document: " + path);
+                    }
+                }
+
+                int fromNode = GetLinkNode(doc.url);
+
+                for (const std::string& link : doc.forwardLinks) {
+                    int newNode = GetLinkNode(link);
+                    (*NodeConnections)[fromNode].push_back(newNode);
+                }
+                (*NodeConnections)[fromNode].shrink_to_fit();
+
+                (*DocumentToNode)[doc.id] = fromNode;
+                (*NodeToDocument)[fromNode] = PagerankDocument{
+                    .id = doc.id,
+                    .url = std::move(doc.url),
+                };
+                processed++;
+            } catch (const std::exception& e) {
+                spdlog::error("Error processing {}: {}", path, e.what());
             }
 
-            (*DocumentToNode)[doc.id] = fromNode;
-            (*NodeToDocument)[fromNode] = std::move(doc);
-            processed++;
-        } catch (const std::exception& e) {
-            spdlog::error("Error processing {}: {}", path, e.what());
+            if ((processed % 10000 == 0 || processed == 1)) {
+                auto end = std::chrono::steady_clock::now();
+                std::chrono::duration<double> processDoubleDuration = end - start;
+                auto processDuration = processDoubleDuration.count();
+
+                spdlog::info("Processed {}/{} documents so far. Found {} links. Time taken: {}s.",
+                             processed,
+                             DocumentCount,
+                             Nodes,
+                             processDuration);
+            }
         }
 
-        if ((processed % 10000 == 0 || processed == 1)) {
-            auto end = std::chrono::steady_clock::now();
-            std::chrono::duration<double> processDoubleDuration = end - start;
-            auto processDuration = processDoubleDuration.count();
-
-            spdlog::info("Processed {}/{} documents so far. Found {} links. Time taken: {}s.",
-                         processed,
-                         DocumentCount,
-                         Nodes,
-                         processDuration);
-        }
+        NodeConnections->shrink_to_fit();
+        NodeToDocument->shrink_to_fit();
+        LinkToNode.Reset(nullptr);
     }
 
     auto end = std::chrono::steady_clock::now();
@@ -245,23 +275,26 @@ void PerformPageRank(const std::string& inputDirectory) {
 
     // Build CSR Matrix from the above data.
     // This tolerance is dynamic based on number of nodes.
-    const double tol = 1.0 / Nodes;
+    const float tol = 1.0F / static_cast<float>(Nodes);
     spdlog::info("Building CSR Matrix with tolerance {:e}...", tol);
 
     start = std::chrono::steady_clock::now();
 
     core::CSRMatrix m(Nodes);
-    std::vector<double> outDegree(Nodes, 0.0);
+    std::vector<float> outDegree(Nodes, 0.0);
 
     size_t edges = 0;
-    for (auto& [node, value] : *NodeConnections) {
+    for (int node = 0; node < Nodes; ++node) {
+        const auto& value = (*NodeConnections)[node];
         for (auto target : value) {
             m.AddEdge(target, node, 1.0);
             edges++;
         }
 
-        outDegree[node] = static_cast<double>(value.size());
+        outDegree[node] = static_cast<float>(value.size());
     }
+
+    NodeConnections.Reset(nullptr);
 
     m.Finalize();
 
@@ -301,9 +334,6 @@ void PerformPageRank(const std::string& inputDirectory) {
 }
 
 void Cleanup() {
-    LinkToNode.Reset(nullptr);
-    NodeToLink.Reset(nullptr);
-    NodeConnections.Reset(nullptr);
     NodeToDocument.Reset(nullptr);
     DocumentToNode.Reset(nullptr);
     Results.Reset(nullptr);
