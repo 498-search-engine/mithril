@@ -54,6 +54,7 @@ core::UniquePtr<std::vector<float>> StandardizedResults = core::UniquePtr<std::v
 
 int Nodes = 0;
 size_t DocumentCount = 0;
+size_t StartDocument = 0;
 
 std::string ProcessLink(const std::string& link) {
 #if USE_DOMAIN_RANK == 1
@@ -91,7 +92,14 @@ void Write() {
     std::vector<float>& scores = *mithril::pagerank::StandardizedResults;
 
     size_t written = 0;
-    for (size_t i = 0; i < DocumentCount; ++i) {
+
+    size_t writeBegin = StartDocument - DocumentCount;
+    spdlog::info("Starting pagerank write at doc id {}", writeBegin);
+
+    uint32_t initialBytes = htonl(static_cast<uint32_t>(writeBegin));
+    fwrite(&initialBytes, sizeof(initialBytes), 1, f);
+
+    for (size_t i = writeBegin; i < StartDocument; ++i) {
         auto it = DocumentToNode->find(static_cast<data::docid_t>(i));
 
         uint32_t bytes;
@@ -185,7 +193,6 @@ void PerformPageRank(const std::string& inputDirectory) {
         }
         std::sort(documentPaths.begin(), documentPaths.end());
 
-        size_t startDocument = 0;
         for (const auto& path : documentPaths) {
             size_t docID = 0;
             try {
@@ -194,11 +201,10 @@ void PerformPageRank(const std::string& inputDirectory) {
                 continue;
             }
 
-            if (startDocument != docID) {
-                if (startDocument == 0) {
-                    startDocument = docID;
-                    spdlog::warn(
-                        "Starting document ID: {}. Document ID: {}. Ensure all data is present.", startDocument, docID);
+            if (StartDocument != docID) {
+                if (StartDocument == 0) {
+                    StartDocument = docID;
+                    spdlog::warn("Starting document ID: {}.  Ensure all data is present.", StartDocument);
                 } else {
                     spdlog::error("There is a hole in the documents starting at ID: {}. Ensure all data is present.",
                                   docID);
@@ -207,7 +213,7 @@ void PerformPageRank(const std::string& inputDirectory) {
             }
 
             DocumentCount++;
-            startDocument++;
+            StartDocument++;
         }
 
         DocumentToNode->reserve(DocumentCount);

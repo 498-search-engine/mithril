@@ -58,6 +58,7 @@ extern core::UniquePtr<std::vector<float>> StandardizedResults;
 
 extern int Nodes;
 extern size_t DocumentCount;
+extern size_t StartDocument;
 /**
     private namespace variables
 */

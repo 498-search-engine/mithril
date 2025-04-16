@@ -27,17 +27,18 @@ PageRankReader::PageRankReader() {
         throw std::runtime_error("Failed to memory map pagerank data");
     }
 
-    size_ = st.st_size / sizeof(float);
+    start = ntohl(*reinterpret_cast<uint32_t*>(map_));
+    size_ = (st.st_size - 4) / sizeof(float);
 }
 
 PageRankReader::~PageRankReader() {
     if (map_ != nullptr) {
-        munmap(map_, size_ * sizeof(float));
+        munmap(map_, (size_ * sizeof(float)) + 4);
     }
 }
 
 float PageRankReader::GetDocumentPageRank(data::docid_t docid) {
-    char* data = reinterpret_cast<char*>(map_) + (docid * sizeof(float));
+    char* data = (reinterpret_cast<char*>(map_) + 4) + ((docid - start) * sizeof(float));
 
     float bytes;
     memcpy(&bytes, data, sizeof(float));

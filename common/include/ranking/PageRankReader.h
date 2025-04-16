@@ -11,6 +11,7 @@ public:
 
     float GetDocumentPageRank(data::docid_t docid);
 
+    uint32_t start;
     uint64_t size_;
 
 private:
