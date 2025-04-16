@@ -51,7 +51,7 @@ core::UniquePtr<std::unordered_map<int, data::Document>> NodeToDocument =
     core::UniquePtr<std::unordered_map<int, data::Document>>(new std::unordered_map<int, data::Document>());
 core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode =
     core::UniquePtr<std::unordered_map<data::docid_t, int>>(new std::unordered_map<data::docid_t, int>());
-core::UniquePtr<std::vector<double>> Results = core::UniquePtr<std::vector<double>>(new std::vector<double>());
+core::UniquePtr<std::vector<float>> Results = core::UniquePtr<std::vector<float>>(new std::vector<float>());
 core::UniquePtr<std::vector<float>> StandardizedResults = core::UniquePtr<std::vector<float>>(new std::vector<float>());
 
 int Nodes = 0;
@@ -111,18 +111,18 @@ void Write() {
 
 void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     int maxIteration = Config.GetInt("max_iterations");
-    double d = Config.GetDouble("decay_factor");
-    double tol = 1.0 / N;
+    float d = Config.GetFloat("decay_factor");
+    float tol = 1.0F / static_cast<float>(N);
 
-    Results->resize(N, 1.0 / N);
+    Results->resize(N, tol);
     StandardizedResults->resize(N);
 
-    std::vector<double> teleport(N, (1.0 - d) / N);
+    std::vector<float> teleport(N, (1.0F - d) / static_cast<float>(N));
 
     for (int iter = 0; iter < maxIteration; ++iter) {
-        std::vector<double> newR = matrix_.Multiply(*Results);
+        std::vector<float> newR = matrix_.Multiply(*Results);
 
-        double diff = 0.0;
+        float diff = 0.0;
 #pragma omp parallel for reduction(+ : diff)
         for (int i = 0; i < N; ++i) {
             newR[i] = d * newR[i] + teleport[i];
@@ -135,9 +135,9 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
         *Results = newR;
     }
 
-    constexpr double Epsilon = 1e-30;  // Avoid log(0)
+    constexpr float Epsilon = 1e-30;  // Avoid log(0)
 
-    std::vector<double> temp;
+    std::vector<float> temp;
     temp.reserve(N);
     StandardizedResults->resize(N);
 
@@ -147,14 +147,14 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
 
     auto [minit, maxit] = std::minmax_element(temp.begin(), temp.end());
 
-    double min = *minit;
-    double max = *maxit;
-    double range = max - min;
+    float min = *minit;
+    float max = *maxit;
+    float range = max - min;
 
     // Square root twice to spread lower values more
-    constexpr double Power = 0.5 * 0.5;
+    constexpr float Power = 0.5 * 0.5;
     for (int i = 0; i < N; ++i) {
-        (*StandardizedResults)[i] = static_cast<float>(std::pow(((temp[i] - min) / range), Power));
+        (*StandardizedResults)[i] = std::pow(((temp[i] - min) / range), Power);
     }
 }
 
@@ -250,13 +250,13 @@ void PerformPageRank(const std::string& inputDirectory) {
 
     // Build CSR Matrix from the above data.
     // This tolerance is dynamic based on number of nodes.
-    const double tol = 1.0 / Nodes;
+    const float tol = 1.0 / Nodes;
     spdlog::info("Building CSR Matrix with tolerance {:e}...", tol);
 
     start = std::chrono::steady_clock::now();
 
     core::CSRMatrix m(Nodes);
-    std::vector<double> outDegree(Nodes, 0.0);
+    std::vector<float> outDegree(Nodes, 0.0);
 
     size_t edges = 0;
     for (auto& [node, value] : *NodeConnections) {
@@ -265,7 +265,7 @@ void PerformPageRank(const std::string& inputDirectory) {
             edges++;
         }
 
-        outDegree[node] = static_cast<double>(value.size());
+        outDegree[node] = static_cast<float>(value.size());
     }
 
     m.Finalize();

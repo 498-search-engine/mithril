@@ -20,7 +20,7 @@ void WriteBackToFile() {
     std::ofstream outFile;
     outFile.open(OutputFile);
 
-    std::vector<double>& scores = *mithril::pagerank::Results;
+    std::vector<float>& scores = *mithril::pagerank::Results;
     std::vector<size_t> idx(mithril::pagerank::DocumentCount);
     std::iota(idx.begin(), idx.end(), 0);
 

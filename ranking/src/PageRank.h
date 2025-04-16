@@ -11,7 +11,7 @@ static_assert(sizeof(double) == 8, "Size of double is not 8 bytes");
 
 #include <vector>
 
-constexpr double ErrorAllowed = 0.001;
+constexpr float ErrorAllowed = 0.001;
 
 namespace mithril::pagerank {
 
@@ -49,7 +49,7 @@ extern core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink;
 extern core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections;
 extern core::UniquePtr<std::unordered_map<int, data::Document>> NodeToDocument;
 extern core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode;
-extern core::UniquePtr<std::vector<double>> Results;
+extern core::UniquePtr<std::vector<float>> Results;
 extern core::UniquePtr<std::vector<float>> StandardizedResults;
 
 extern int Nodes;
