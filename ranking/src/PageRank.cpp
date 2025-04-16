@@ -185,6 +185,7 @@ void PerformPageRank(const std::string& inputDirectory) {
         }
         std::sort(documentPaths.begin(), documentPaths.end());
 
+        size_t startDocument = 0;
         for (const auto& path : documentPaths) {
             size_t docID = 0;
             try {
@@ -193,13 +194,20 @@ void PerformPageRank(const std::string& inputDirectory) {
                 continue;
             }
 
-            if (docID != DocumentCount) {
-                spdlog::error("There is a hole in the documents starting at ID: {}. Ensure all data is present.",
-                              docID);
-                exit(1);
+            if (startDocument != docID) {
+                if (startDocument == 0) {
+                    startDocument = docID;
+                    spdlog::warn(
+                        "Starting document ID: {}. Document ID: {}. Ensure all data is present.", startDocument, docID);
+                } else {
+                    spdlog::error("There is a hole in the documents starting at ID: {}. Ensure all data is present.",
+                                  docID);
+                    exit(1);
+                }
             }
 
             DocumentCount++;
+            startDocument++;
         }
 
         DocumentToNode->reserve(DocumentCount);
