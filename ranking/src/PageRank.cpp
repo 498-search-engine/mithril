@@ -64,7 +64,11 @@ std::string ProcessLink(const std::string& link) {
 }
 
 int GetLinkNode(const std::string& link) {
+#if USE_DOMAIN_RANK == 1
     std::string processedLink = ProcessLink(link);
+#else
+    const std::string& processedLink = link;
+#endif
     auto it = LinkToNode->find(processedLink);
     int nodeNo;
     if (it == LinkToNode->end()) {
