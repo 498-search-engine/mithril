@@ -15,6 +15,11 @@ constexpr float ErrorAllowed = 0.001;
 
 namespace mithril::pagerank {
 
+struct PagerankDocument {
+    mithril::data::docid_t id;
+    std::string url;
+};
+
 /**
     @brief Process any links as necessary (e.g for DomainRank.)
 */
@@ -47,7 +52,7 @@ void Cleanup();
 extern core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode;
 extern core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink;
 extern core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections;
-extern core::UniquePtr<std::unordered_map<int, data::Document>> NodeToDocument;
+extern core::UniquePtr<std::unordered_map<int, PagerankDocument>> NodeToDocument;
 extern core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode;
 extern core::UniquePtr<std::vector<float>> Results;
 extern core::UniquePtr<std::vector<float>> StandardizedResults;

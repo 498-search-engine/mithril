@@ -47,8 +47,8 @@ core::UniquePtr<std::unordered_map<int, std::string>> NodeToLink =
     core::UniquePtr<std::unordered_map<int, std::string>>(new std::unordered_map<int, std::string>());
 core::UniquePtr<std::unordered_map<int, std::vector<int>>> NodeConnections =
     core::UniquePtr<std::unordered_map<int, std::vector<int>>>(new std::unordered_map<int, std::vector<int>>());
-core::UniquePtr<std::unordered_map<int, data::Document>> NodeToDocument =
-    core::UniquePtr<std::unordered_map<int, data::Document>>(new std::unordered_map<int, data::Document>());
+core::UniquePtr<std::unordered_map<int, PagerankDocument>> NodeToDocument =
+    core::UniquePtr<std::unordered_map<int, PagerankDocument>>(new std::unordered_map<int, PagerankDocument>());
 core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode =
     core::UniquePtr<std::unordered_map<data::docid_t, int>>(new std::unordered_map<data::docid_t, int>());
 core::UniquePtr<std::vector<float>> Results = core::UniquePtr<std::vector<float>>(new std::vector<float>());
@@ -221,7 +221,10 @@ void PerformPageRank(const std::string& inputDirectory) {
                 }
 
                 (*DocumentToNode)[doc.id] = fromNode;
-                (*NodeToDocument)[fromNode] = std::move(doc);
+                (*NodeToDocument)[fromNode] = PagerankDocument{
+                    .id = doc.id,
+                    .url = std::move(doc.url),
+                };
                 processed++;
             } catch (const std::exception& e) {
                 spdlog::error("Error processing {}: {}", path, e.what());
