@@ -165,74 +165,79 @@ void PerformPageRank(const std::string& inputDirectory) {
 
     auto start = std::chrono::steady_clock::now();
 
-    // Read PageRank info related info from all documents and setup info needed to form the CSR Matrix
-    std::vector<std::string> documentPaths;
+    {
+        // Read PageRank info related info from all documents and setup info needed to form the CSR Matrix
 
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(inputDirectory)) {
-        if (!entry.is_regular_file()) {
-            continue;  // skip chunk dir
+        // This scope allows us to nicely clear document path.
+        std::vector<std::string> documentPaths;
+
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(inputDirectory)) {
+            if (!entry.is_regular_file()) {
+                continue;  // skip chunk dir
+            }
+
+            std::string path = entry.path().string();
+            if (path == "/.DS_Store") {
+                continue;
+            }
+            documentPaths.push_back(std::move(path));
+        }
+        std::sort(documentPaths.begin(), documentPaths.end());
+
+        for (const auto& path : documentPaths) {
+            size_t docID = 0;
+            try {
+                docID = stoi(path.substr(path.size() - 10));
+            } catch (std::exception& e) {
+                continue;
+            }
+
+            if (docID != DocumentCount) {
+                spdlog::error("There is a hole in the documents starting at ID: {}. Ensure all data is present.",
+                              docID);
+                exit(1);
+            }
+
+            DocumentCount++;
         }
 
-        std::string path = entry.path().string();
-        if (path == "/.DS_Store") {
-            continue;
-        }
-        documentPaths.push_back(std::move(path));
-    }
-    std::sort(documentPaths.begin(), documentPaths.end());
-
-    for (const auto& path : documentPaths) {
-        size_t docID = 0;
-        try {
-            docID = stoi(path.substr(path.size() - 10));
-        } catch (std::exception& e) {
-            continue;
-        }
-
-        if (docID != DocumentCount) {
-            spdlog::error("There is a hole in the documents starting at ID: {}. Ensure all data is present.", docID);
-            exit(1);
-        }
-
-        DocumentCount++;
-    }
-
-    size_t processed = 0;
-    for (const auto& path : documentPaths) {
-        try {
-            data::Document doc;
-            {
-                data::FileReader file{path.c_str()};
-                data::GzipReader gzip{file};
-                if (!data::DeserializeValue(doc, gzip)) {
-                    throw std::runtime_error("Failed to deserialize document: " + path);
+        size_t processed = 0;
+        for (const auto& path : documentPaths) {
+            try {
+                data::Document doc;
+                {
+                    data::FileReader file{path.c_str()};
+                    data::GzipReader gzip{file};
+                    if (!data::DeserializeValue(doc, gzip)) {
+                        throw std::runtime_error("Failed to deserialize document: " + path);
+                    }
                 }
+
+                int fromNode = GetLinkNode(doc.url);
+                auto& vec = (*NodeConnections)[fromNode];
+
+                for (const std::string& link : doc.forwardLinks) {
+                    vec.push_back(GetLinkNode(link));
+                }
+
+                (*DocumentToNode)[doc.id] = fromNode;
+                (*NodeToDocument)[fromNode] = std::move(doc);
+                processed++;
+            } catch (const std::exception& e) {
+                spdlog::error("Error processing {}: {}", path, e.what());
             }
 
-            int fromNode = GetLinkNode(doc.url);
-            auto& vec = (*NodeConnections)[fromNode];
+            if ((processed % 10000 == 0 || processed == 1)) {
+                auto end = std::chrono::steady_clock::now();
+                std::chrono::duration<double> processDoubleDuration = end - start;
+                auto processDuration = processDoubleDuration.count();
 
-            for (const std::string& link : doc.forwardLinks) {
-                vec.push_back(GetLinkNode(link));
+                spdlog::info("Processed {}/{} documents so far. Found {} links. Time taken: {}s.",
+                             processed,
+                             DocumentCount,
+                             Nodes,
+                             processDuration);
             }
-
-            (*DocumentToNode)[doc.id] = fromNode;
-            (*NodeToDocument)[fromNode] = std::move(doc);
-            processed++;
-        } catch (const std::exception& e) {
-            spdlog::error("Error processing {}: {}", path, e.what());
-        }
-
-        if ((processed % 10000 == 0 || processed == 1)) {
-            auto end = std::chrono::steady_clock::now();
-            std::chrono::duration<double> processDoubleDuration = end - start;
-            auto processDuration = processDoubleDuration.count();
-
-            spdlog::info("Processed {}/{} documents so far. Found {} links. Time taken: {}s.",
-                         processed,
-                         DocumentCount,
-                         Nodes,
-                         processDuration);
         }
     }
 
