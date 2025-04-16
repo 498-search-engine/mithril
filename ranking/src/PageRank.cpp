@@ -45,8 +45,8 @@ core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode =
     core::UniquePtr<std::unordered_map<std::string, int>>(new std::unordered_map<std::string, int>());
 core::UniquePtr<std::vector<std::vector<int>>> NodeConnections =
     core::UniquePtr<std::vector<std::vector<int>>>(new std::vector<std::vector<int>>);
-core::UniquePtr<std::unordered_map<int, PagerankDocument>> NodeToDocument =
-    core::UniquePtr<std::unordered_map<int, PagerankDocument>>(new std::unordered_map<int, PagerankDocument>());
+core::UniquePtr<std::vector<PagerankDocument>> NodeToDocument =
+    core::UniquePtr<std::vector<PagerankDocument>>(new std::vector<PagerankDocument>());
 core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode =
     core::UniquePtr<std::unordered_map<data::docid_t, int>>(new std::unordered_map<data::docid_t, int>());
 core::UniquePtr<std::vector<float>> Results = core::UniquePtr<std::vector<float>>(new std::vector<float>());
@@ -71,6 +71,7 @@ int GetLinkNode(const std::string& link) {
         nodeNo = Nodes;
         (*LinkToNode)[processedLink] = nodeNo;
         NodeConnections->push_back(std::vector<int>());
+        NodeToDocument->push_back(PagerankDocument{});
         Nodes++;
     } else {
         nodeNo = it->second;
@@ -242,6 +243,8 @@ void PerformPageRank(const std::string& inputDirectory) {
             }
         }
 
+        NodeConnections->shrink_to_fit();
+        NodeToDocument->shrink_to_fit();
         LinkToNode.Reset(nullptr);
     }
 
@@ -272,14 +275,6 @@ void PerformPageRank(const std::string& inputDirectory) {
 
         outDegree[node] = static_cast<float>(value.size());
     }
-    // for (auto& [node, value] : *NodeConnections) {
-    //     for (auto target : value) {
-    //         m.AddEdge(target, node, 1.0);
-    //         edges++;
-    //     }
-
-    //     outDegree[node] = static_cast<float>(value.size());
-    // }
 
     NodeConnections.Reset(nullptr);
 

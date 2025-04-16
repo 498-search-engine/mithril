@@ -51,7 +51,7 @@ void Cleanup();
 */
 extern core::UniquePtr<std::unordered_map<std::string, int>> LinkToNode;
 extern core::UniquePtr<std::vector<std::vector<int>>> NodeConnections;
-extern core::UniquePtr<std::unordered_map<int, PagerankDocument>> NodeToDocument;
+extern core::UniquePtr<std::vector<PagerankDocument>> NodeToDocument;
 extern core::UniquePtr<std::unordered_map<data::docid_t, int>> DocumentToNode;
 extern core::UniquePtr<std::vector<float>> Results;
 extern core::UniquePtr<std::vector<float>> StandardizedResults;
