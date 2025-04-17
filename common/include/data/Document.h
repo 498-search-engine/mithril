@@ -15,6 +15,41 @@ namespace mithril::data {
 
 using docid_t = uint32_t;
 
+enum class FieldType {
+    BODY = 0,
+    TITLE = 1,
+    URL = 2,
+    ANCHOR = 3,
+    DESC = 4
+    // Can be extended with HEADING, BOLD, etc.
+};
+
+struct DocInfo {
+    data::docid_t id;
+    uint32_t url_offset;
+    uint32_t url_length;
+    uint32_t title_offset;
+    uint32_t title_length;
+    uint32_t body_length;
+    uint32_t desc_length;
+    float pagerank_score;
+
+    uint32_t getFieldLength(FieldType field) const {
+        switch (field) {
+        case FieldType::BODY:
+            return body_length;
+        case FieldType::TITLE:
+            return title_length;
+        case FieldType::URL:
+            return url_length;
+        case FieldType::DESC:
+            return desc_length;
+        default:
+            return 0;
+        }
+    }
+};
+
 struct Document {
     docid_t id;
     std::string url;
