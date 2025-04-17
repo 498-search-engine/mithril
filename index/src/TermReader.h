@@ -16,7 +16,8 @@ namespace mithril {
 
 class TermReader : public IndexStreamReader {
 public:
-    TermReader(const std::string& index_path, const std::string& term, TermDictionary& term_dict);
+    TermReader(const std::string& index_path, const std::string& term,
+               TermDictionary& term_dict, PositionIndex& position_index);
     ~TermReader();
 
     // ISR
@@ -50,7 +51,7 @@ private:
     size_t current_posting_index_{0};
     std::vector<SyncPoint> sync_points_;
 
-    mutable std::shared_ptr<PositionIndex> position_index_;
+    PositionIndex& position_index_;
 
     mutable double avg_frequency_{0.0};
     mutable bool avg_frequency_computed_{false};

@@ -7,6 +7,7 @@
 #include "TermDictionary.h"
 #include "TermReader.h"
 #include "data/Document.h"
+#include "PositionIndex.h"
 
 #include <memory>
 #include <string>
@@ -19,7 +20,8 @@ public:
     explicit TermPhrase(DocumentMapReader& doc_reader,
                         const std::string& index_path,
                         const std::vector<std::string>& phrase,
-                        TermDictionary& term_dict);
+                        TermDictionary& term_dict,
+                        PositionIndex& position_index);
 
     TermPhrase(const TermPhrase&) = delete;
     TermPhrase& operator=(const TermPhrase&) = delete;
@@ -40,6 +42,7 @@ private:
     const std::string& index_path_;
     const std::vector<std::string>& phrase_;
     TermDictionary& term_dict_;
+    PositionIndex& position_index_;
     std::vector<TermReader*> term_readers_;  // sketchy
     std::unique_ptr<TermAND> stream_reader_;
     data::docid_t current_doc_id_{0};
