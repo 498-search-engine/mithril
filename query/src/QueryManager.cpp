@@ -1,7 +1,6 @@
 #include "QueryManager.h"
 
-#include "DynamicRanker.h"
-#include "StaticRanker.h"
+#include "Ranker.h"
 
 #include <algorithm>
 #include <mutex>
@@ -116,15 +115,11 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
             ranked_matches.push_back({match, 0});
             continue;
         }
+
         const data::Document& doc = doc_opt.value();
         const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
 
-        ranking::dynamic::RankerFeatures features{
-            .static_rank = static_cast<float>(ranking::GetUrlStaticRank(doc.url)),
-            .pagerank = docInfo.pagerank_score,
-        };
-
-        float score = ranking::dynamic::GetUrlDynamicRank(features);
+        uint32_t score = ranking::GetFinalScore(doc, docInfo);
         ranked_matches.push_back({match, score});  // TODO: replace 0 with actual score
     }
 

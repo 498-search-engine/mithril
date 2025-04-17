@@ -13,3 +13,5 @@ target_link_libraries(web PUBLIC
 
 add_executable_with_copy(mithril_server src/main.cpp)
 target_link_libraries(mithril_server web)
+
+file(COPY frontend DESTINATION ${CMAKE_SOURCE_DIR}/bin)
