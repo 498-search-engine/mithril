@@ -13,10 +13,14 @@
 #include "http/URL.h"
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 namespace mithril {
+
+void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& doc);
+std::vector<std::string_view> GetDescription(const html::ParsedDocument& doc);
 
 constexpr auto DocumentChunkSize = 10000;
 

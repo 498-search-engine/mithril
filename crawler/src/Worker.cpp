@@ -45,18 +45,6 @@ const std::set<std::string_view> BlacklistedBasePaths = {
     "/search"sv,
 };
 
-void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& doc) {
-    try {
-        auto fWriter = data::FileWriter{fileName.c_str()};
-        auto zipWriter = data::GzipWriter{fWriter};
-        data::SerializeValue(doc, zipWriter);
-        zipWriter.Finish();
-        fWriter.DontNeed();
-    } catch (const std::exception& e) {
-        spdlog::error("failed to write document {} ({}): {}", doc.id, doc.url, e.what());
-    }
-}
-
 std::string NumberedEntity(std::string_view entity, size_t num, int pad) {
     std::string res;
     res.reserve(entity.size() + pad + 1);
@@ -69,15 +57,6 @@ std::string NumberedEntity(std::string_view entity, size_t num, int pad) {
     }
     res.append(numStr);
     return res;
-}
-
-std::vector<std::string_view> GetDescription(const html::ParsedDocument& doc) {
-    auto descIt = doc.metas.find("description"sv);
-    if (descIt == doc.metas.end()) {
-        return {};
-    }
-
-    return GetWords(descIt->second);
 }
 
 struct RobotsMeta {
@@ -106,6 +85,23 @@ RobotsMeta GetRobotsMeta(const html::ParsedDocument& doc) {
 }
 
 }  // namespace
+
+void WriteDocumentToFile(const std::string& fileName, const data::DocumentView& doc) {
+    auto fWriter = data::FileWriter{fileName.c_str()};
+    auto zipWriter = data::GzipWriter{fWriter};
+    data::SerializeValue(doc, zipWriter);
+    zipWriter.Finish();
+    fWriter.DontNeed();
+}
+
+std::vector<std::string_view> GetDescription(const html::ParsedDocument& doc) {
+    auto descIt = doc.metas.find("description"sv);
+    if (descIt == doc.metas.end()) {
+        return {};
+    }
+
+    return GetWords(descIt->second);
+}
 
 Worker::Worker(LiveState& state,
                DocumentQueue* docQueue,
@@ -217,7 +213,11 @@ void Worker::SaveDocument(data::DocumentView doc) {
     }
 
     doc.id = docID;
-    WriteDocumentToFile(docPath, doc);
+    try {
+        WriteDocumentToFile(docPath, doc);
+    } catch (const std::exception& e) {
+        spdlog::error("failed to write document {} ({}): {}", doc.id, doc.url, e.what());
+    }
 }
 
 void Worker::ProcessDocument(const http::Request& req, http::Response& res) {
