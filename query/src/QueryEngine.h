@@ -3,10 +3,10 @@
 
 #include "DocumentMapReader.h"
 #include "Parser.h"
+#include "PositionIndex.h"
 #include "Query.h"
 #include "QueryConfig.h"
 #include "TermDictionary.h"
-#include "PositionIndex.h"
 
 #include <iostream>
 #include <memory>
@@ -16,7 +16,8 @@ using namespace mithril;
 
 class QueryEngine {
 public:
-    QueryEngine(const std::string& index_dir) : map_reader_(index_dir), term_dict_(index_dir), position_index_(index_dir) {
+    QueryEngine(const std::string& index_dir)
+        : map_reader_(index_dir), term_dict_(index_dir), position_index_(index_dir) {
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
 
@@ -67,10 +68,11 @@ public:
     std::optional<data::Document> GetDocument(uint32_t doc_id) const { return map_reader_.getDocument(doc_id); }
     DocInfo GetDocumentInfo(uint32_t doc_id) const { return map_reader_.getDocInfo(doc_id); }
 
+    mithril::PositionIndex position_index_;
+
 private:
     mithril::DocumentMapReader map_reader_;
     mithril::TermDictionary term_dict_;
-    mithril::PositionIndex position_index_;
 };
 
 #endif /* QUERYENGINE_H */

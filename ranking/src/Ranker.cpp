@@ -10,7 +10,8 @@ namespace mithril::ranking {
 
 uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
-                       const data::DocInfo& info) {
+                       const data::DocInfo& info,
+                       const PositionIndex& position_index) {
 
     auto logger = spdlog::get("ranker_logger");
     if (!logger) {
