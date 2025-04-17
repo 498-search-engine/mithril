@@ -19,8 +19,9 @@
 
 using namespace mithril;
 
-int ManualCrawl(const std::string& url, data::docid_t docID, const std::string& outputPath) {
+namespace {
 
+int ManualCrawl(const std::string& url, data::docid_t docID, const std::string& outputPath) {
     auto parsed = http::ParseURL(url);
     if (!parsed) {
         spdlog::error("failed to parse url");
@@ -83,6 +84,8 @@ int ManualCrawl(const std::string& url, data::docid_t docID, const std::string& 
     spdlog::info("wrote document to {}", outputPath);
     return 0;
 }
+
+}  // namespace
 
 int main(int argc, const char* argv[]) {
     if (argc != 4) {
