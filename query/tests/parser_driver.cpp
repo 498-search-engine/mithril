@@ -2,6 +2,7 @@
 #include "../src/Parser.h"
 #include "../src/Query.h"
 #include "../src/QueryConfig.h"
+#include "PositionIndex.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -55,7 +56,8 @@ auto main(int argc, char* argv[]) -> int {
     }
 
     DocumentMapReader doc_reader(indexPath);
-    
+    PositionIndex position_index(indexPath);
+
     // Set the index path in the QueryConfig
     query::QueryConfig::SetIndexPath(indexPath);
     std::cout << "Using index path: " << query::QueryConfig::GetIndexPath() << std::endl;
@@ -83,7 +85,7 @@ auto main(int argc, char* argv[]) -> int {
         
         try {
             // Create parser with the input
-            Parser parser(input, term_dict);
+            Parser parser(input, term_dict, position_index);
       
             // Display tokens for reference
             std::cout << "Tokens:" << std::endl;
