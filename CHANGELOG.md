@@ -65,6 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - first pass of querycoordinator integration (w searchplugin impl) in client server, better js, etc (#127)
 - integrate query engine/coordinator with client server and CLOSE!THE!LOOP! 🥳 (#128)
 - integrate ranking into everything (#130)
+- manual document crawling (#138)
 
 ### Fixed
 
