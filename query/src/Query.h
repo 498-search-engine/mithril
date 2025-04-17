@@ -55,12 +55,15 @@ private:
 
 class TermQuery : public Query {
 public:
-    TermQuery(Token token, mithril::TermDictionary& term_dict, mithril::PositionIndex& position_index) : token_(std::move(token)), term_dict_(term_dict), position_index_(position_index) {}
+    TermQuery(Token token, const core::MemMapFile& index_file,
+              mithril::TermDictionary& term_dict, mithril::PositionIndex& position_index)
+        : token_(std::move(token)), index_file_(index_file),
+          term_dict_(term_dict), position_index_(position_index) {}
 
     Token get_token() { return token_; }
 
     std::vector<uint32_t> evaluate() const override {
-        mithril::TermReader term(query::QueryConfig::GetIndexPath(), token_.value, term_dict_, position_index_);
+        mithril::TermReader term(query::QueryConfig::GetIndexPath(), token_.value, index_file_, term_dict_, position_index_);
 
         std::vector<uint32_t> results;
         results.reserve(MAX_DOCUMENTS);
@@ -75,7 +78,7 @@ public:
     }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        return std::make_unique<mithril::TermReader>(query::QueryConfig::GetIndexPath(), token_.value, term_dict_, position_index_);
+        return std::make_unique<mithril::TermReader>(query::QueryConfig::GetIndexPath(), token_.value, index_file_, term_dict_, position_index_);
     }
 
     [[nodiscard]] std::string to_string() const override { return "TERM(" + token_.value + ")"; }
@@ -85,6 +88,7 @@ public:
 private:
     Token token_;
     static constexpr int MAX_DOCUMENTS = 100000;
+    const core::MemMapFile& index_file_;
     mithril::TermDictionary& term_dict_;
     mithril::PositionIndex& position_index_;
 };

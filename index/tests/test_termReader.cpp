@@ -2,6 +2,7 @@
 #include "TermDictionary.h"
 #include "TermReader.h"
 #include "PositionIndex.h"
+#include "core/mem_map_file.h"
 
 #include <iomanip>
 #include <iostream>
@@ -50,9 +51,12 @@ int main(int argc, char* argv[]) {
         double dic_ms = std::ceil(dic_time.count() * 100.0) / 100.0;
         std::cout << "Loaded term dictionary in " << std::fixed << std::setprecision(2) << dic_ms << "ms" << std::endl;
 
+        std::cout << "Memory mapping index file" << std::endl;
+        core::MemMapFile index_file(index_dir + "/final_index.data");
+
         std::cout << "Creating TermReader for term '" << term << "'" << std::endl;
         auto t6 = Clock::now();
-        mithril::TermReader term_reader(index_dir, term, term_dict, position_index);
+        mithril::TermReader term_reader(index_dir, term, index_file, term_dict, position_index);
         auto t7 = Clock::now();
 
         std::chrono::duration<double, std::milli> read_time = t7 - t6;

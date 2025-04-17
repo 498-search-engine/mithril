@@ -8,6 +8,7 @@
 #include "TermReader.h"
 #include "data/Document.h"
 #include "PositionIndex.h"
+#include "core/mem_map_file.h"
 
 #include <memory>
 #include <string>
@@ -20,6 +21,7 @@ public:
     explicit TermPhrase(DocumentMapReader& doc_reader,
                         const std::string& index_path,
                         const std::vector<std::string>& phrase,
+                        const core::MemMapFile& index_file,
                         TermDictionary& term_dict,
                         PositionIndex& position_index);
 
@@ -41,6 +43,7 @@ private:
     DocumentMapReader& doc_reader_;
     const std::string& index_path_;
     const std::vector<std::string>& phrase_;
+    const core::MemMapFile& index_file_;
     TermDictionary& term_dict_;
     PositionIndex& position_index_;
     std::vector<TermReader*> term_readers_;  // sketchy
