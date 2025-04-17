@@ -1,6 +1,7 @@
 #include "DocumentMapReader.h"
 #include "TermDictionary.h"
 #include "TermQuote.h"
+#include "PositionIndex.h"
 
 #include <iostream>
 // #include <spdlog/spdlog.h>
@@ -30,9 +31,13 @@ int main(int argc, char* argv[]) {
         std::cout << "Loading document map from " << index_dir << std::endl;
         mithril::DocumentMapReader doc_reader(index_dir);
         std::cout << "Loaded document map with " << doc_reader.documentCount() << " documents." << std::endl;
+    
+        std::cout << "Loading position index from " << index_dir << std::endl;
+        mithril::PositionIndex position_index(index_dir);
+        std::cout << "Loaded position index." << std::endl;
 
         std::cout << "Creating TermQuote for quote '" << original_quote << "'" << std::endl;
-        mithril::TermQuote term_quote(doc_reader, index_dir, quote, term_dict);
+        mithril::TermQuote term_quote(doc_reader, index_dir, quote, term_dict, position_index);
 
         std::cout << "Searching for quote: \"" << original_quote << "\"" << std::endl;
 
