@@ -119,7 +119,8 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         const data::Document& doc = doc_opt.value();
         const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
 
-        uint32_t score = ranking::GetFinalScore(doc, docInfo);
+        // TODO: replace query with actual query terms (currently will only work for single term queries or phrases)
+        uint32_t score = ranking::GetFinalScore({{query}}, doc, docInfo);
         ranked_matches.push_back({match, score});  // TODO: replace 0 with actual score
     }
 

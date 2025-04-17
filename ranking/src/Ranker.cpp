@@ -4,7 +4,8 @@
 #include "StaticRanker.h"
 
 namespace mithril::ranking {
-uint32_t GetFinalScore(const data::Document& doc, const data::DocInfo& info) {
+uint32_t
+GetFinalScore(std::vector<std::vector<std::string>> query, const data::Document& doc, const data::DocInfo& info) {
     dynamic::RankerFeatures features{
         .static_rank = static_cast<float>(GetUrlStaticRank(doc.url)),
         .pagerank = info.pagerank_score,
