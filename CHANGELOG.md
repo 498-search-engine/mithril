@@ -103,6 +103,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - reduce pagerank memory usage (#133)
 - ISRs now share a position index instead of creating their own (#134)
 - better integration of ranking, query & index (#137)
+- Fixed parser driver (#140)
 
 ## [0.1.0] - 2025-02-07
 
