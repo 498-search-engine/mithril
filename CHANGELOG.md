@@ -65,6 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - first pass of querycoordinator integration (w searchplugin impl) in client server, better js, etc (#127)
 - integrate query engine/coordinator with client server and CLOSE!THE!LOOP! 🥳 (#128)
 - integrate ranking into everything (#130)
+- manual document crawling (#138)
 
 ### Fixed
 
@@ -99,7 +100,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - added command line option for specifying directory for `./pagerank_sim` (#124)
 - index housekeeping to improve perf (now 100k in 40s), use sync points, termAnd improve (#125)
 - fix compile issue on VM, use globalstopwords dict (does give some postnsize idx decrease), lib compile bug fix (#126)
+- reduce pagerank memory usage (#133)
 - ISRs now share a position index instead of creating their own (#134)
+- better integration of ranking, query & index (#137)
 
 ## [0.1.0] - 2025-02-07
 
