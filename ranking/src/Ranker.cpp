@@ -2,12 +2,20 @@
 
 #include "DynamicRanker.h"
 #include "StaticRanker.h"
+#include "spdlog/sinks/basic_file_sink.h"
+
+#include <spdlog/spdlog.h>
 
 namespace mithril::ranking {
 
 uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
                        const data::DocInfo& info) {
+
+    auto logger = spdlog::get("ranker_logger");
+    if (!logger) {
+        logger = spdlog::basic_logger_mt("ranker_logger", "ranker.log");
+    }
 
     bool isInURL = false;
     bool isInTitle = false;
@@ -19,15 +27,18 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
     std::string body;
 
     for (const auto& term : doc.title) {
+        std::cout << "document has title: " << term << std::endl;
         title += term;
     }
 
     for (const auto& term : doc.description) {
-        title += term;
+        std::cout << "document has descript: " << term << std::endl;
+        description += term;
     }
 
     for (const auto& term : doc.words) {
-        title += term;
+        std::cout << "document has word: " << term << std::endl;
+        body += term;
     }
 
     for (const auto& [term, multiplicity] : query) {
@@ -44,6 +55,9 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             isInBody = true;
         }
     }
+
+    logger->info("\nQuery: {}, URL: {}, Title: {}", query[0].first, doc.url, title);
+    logger->info("Description: {}, Body: {}", description, body);
 
     dynamic::RankerFeatures features{
         // Boolean presence flags
