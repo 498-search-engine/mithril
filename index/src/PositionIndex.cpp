@@ -117,7 +117,7 @@ bool PositionIndex::shouldStorePositions(const std::string& term, uint32_t freq,
     }
 
     // 4. Minimum usefulness threshold
-    return (freq >= 2);
+    return (freq > 2);
 }
 
 void PositionIndex::flushBuffer(const std::string& output_dir) {
@@ -206,143 +206,288 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
 
         spdlog::info("Merging {} position buffer files", buffer_files.size());
 
-        // Structure to hold term data
-        std::unordered_map<std::string, std::vector<std::pair<uint32_t, std::pair<uint8_t, std::vector<uint16_t>>>>>
-            term_data;
-        std::mutex term_data_mutex;
-
-        // Process buffer files in parallel
-        size_t num_threads = std::min(buffer_files.size(), static_cast<size_t>(std::thread::hardware_concurrency()));
-        size_t files_per_thread = (buffer_files.size() + num_threads - 1) / num_threads;
-
-        std::vector<std::thread> threads;
-        for (size_t t = 0; t < num_threads; t++) {
-            size_t start_idx = t * files_per_thread;
-            size_t end_idx = std::min(start_idx + files_per_thread, buffer_files.size());
-
-            if (start_idx >= buffer_files.size())
-                continue;
-
-            threads.emplace_back([&, start_idx, end_idx]() {
-                std::unordered_map<std::string,
-                                   std::vector<std::pair<uint32_t, std::pair<uint8_t, std::vector<uint16_t>>>>>
-                    local_term_data;
-
-                for (size_t i = start_idx; i < end_idx; i++) {
-                    const auto& buffer_file = buffer_files[i];
-                    std::ifstream in(buffer_file, std::ios::binary);
-                    if (!in)
-                        continue;
-
-                    uint32_t term_count;
-                    in.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
-
-                    for (uint32_t i = 0; i < term_count && in.good(); i++) {
-                        uint32_t term_len;
-                        in.read(reinterpret_cast<char*>(&term_len), sizeof(term_len));
-                        std::string term(term_len, ' ');
-                        in.read(&term[0], term_len);
-
-                        uint32_t doc_count;
-                        in.read(reinterpret_cast<char*>(&doc_count), sizeof(doc_count));
-
-                        for (uint32_t j = 0; j < doc_count && in.good(); j++) {
-                            uint32_t doc_id;
-                            in.read(reinterpret_cast<char*>(&doc_id), sizeof(doc_id));
-
-                            uint8_t field_flags;
-                            in.read(reinterpret_cast<char*>(&field_flags), sizeof(field_flags));
-
-                            uint32_t pos_count;
-                            in.read(reinterpret_cast<char*>(&pos_count), sizeof(pos_count));
-
-                            std::vector<uint16_t> positions;
-                            positions.reserve(pos_count);
-                            uint16_t prev_pos = 0;
-
-                            for (uint32_t k = 0; k < pos_count && in.good(); k++) {
-                                uint16_t delta = VByteCodec::decode(in);
-                                prev_pos += delta;
-                                positions.push_back(prev_pos);
-                            }
-
-                            local_term_data[term].emplace_back(doc_id,
-                                                               std::make_pair(field_flags, std::move(positions)));
-                        }
-                    }
-                }
-
-                // Merge local data into shared term_data
-                {
-                    std::lock_guard<std::mutex> lock(term_data_mutex);
-                    for (auto& [term, doc_positions] : local_term_data) {
-                        auto& target = term_data[term];
-                        target.insert(target.end(),
-                                      std::make_move_iterator(doc_positions.begin()),
-                                      std::make_move_iterator(doc_positions.end()));
-                    }
-                }
-            });
-        }
-
-        for (auto& thread : threads) {
-            thread.join();
-        }
-
-        // Create final position files
+        // Open output files
         std::string data_file = output_dir + "/positions.data";
         std::ofstream data_out(data_file, std::ios::binary);
+        if (!data_out) {
+            throw std::runtime_error("Failed to create output data file: " + data_file);
+        }
+
         std::string posDict_file = output_dir + "/positions.dict";
         std::ofstream posDict_out(posDict_file, std::ios::binary);
+        if (!posDict_out) {
+            throw std::runtime_error("Failed to create output dictionary file: " + posDict_file);
+        }
 
-        uint32_t term_count = term_data.size();
-        posDict_out.write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
+        // Structure to track a term being processed from a file
+        struct TermInfo {
+            std::string term;
+            uint32_t doc_count;
+            size_t stream_index;  // Index into streams vector
 
-        for (auto& [term, doc_positions] : term_data) {
-            std::sort(doc_positions.begin(), doc_positions.end(), [](const auto& a, const auto& b) {
-                return a.first < b.first;
-            });
+            bool operator<(const TermInfo& other) const {
+                return term > other.term;  // Reverse for min-heap
+            }
+        };
 
-            uint32_t term_len = term.length();
-            posDict_out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
-            posDict_out.write(term.data(), term_len);
+        // Open input streams - keeping them in a vector for stable addresses
+        std::vector<std::ifstream> streams;
+        streams.reserve(buffer_files.size());
 
-            PositionMetadata metadata;
-            metadata.data_offset = static_cast<uint64_t>(data_out.tellp());
-            metadata.doc_count = doc_positions.size();
-            metadata.total_positions = 0;
+        // pqueue for merge
+        std::priority_queue<TermInfo> queue;
 
-            for (const auto& [doc_id, data] : doc_positions) {
-                metadata.total_positions += data.second.size();
+        // init with first term from each file
+        for (size_t i = 0; i < buffer_files.size(); i++) {
+            streams.emplace_back(buffer_files[i], std::ios::binary);
+            std::ifstream& stream = streams.back();
+
+            if (!stream) {
+                spdlog::warn("Failed to open buffer file: {}", buffer_files[i]);
+                continue;
             }
 
-            posDict_out.write(reinterpret_cast<const char*>(&metadata), sizeof(metadata));
+            // Read term count
+            uint32_t term_count;
+            if (!stream.read(reinterpret_cast<char*>(&term_count), sizeof(term_count))) {
+                spdlog::warn("Failed to read term count from file: {}", buffer_files[i]);
+                continue;
+            }
 
-            for (const auto& [doc_id, data] : doc_positions) {
-                const auto& [field_flags, positions] = data;
-                data_out.write(reinterpret_cast<const char*>(&doc_id), sizeof(doc_id));
-                data_out.write(reinterpret_cast<const char*>(&field_flags), sizeof(field_flags));
-
-                uint32_t pos_count = positions.size();
-                data_out.write(reinterpret_cast<const char*>(&pos_count), sizeof(pos_count));
-
-                uint16_t prev_pos = 0;
-                for (uint16_t pos : positions) {
-                    uint16_t delta = pos - prev_pos;
-                    VByteCodec::encode(delta, data_out);
-                    prev_pos = pos;
+            if (term_count > 0) {
+                // Read first term
+                uint32_t term_len;
+                if (!stream.read(reinterpret_cast<char*>(&term_len), sizeof(term_len))) {
+                    spdlog::warn("Failed to read term length from file: {}", buffer_files[i]);
+                    continue;
                 }
+
+                std::string term(term_len, ' ');
+                if (!stream.read(&term[0], term_len)) {
+                    spdlog::warn("Failed to read term string from file: {}", buffer_files[i]);
+                    continue;
+                }
+
+                // Read doc count
+                uint32_t doc_count;
+                if (!stream.read(reinterpret_cast<char*>(&doc_count), sizeof(doc_count))) {
+                    spdlog::warn("Failed to read doc count from file: {}", buffer_files[i]);
+                    continue;
+                }
+
+                // Add to priority queue
+                queue.push({term, doc_count, i});
             }
         }
 
-        // Cleanup
+        // Write placeholder for term count (will update later)
+        uint32_t total_terms = 0;
+        posDict_out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
+        if (!posDict_out) {
+            throw std::runtime_error("Failed to write term count placeholder");
+        }
+
+        // Process all terms
+        std::string current_term;
+        TermPositions current_positions;
+
+        while (!queue.empty()) {
+            // Get next term from queue
+            TermInfo info = queue.top();
+            queue.pop();
+
+            // Safety check for stream index
+            if (info.stream_index >= streams.size() || !streams[info.stream_index]) {
+                spdlog::error("Invalid stream index or bad stream: {}", info.stream_index);
+                continue;
+            }
+
+            std::ifstream& stream = streams[info.stream_index];
+
+            // If new term, write previous term data
+            if (current_term != info.term) {
+                if (!current_term.empty()) {
+                    // Write previous term
+                    if (!writeTerm(current_term, current_positions, data_out, posDict_out)) {
+                        throw std::runtime_error("Failed to write term: " + current_term);
+                    }
+                    total_terms++;
+                }
+
+                // Start new term
+                current_term = info.term;
+                current_positions.clear();
+            }
+
+            // Read all docs for this term
+            for (uint32_t i = 0; i < info.doc_count && stream.good(); i++) {
+                // Read doc ID
+                uint32_t doc_id;
+                if (!stream.read(reinterpret_cast<char*>(&doc_id), sizeof(doc_id))) {
+                    spdlog::error("Failed to read doc ID for term: {}", info.term);
+                    break;
+                }
+
+                // Read field flags
+                uint8_t field_flags;
+                if (!stream.read(reinterpret_cast<char*>(&field_flags), sizeof(field_flags))) {
+                    spdlog::error("Failed to read field flags for doc: {}", doc_id);
+                    break;
+                }
+
+                // Read position count
+                uint32_t pos_count;
+                if (!stream.read(reinterpret_cast<char*>(&pos_count), sizeof(pos_count))) {
+                    spdlog::error("Failed to read position count for doc: {}", doc_id);
+                    break;
+                }
+
+                // Read positions
+                std::vector<uint16_t> positions;
+                positions.reserve(pos_count);
+
+                uint16_t prev_pos = 0;
+                bool read_success = true;
+
+                for (uint32_t j = 0; j < pos_count; j++) {
+                    try {
+                        uint16_t delta = VByteCodec::decode(stream);
+                        prev_pos += delta;
+                        positions.push_back(prev_pos);
+                    } catch (const std::exception& e) {
+                        spdlog::error("Error decoding position: {}", e.what());
+                        read_success = false;
+                        break;
+                    }
+                }
+
+                if (read_success) {
+                    current_positions.emplace_back(doc_id, std::make_pair(field_flags, std::move(positions)));
+                }
+            }
+
+            // Try to read next term from this file
+            if (stream.good()) {
+                // Read next term length
+                uint32_t term_len;
+                if (!stream.read(reinterpret_cast<char*>(&term_len), sizeof(term_len))) {
+                    // End of file or error, continue to next stream
+                    continue;
+                }
+
+                // Read term
+                std::string term(term_len, ' ');
+                if (!stream.read(&term[0], term_len)) {
+                    continue;
+                }
+
+                // Read doc count
+                uint32_t doc_count;
+                if (!stream.read(reinterpret_cast<char*>(&doc_count), sizeof(doc_count))) {
+                    continue;
+                }
+
+                // Add to queue
+                queue.push({term, doc_count, info.stream_index});
+            }
+        }
+
+        // Write final term if any
+        if (!current_term.empty()) {
+            if (!writeTerm(current_term, current_positions, data_out, posDict_out)) {
+                throw std::runtime_error("Failed to write final term: " + current_term);
+            }
+            total_terms++;
+        }
+
+        // Update term count
+        posDict_out.seekp(0);
+        posDict_out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
+        if (!posDict_out) {
+            throw std::runtime_error("Failed to update term count");
+        }
+
+        // Close files
+        data_out.close();
+        posDict_out.close();
+
+        // Clean up
         for (const auto& buffer_file : buffer_files) {
             fs::remove(buffer_file);
         }
         fs::remove_all(pos_dir);
 
+        spdlog::info("Position index merge complete. Total terms: {}", total_terms);
     } catch (const std::exception& e) {
         spdlog::error("Error merging position buffers: {}", e.what());
+    }
+}
+
+bool PositionIndex::writeTerm(const std::string& term,
+                              const TermPositions& docs_positions,
+                              std::ofstream& data_out,
+                              std::ofstream& posDict_out) {
+    try {
+        // Sort docs by ID
+        TermPositions sorted_docs = docs_positions;
+        std::sort(
+            sorted_docs.begin(), sorted_docs.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        // Write term to dictionary
+        uint32_t term_len = term.length();
+        posDict_out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
+        if (!posDict_out)
+            return false;
+
+        posDict_out.write(term.data(), term_len);
+        if (!posDict_out)
+            return false;
+
+        // Prepare metadata
+        PositionMetadata metadata;
+        metadata.data_offset = static_cast<uint64_t>(data_out.tellp());
+        metadata.doc_count = sorted_docs.size();
+        metadata.total_positions = 0;
+
+        for (const auto& [doc_id, data] : sorted_docs) {
+            metadata.total_positions += data.second.size();
+        }
+
+        posDict_out.write(reinterpret_cast<const char*>(&metadata), sizeof(metadata));
+        if (!posDict_out)
+            return false;
+
+        // Write docs
+        for (const auto& [doc_id, data] : sorted_docs) {
+            const auto& [field_flags, positions] = data;
+
+            data_out.write(reinterpret_cast<const char*>(&doc_id), sizeof(doc_id));
+            if (!data_out)
+                return false;
+
+            data_out.write(reinterpret_cast<const char*>(&field_flags), sizeof(field_flags));
+            if (!data_out)
+                return false;
+
+            uint32_t pos_count = positions.size();
+            data_out.write(reinterpret_cast<const char*>(&pos_count), sizeof(pos_count));
+            if (!data_out)
+                return false;
+
+            uint16_t prev_pos = 0;
+            for (uint16_t pos : positions) {
+                uint16_t delta = pos - prev_pos;
+                VByteCodec::encode(delta, data_out);
+                if (!data_out)
+                    return false;
+                prev_pos = pos;
+            }
+        }
+
+        return true;
+    } catch (const std::exception& e) {
+        spdlog::error("Error writing term {}: {}", term, e.what());
+        return false;
     }
 }
 
