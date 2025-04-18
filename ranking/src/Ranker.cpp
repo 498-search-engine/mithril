@@ -19,36 +19,43 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         logger = spdlog::basic_logger_mt("ranker_logger", "ranker.log");
     }
 
-    uint8_t fieldFlags = position_index.getFieldFlags(query[0].first, doc.id);
-    bool isInURL = fieldTypeToFlag(FieldType::URL) & fieldFlags;
-    bool isInTitle = fieldTypeToFlag(FieldType::TITLE) & fieldFlags;
-    bool isInDescription = fieldTypeToFlag(FieldType::DESC) & fieldFlags;
-    bool isInBody = fieldTypeToFlag(FieldType::BODY) & fieldFlags;
+    std::vector<uint16_t> urlPositions =
+        position_index.getPositions(mithril::TokenNormalizer::decorateToken(query[0].first, FieldType::URL), doc.id);
+    std::vector<uint16_t> titlePositions =
+        position_index.getPositions(mithril::TokenNormalizer::decorateToken(query[0].first, FieldType::TITLE), doc.id);
+    std::vector<uint16_t> descPositions =
+        position_index.getPositions(mithril::TokenNormalizer::decorateToken(query[0].first, FieldType::DESC), doc.id);
+    std::vector<uint16_t> bodyPositions =
+        position_index.getPositions(mithril::TokenNormalizer::decorateToken(query[0].first, FieldType::BODY), doc.id);
+
+    bool isInURL = urlPositions.size();
+    bool isInTitle = titlePositions.size();
+    bool isInDescription = descPositions.size();
+    bool isInBody = bodyPositions.size();
 
     std::string title;
-
     for (const auto& term : doc.title) {
         title += term;
     }
-
     std::transform(title.begin(), title.end(), title.begin(), [](unsigned char c) { return std::tolower(c); });
 
-    for (const auto& [term, multiplicity] : query) {
-        if (doc.url.find(term) != std::string::npos) {
-            if (!isInURL) {
-                logger->error("Term {} not found in URL", term);
-            }
-            isInURL = true;
-        }
-        if (title.find(term) != std::string::npos) {
-            if (!isInURL) {
-                logger->error("Term {} not found in title", term);
-            }
-            isInTitle = true;
-        }
-    }
+    logger->info("[{}] Query: {}, URL: {}, Title: {}", doc.id, query[0].first, doc.url, title);
 
-    logger->info("\nQuery: {}, URL: {}, Title: {}", query[0].first, doc.url, title);
+
+    // for (const auto& [term, multiplicity] : query) {
+    //     if (doc.url.find(term) != std::string::npos) {
+    //         if (!isInURL) {
+    //             logger->error("Term {} not found in URL", term);
+    //         }
+    //         isInURL = true;
+    //     }
+    //     if (title.find(term) != std::string::npos) {
+    //         if (!isInURL) {
+    //             logger->error("Term {} not found in title", term);
+    //         }
+    //         isInTitle = true;
+    //     }
+    // }
 
     dynamic::RankerFeatures features{
         // Boolean presence flags
