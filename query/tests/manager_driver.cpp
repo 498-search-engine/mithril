@@ -4,6 +4,11 @@
 #include <string>
 #include <vector>
 #include <spdlog/spdlog.h>
+#include <chrono>
+#include <cmath>
+
+using Clock = std::chrono::high_resolution_clock;
+using MsBetween = std::chrono::duration<double, std::milli>;
 
 int main(int argc, char** argv) {
     // Configure logging
@@ -23,18 +28,30 @@ int main(int argc, char** argv) {
         index_dirs.push_back(argv[i]);
     }
 
+    spdlog::info("Making Query Manager");
     QueryManager qm(index_dirs);
     spdlog::info("Constructed Query Manager with {} workers", index_dirs.size());
     spdlog::info("Now serving queries. Enter below...");
 
     std::string query;
+    std::cout << ">> ";
     while (std::getline(std::cin, query)) {
         spdlog::info("Serving query {}...", query);
+
+        auto t0 = Clock::now();
         auto result = qm.AnswerQuery(query);
-        spdlog::info("Found {} matches", result.size());
+        auto t1 = Clock::now();
+
+        // Calc runtime
+        std::chrono::duration<double, std::milli> query_time = t1 - t0;
+        const double query_ms = std::ceil(query_time.count() * 100.0) / 100.0;
+        spdlog::info("Found {} matches in {}ms", result.size(), query_ms);
+    
         if (result.size() > 0) {
             std::cout << "Best: doc " << result[0].first << " with score " << result[0].second << "\n\n";
         }
+
+        std::cout << ">> ";
     }
 
     return 0;

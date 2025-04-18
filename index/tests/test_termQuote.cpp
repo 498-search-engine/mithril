@@ -1,7 +1,7 @@
 #include "DocumentMapReader.h"
+#include "PositionIndex.h"
 #include "TermDictionary.h"
 #include "TermQuote.h"
-#include "PositionIndex.h"
 #include "core/mem_map_file.h"
 
 #include <iostream>
@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Loading document map from " << index_dir << std::endl;
         mithril::DocumentMapReader doc_reader(index_dir);
         std::cout << "Loaded document map with " << doc_reader.documentCount() << " documents." << std::endl;
-    
+
         std::cout << "Loading position index from " << index_dir << std::endl;
         mithril::PositionIndex position_index(index_dir);
         std::cout << "Loaded position index." << std::endl;

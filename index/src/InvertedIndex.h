@@ -25,7 +25,7 @@ using docid_t = data::docid_t;
 
 // Constants
 constexpr size_t DEFAULT_MAX_TERMS_PER_BLOCK = 750000;
-constexpr size_t DEFAULT_MERGE_FACTOR = 16;
+constexpr size_t DEFAULT_MERGE_FACTOR = 32;
 
 struct DocumentMetadata {
     data::docid_t id;

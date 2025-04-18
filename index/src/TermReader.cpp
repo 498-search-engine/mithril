@@ -3,10 +3,10 @@
 #include "PostingBlock.h"
 #include "core/mem_map_file.h"
 
+#include <concepts>
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
-#include <cstdlib>
-#include <concepts>
 
 namespace mithril {
 
@@ -17,12 +17,17 @@ static inline T CopyFromBytes(const char* ptr) {
     return val;
 }
 
-TermReader::TermReader(const std::string& index_path, const std::string& term,
-                       const core::MemMapFile& index_file, TermDictionary& term_dict,
+TermReader::TermReader(const std::string& index_path,
+                       const std::string& term,
+                       const core::MemMapFile& index_file,
+                       TermDictionary& term_dict,
                        PositionIndex& position_index)
-    : term_dict_(term_dict), term_(term), index_path_(index_path + "/final_index.data"),
-      index_dir_(index_path), index_file_(index_file), position_index_(position_index)
-{
+    : term_dict_(term_dict),
+      term_(term),
+      index_path_(index_path + "/final_index.data"),
+      index_dir_(index_path),
+      index_file_(index_file),
+      position_index_(position_index) {
 
     if (term_dict_.is_loaded()) {
         found_term_ = findTermWithDict(term, term_dict_);
@@ -37,7 +42,7 @@ TermReader::TermReader(const std::string& index_path, const std::string& term,
     }
 }
 
-TermReader::~TermReader() { }
+TermReader::~TermReader() {}
 
 bool TermReader::findTermWithDict(const std::string& term, const TermDictionary& dictionary) {
     auto entry_opt = dictionary.lookup(term);
@@ -115,7 +120,8 @@ uint32_t TermReader::decodeVByte(const char*& ptr) {
     while (ptr < end) [[likely]] {
         uint8_t byte = *reinterpret_cast<const uint8_t*>(ptr++);
         result |= (uint32_t)(byte & 0x7f) << shift;
-        if (!(byte & 0x80)) break;
+        if (!(byte & 0x80))
+            break;
         shift += 7;
     }
 
