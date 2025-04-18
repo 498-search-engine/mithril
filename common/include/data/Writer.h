@@ -31,6 +31,11 @@ public:
     FileWriter& operator=(FileWriter&& other) noexcept;
 
     void Write(const void* data, size_t size);
+    void Write(char byte);
+
+    long Ftell() const;
+    void Fseek(long pos, int origin = SEEK_SET);
+
     void Flush();
     void Close();
     void DontNeed();

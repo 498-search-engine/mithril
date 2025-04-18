@@ -4,6 +4,7 @@
 #include "TextPreprocessor.h"
 #include "Utils.h"
 #include "core/mem_map_file.h"
+#include "data/Writer.h"
 
 #include <array>
 #include <fstream>
@@ -13,6 +14,8 @@
 #include <vector>
 
 namespace mithril {
+
+using TermPositions = std::vector<std::pair<uint32_t, std::pair<uint8_t, std::vector<uint16_t>>>>;
 
 struct PositionMetadata {
     uint64_t data_offset;
@@ -73,6 +76,10 @@ private:
 
     static void flushBuffer(const std::string& output_dir);
     static void mergePositionBuffers(const std::string& output_dir);
+    static bool writeTerm(const std::string& term,
+                          const TermPositions& docs_positions,
+                          data::FileWriter& data_out,
+                          data::FileWriter& posDict_out);
 };
 
 }  // namespace mithril
