@@ -126,6 +126,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    run_query_engine(index_dir, query);
+    _engine(index_dir, query);
     return shutdown_requested ? 1 : 0;
 }

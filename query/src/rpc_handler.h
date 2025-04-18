@@ -10,8 +10,36 @@
 
 struct RPCHandler {
     public:
+    static std::string ReadQuery(int client_fd){
+        uint32_t query_length = 0;
 
-    static void Send(int sockfd, const std::vector<std::pair<uint32_t, std::string>>& data){
+        // Step 1: Receive query length (4 bytes)
+        ssize_t bytes_read = recv(client_fd, &query_length, sizeof(query_length), MSG_WAITALL);
+        if (bytes_read != sizeof(query_length)) {
+            spdlog::error("Failed to read query length, received {} bytes", bytes_read);
+            uint32_t result_count = 0;
+            send(client_fd, &result_count, sizeof(uint32_t), 0);
+            return;
+        }
+
+        // Convert from network byte order (if needed)
+        // query_length = ntohl(query_length); // Uncomment if the client used htonl()
+
+        // Step 2: Receive query string
+        std::string query(query_length, '\0');
+        bytes_read = recv(client_fd, &query[0], query_length, MSG_WAITALL);
+        if (bytes_read != query_length) {
+            spdlog::error("Failed to read query, expected {} bytes but got {}", query_length, bytes_read);
+            uint32_t result_count = 0;
+            send(client_fd, &result_count, sizeof(uint32_t), 0);
+            return;
+        }
+        
+        spdlog::info("Received binary query: '{}'", query);
+        return query;
+    }
+
+    static void SendResults(int sockfd, const std::vector<std::pair<uint32_t, std::string>>& data){
         std::string header = std::to_string(data.size())+"\r\n\r\n";
         sendAll(sockfd, header.c_str(), header.size());
 
@@ -23,19 +51,9 @@ struct RPCHandler {
             //send c-str
             sendAll(sockfd, str.c_str(), str.size()+1);
         }
-
-        // //wait for ack
-        // std::cout << "waiting for ack\n";
-        // char ack_buf[4] = {0};
-        // ssize_t n = recv(sockfd, ack_buf, sizeof(ack_buf) - 1, MSG_WAITALL);
-        // if (n > 0) {
-        //     std::cout << "Server replied: " << ack_buf << std::endl;
-        // } else {
-        //     std::cerr << "Did not receive ACK from server.\n";
-        // }
     }
 
-    static std::vector<std::pair<uint32_t, std::string>> Read(int sockfd){
+    static std::vector<std::pair<uint32_t, std::string>> ReadResults(int sockfd){
         //blocking until read can happen
         std::vector<std::pair<uint32_t, std::string>> result;
 
@@ -81,11 +99,6 @@ struct RPCHandler {
 
             result.emplace_back(num, str);
         }
-
-        // //send ack
-        // std::cout << "about to send ack\n";
-        // const char* ack = "ACK";
-        // send(sockfd, ack, strlen(ack), 0);
 
         return result;
     }
