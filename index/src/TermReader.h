@@ -5,6 +5,7 @@
 #include "PositionIndex.h"
 #include "PostingBlock.h"
 #include "TermDictionary.h"
+#include "core/mem_map_file.h"
 
 #include <fstream>
 #include <memory>
@@ -17,7 +18,8 @@ namespace mithril {
 class TermReader : public IndexStreamReader {
 public:
     TermReader(const std::string& index_path, const std::string& term,
-               TermDictionary& term_dict, PositionIndex& position_index);
+               const core::MemMapFile& index_file, TermDictionary& term_dict,
+               PositionIndex& position_index);
     ~TermReader();
 
     // ISR
@@ -42,7 +44,7 @@ private:
     std::string term_;
     std::string index_path_;
     std::string index_dir_;
-    std::ifstream index_file_;
+    const core::MemMapFile& index_file_;
     bool found_term_{false};
     bool at_end_{false};
 
@@ -58,7 +60,7 @@ private:
 
     bool findTerm(const std::string& term);
     bool findTermWithDict(const std::string& term, const TermDictionary& dictionary);
-    static uint32_t decodeVByte(std::istream& in);
+    uint32_t decodeVByte(const char*& ptr);
 };
 
 }  // namespace mithril
