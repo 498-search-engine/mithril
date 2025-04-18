@@ -104,6 +104,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - ISRs now share a position index instead of creating their own (#134)
 - better integration of ranking, query & index (#137)
 - Fixed parser driver (#140)
+- ISRs and Position Index now use memory mapped files instead of reading byte-by-byte from ifstreams (#141)
 
 ## [0.1.0] - 2025-02-07
 
