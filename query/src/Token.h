@@ -58,7 +58,7 @@ struct Token {
     }
 };
 
-std::vector<std::string> extract_quote_terms(Token quote_token) {
+inline std::vector<std::string> extract_quote_terms(Token quote_token) {
     if (quote_token.type != TokenType::QUOTE) {
         throw std::invalid_argument("Token is not a quote but youa re calling extract_quote_terms");
     }

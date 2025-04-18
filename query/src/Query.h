@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <sstream>
 
 
 // TODO: Determine if we should limit the number of documents we read
@@ -231,13 +232,22 @@ public:
 
     std::vector<uint32_t> evaluate() const override { return {}; }
 
-
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        return std::make_unique<mithril::TermQuote>(query::QueryConfig::GetIndexPath(),
-                                                    extract_quote_terms(quote_token_),
-                                                    index_file_,
-                                                    term_dict_,
-                                                    position_index_);
+        // Split the quote into terms
+        std::vector<std::string> quote_terms;
+        std::istringstream iss(quote_token_.value);
+        std::string term;
+        while (iss >> term) {
+            quote_terms.push_back(term);
+        }
+
+        return std::make_unique<mithril::TermQuote>(
+            query::QueryConfig::GetIndexPath(),
+            quote_terms,
+            index_file_,
+            term_dict_,
+            position_index_
+        );
     }
 
     [[nodiscard]] std::string to_string() const override { return "QUOTE(" + quote_token_.value + ")"; }
@@ -245,10 +255,10 @@ public:
     [[nodiscard]] std::string get_type() const override { return "QuoteQuery"; }
 
 private:
-    Token quote_token;
+    Token quote_token_;
     const core::MemMapFile& index_file_;
     mithril::TermDictionary& term_dict_;
     mithril::PositionIndex& position_index_;
-}
+};
 
 #endif  // QUERY_H_
