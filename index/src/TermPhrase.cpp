@@ -3,6 +3,7 @@
 #include "TermAND.h"
 #include "TermDictionary.h"
 #include "TermReader.h"
+#include "core/mem_map_file.h"
 
 #include <algorithm>
 
@@ -13,11 +14,15 @@ constexpr uint32_t kMaxSpanSize = 5;
 TermPhrase::TermPhrase(DocumentMapReader& doc_reader,
                        const std::string& index_path,
                        const std::vector<std::string>& phrase,
-                       TermDictionary& term_dict)
-    : doc_reader_(doc_reader), index_path_(index_path), phrase_(phrase), term_dict_(term_dict) {
+                       const core::MemMapFile& index_file,
+                       TermDictionary& term_dict,
+                       PositionIndex& position_index)
+    : doc_reader_(doc_reader), index_path_(index_path), phrase_(phrase),
+      index_file_(index_file), term_dict_(term_dict), position_index_(position_index)
+{
     std::vector<std::unique_ptr<IndexStreamReader>> term_readers;
     for (const auto& term : phrase) {
-        auto ptr = new TermReader(index_path_, term, term_dict_);
+        auto ptr = new TermReader(index_path_, term, index_file_, term_dict_, position_index_);
         term_readers_.push_back(ptr);                                          // maintain for ourselves
         term_readers.emplace_back(reinterpret_cast<IndexStreamReader*>(ptr));  // what we pass to TermAND
     }

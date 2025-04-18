@@ -9,33 +9,10 @@
 #include <unordered_map>
 #include <vector>
 
+
 namespace mithril {
 
-struct DocInfo {
-    data::docid_t id;
-    uint32_t url_offset;
-    uint32_t url_length;
-    uint32_t title_offset;
-    uint32_t title_length;
-    uint32_t body_length;
-    uint32_t desc_length;
-    float pagerank_score;
-
-    uint32_t getFieldLength(FieldType field) const {
-        switch (field) {
-        case FieldType::BODY:
-            return body_length;
-        case FieldType::TITLE:
-            return title_length;
-        case FieldType::URL:
-            return url_length;
-        case FieldType::DESC:
-            return desc_length;
-        default:
-            return 0;
-        }
-    }
-};
+using DocInfo = data::DocInfo;
 
 class DocumentMapReader {
 public:

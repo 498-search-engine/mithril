@@ -2,6 +2,8 @@
 #include "TermAND.h"
 #include "TermDictionary.h"
 #include "TermReader.h"
+#include "PositionIndex.h"
+#include "core/mem_map_file.h"
 
 #include <iostream>
 #include <memory>
@@ -77,7 +79,9 @@ int main(int argc, char* argv[]) {
 
     try {
         // Make term dict
+        core::MemMapFile index_file(index_dir + "/final_index.data");
         mithril::TermDictionary term_dict(index_dir);
+        mithril::PositionIndex position_index(index_dir);
 
         // Create readers for each term
         std::vector<std::unique_ptr<mithril::IndexStreamReader>> isr_readers;
@@ -85,10 +89,10 @@ int main(int argc, char* argv[]) {
 
         for (int i = 2; i < argc - (phrase_mode ? 1 : 0); ++i) {
             // Create TermReader for position checking
-            term_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i], term_dict));
+            term_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i], index_file, term_dict, position_index));
 
             // Create another TermReader for the AND operation
-            isr_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i], term_dict));
+            isr_readers.push_back(std::make_unique<mithril::TermReader>(index_dir, argv[i], index_file, term_dict, position_index));
         }
 
         mithril::TermAND and_reader(std::move(isr_readers));

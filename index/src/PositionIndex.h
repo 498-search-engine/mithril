@@ -4,6 +4,7 @@
 #include "TextPreprocessor.h"
 #include "Utils.h"
 #include "data/Writer.h"
+#include "core/mem_map_file.h"
 
 #include <array>
 #include <fstream>
@@ -62,8 +63,10 @@ public:
 private:
     std::string index_dir_;
     std::unordered_map<std::string, PositionMetadata> posDict_;
-    mutable std::ifstream data_file_;
+    mutable core::MemMapFile data_file_;
+
     bool loadPosDict();
+    uint32_t decodeVByte(const char*& ptr) const;
 
     static std::mutex buffer_mutex_;
     static std::unordered_map<std::string, std::vector<PositionEntry>> position_buffer_;

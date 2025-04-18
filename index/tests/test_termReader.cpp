@@ -1,9 +1,15 @@
 #include "DocumentMapReader.h"
 #include "TermDictionary.h"
 #include "TermReader.h"
+#include "PositionIndex.h"
+#include "core/mem_map_file.h"
 
 #include <iomanip>
 #include <iostream>
+#include <chrono>
+
+using Clock = std::chrono::high_resolution_clock;
+using MsBetween = std::chrono::duration<double, std::milli>;
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
@@ -14,17 +20,48 @@ int main(int argc, char* argv[]) {
     std::string index_dir = argv[1];
     std::string term = argv[2];
 
-    mithril::TermDictionary term_dict(index_dir);
-
     try {
         std::cout << "Starting program" << std::endl;
 
+        auto t0 = Clock::now();
         std::cout << "Loading document map from " << index_dir << std::endl;
         mithril::DocumentMapReader doc_reader(index_dir);
-        std::cout << "Loaded document map with " << doc_reader.documentCount() << " documents." << std::endl;
+        auto t1 = Clock::now();
+
+        std::chrono::duration<double, std::milli> doc_time = t1 - t0;
+        double doc_ms = std::ceil(doc_time.count() * 100.0) / 100.0;
+        std::cout << "Loaded document map with " << doc_reader.documentCount()
+                  << " documents in " << std::fixed << std::setprecision(2) << doc_ms << "ms" << std::endl;
+
+        std::cout << "Loading position index from " << index_dir << std::endl;
+        auto t2 = Clock::now();
+        mithril::PositionIndex position_index(index_dir);
+        auto t3 = Clock::now();
+
+        std::chrono::duration<double, std::milli> pos_time = t3 - t2;
+        double pos_ms = std::ceil(pos_time.count() * 100.0) / 100.0;
+        std::cout << "Loaded position index in " << std::fixed << std::setprecision(2) << doc_ms << "ms" << std::endl;
+
+        std::cout << "Loading term dictionary from " << index_dir << std::endl;
+        auto t4 = Clock::now();
+        mithril::TermDictionary term_dict(index_dir);
+        auto t5 = Clock::now();
+
+        std::chrono::duration<double, std::milli> dic_time = t5 - t4;
+        double dic_ms = std::ceil(dic_time.count() * 100.0) / 100.0;
+        std::cout << "Loaded term dictionary in " << std::fixed << std::setprecision(2) << dic_ms << "ms" << std::endl;
+
+        std::cout << "Memory mapping index file" << std::endl;
+        core::MemMapFile index_file(index_dir + "/final_index.data");
 
         std::cout << "Creating TermReader for term '" << term << "'" << std::endl;
-        mithril::TermReader term_reader(index_dir, term, term_dict);
+        auto t6 = Clock::now();
+        mithril::TermReader term_reader(index_dir, term, index_file, term_dict, position_index);
+        auto t7 = Clock::now();
+
+        std::chrono::duration<double, std::milli> read_time = t7 - t6;
+        double read_ms = std::ceil(read_time.count() * 100.0) / 100.0;
+        std::cout << "Created TermReader in " << std::fixed << std::setprecision(2) << read_ms << "ms" << std::endl;
 
         std::cout << "Searching for term: \"" << term << "\"" << std::endl;
 

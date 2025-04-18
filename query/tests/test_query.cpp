@@ -1,5 +1,8 @@
 #include "../src/Query.h"
 #include "TermDictionary.h"
+#include "PositionIndex.h"
+#include "core/mem_map_file.h"
+
 #include <gtest/gtest.h>
 #include <string>
 #include <random>
@@ -42,9 +45,11 @@ protected:
 // Test that TermQuery can be constructed and evaluated
 TEST_F(QueryTest, TermQueryConstruction) {
     mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
+    mithril::PositionIndex position_index(query::QueryConfig::GetIndexPath());
+    core::MemMapFile index_file(query::QueryConfig::GetIndexPath());
 
     // Create a TermQuery
-    TermQuery query(CreateToken("example"), term_dict);
+    TermQuery query(CreateToken("example"), index_file, term_dict, position_index);
     
     // We expect an empty result since the index path is random
     auto results = query.evaluate();
@@ -56,8 +61,11 @@ TEST_F(QueryTest, TermQueryConstruction) {
 // Test that basic Query methods work
 TEST_F(QueryTest, BaseQueryMethods) {
     mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
+    mithril::PositionIndex position_index(query::QueryConfig::GetIndexPath());
+    core::MemMapFile index_file(query::QueryConfig::GetIndexPath());
+
     // The base Query virtual destructor should be callable
-    Query* query = new TermQuery(CreateToken("test"), term_dict);
+    Query* query = new TermQuery(CreateToken("test"), index_file, term_dict, position_index);
     delete query;
     
     // Base Query's Evaluate should return empty vector
@@ -69,13 +77,15 @@ TEST_F(QueryTest, BaseQueryMethods) {
 // Test with different token types
 TEST_F(QueryTest, DifferentTokenTypes) {
     mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
+    mithril::PositionIndex position_index(query::QueryConfig::GetIndexPath());
+    core::MemMapFile index_file(query::QueryConfig::GetIndexPath());
     // Test with WORD token
-    TermQuery word_query(CreateToken("wordtoken", TokenType::WORD), term_dict);
+    TermQuery word_query(CreateToken("wordtoken", TokenType::WORD), index_file, term_dict, position_index);
     auto word_results = word_query.evaluate();
     EXPECT_TRUE(word_results.empty());
     
     // Test with QUOTE token
-    TermQuery phrase_query(CreateToken("quote token", TokenType::QUOTE), term_dict);
+    TermQuery phrase_query(CreateToken("quote token", TokenType::QUOTE), index_file, term_dict, position_index);
     auto phrase_results = phrase_query.evaluate();
     EXPECT_TRUE(phrase_results.empty());
 }
@@ -83,7 +93,9 @@ TEST_F(QueryTest, DifferentTokenTypes) {
 // Test with empty token value
 TEST_F(QueryTest, EmptyTokenValue) {
     mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
-    TermQuery empty_query(CreateToken(""), term_dict);
+    mithril::PositionIndex position_index(query::QueryConfig::GetIndexPath());
+    core::MemMapFile index_file(query::QueryConfig::GetIndexPath());
+    TermQuery empty_query(CreateToken(""), index_file, term_dict, position_index);
     auto results = empty_query.evaluate();
     EXPECT_TRUE(results.empty());
 }
@@ -97,17 +109,19 @@ TEST_F(QueryTest, QueryConfigPathUpdated) {
 // Test with different random paths
 TEST_F(QueryTest, MultipleRandomPaths) {
     mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
+    mithril::PositionIndex position_index(query::QueryConfig::GetIndexPath());
+    core::MemMapFile index_file(query::QueryConfig::GetIndexPath());
     // Test with first random path
     // const_cast<std::string&>(query::QueryConfig::GetIndexPath() ) = "random_path_1";
     query::QueryConfig::SetIndexPath("random_path_1");
-    TermQuery query1(CreateToken("test"), term_dict);
+    TermQuery query1(CreateToken("test"), index_file, term_dict, position_index);
     auto results1 = query1.evaluate();
     EXPECT_TRUE(results1.empty());
     
     // Test with second random path
     // const_cast<std::string&>(query::QueryConfig::GetIndexPath()) = "random_path_2";
     query::QueryConfig::SetIndexPath("random_path_2");
-    TermQuery query2(CreateToken("test"), term_dict);
+    TermQuery query2(CreateToken("test"), index_file, term_dict, position_index);
     auto results2 = query2.evaluate();
     EXPECT_TRUE(results2.empty());
 }
@@ -115,7 +129,9 @@ TEST_F(QueryTest, MultipleRandomPaths) {
 // Test with special characters in token
 TEST_F(QueryTest, SpecialCharactersInToken) {
     mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
-    TermQuery query(CreateToken("special!@#$%^&*()"), term_dict);
+    mithril::PositionIndex position_index(query::QueryConfig::GetIndexPath());
+    core::MemMapFile index_file(query::QueryConfig::GetIndexPath());
+    TermQuery query(CreateToken("special!@#$%^&*()"), index_file, term_dict, position_index);
     auto results = query.evaluate();
     EXPECT_TRUE(results.empty());
 }
@@ -123,8 +139,10 @@ TEST_F(QueryTest, SpecialCharactersInToken) {
 // Test with very long token
 TEST_F(QueryTest, VeryLongToken) {
     mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
+    mithril::PositionIndex position_index(query::QueryConfig::GetIndexPath());
+    core::MemMapFile index_file(query::QueryConfig::GetIndexPath());
     std::string long_token(1000, 'a'); // 1000 'a' characters
-    TermQuery query(CreateToken(long_token), term_dict);
+    TermQuery query(CreateToken(long_token), index_file, term_dict, position_index);
     auto results = query.evaluate();
     EXPECT_TRUE(results.empty());
 }

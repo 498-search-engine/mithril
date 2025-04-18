@@ -11,6 +11,7 @@ else()
 endif()
 
 add_library(ranking STATIC 
+    src/Ranker.cpp
     src/PageRank.cpp
     src/StaticRanker.cpp
     src/DynamicRanker.cpp

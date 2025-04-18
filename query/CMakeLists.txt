@@ -53,3 +53,5 @@ target_link_libraries(or_test PRIVATE query index common)
 
 # Tests registration
 add_test(NAME LexerTest COMMAND test_lexer)
+
+file(COPY server.conf DESTINATION ${CMAKE_SOURCE_DIR}/bin)
