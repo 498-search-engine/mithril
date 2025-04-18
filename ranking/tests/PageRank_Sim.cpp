@@ -20,9 +20,9 @@ void WriteBackToFile() {
     std::ofstream outFile;
     outFile.open(OutputFile);
 
-    std::vector<double>& scores = *mithril::pagerank::Results;
+    std::vector<float>& scores = *mithril::pagerank::Results;
     std::vector<size_t> idx(mithril::pagerank::DocumentCount);
-    std::iota(idx.begin(), idx.end(), 0);
+    std::iota(idx.begin(), idx.end(), mithril::pagerank::StartDocument - mithril::pagerank::DocumentCount);
 
     sort(idx.begin(), idx.end(), [&scores](size_t i1, size_t i2) {
         auto it1 = mithril::pagerank::DocumentToNode->find(static_cast<mithril::data::docid_t>(i1));

@@ -4,6 +4,7 @@
 #include "Plugin.h"
 #include "QueryCoordinator.h"
 #include "QueryEngine.h"
+#include "QueryManager.h"
 
 #include <chrono>
 #include <memory>
@@ -35,7 +36,7 @@ public:
 
 private:
     std::unique_ptr<mithril::QueryCoordinator> query_coordinator_;
-    std::unique_ptr<QueryEngine> query_engine_;
+    std::unique_ptr<QueryManager> query_manager_;
     bool coordinator_initialized_ = false;
     bool engine_initialized_ = false;
     std::string config_path_;
@@ -45,6 +46,13 @@ private:
     std::mutex cache_mutex_;
 
     std::string ExecuteQuery(const std::string& query_text, int max_results = 50);
+    std::string GenerateJsonResults(const std::vector<std::pair<uint32_t, uint32_t>>& doc_ids,
+                                    size_t num_results,
+                                    bool demo_mode,
+                                    const std::string& error = "");
+    /**
+     * @deprecated does not account for ranking
+     */
     std::string GenerateJsonResults(const std::vector<uint32_t>& doc_ids,
                                     size_t num_results,
                                     bool demo_mode,

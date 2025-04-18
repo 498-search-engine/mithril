@@ -1,8 +1,11 @@
 #include "QueryManager.h"
 
+#include "Ranker.h"
+
 #include <algorithm>
 #include <mutex>
 #include <string>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -58,8 +61,14 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     QueryResult_t aggregated;
     for (const auto& marginal : marginal_results_)
         aggregated.insert(aggregated.end(), marginal.begin(), marginal.end());
-    std::sort(aggregated.begin(), aggregated.end());
+    std::sort(aggregated.begin(), aggregated.end(), [](const auto& a, const auto& b) {
+        if (a.second != b.second) {
+            return a.second > b.second;
+        }
+        return a.first > b.first;
+    });
 
+    spdlog::info("Returning results of size: {}", aggregated.size());
     return aggregated;
 }
 
@@ -77,10 +86,12 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
+
+        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, result);
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
-            marginal_results_[worker_id] = std::move(result);
+            marginal_results_[worker_id] = std::move(result_ranked);
             ++worker_completion_count_;  // TODO: change this to std::atomic increment?
             // if finished, tell main thread
             if (worker_completion_count_ == threads_.size())
@@ -92,8 +103,33 @@ void QueryManager::WorkerThread(size_t worker_id) {
     }
 }
 
-void QueryManager::HandleRanking(QueryResult& matches) {
-    // TODO: handle ranking here
+QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worker_id, std::vector<uint32_t>& matches) {
+    QueryResult_t ranked_matches;
+    ranked_matches.reserve(matches.size());
+
+    auto& query_engine = query_engines_[worker_id];
+
+    for (uint32_t match : matches) {
+        const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
+        if (!doc_opt.has_value()) {
+            ranked_matches.push_back({match, 0});
+            continue;
+        }
+
+        const data::Document& doc = doc_opt.value();
+        const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
+
+        // TODO: replace query with actual query terms (currently will only work for single term queries or phrases)
+        uint32_t score = ranking::GetFinalScore(
+            {
+                {query, 1}
+        },
+            doc,
+            docInfo);
+        ranked_matches.push_back({match, score});  // TODO: replace 0 with actual score
+    }
+
+    return ranked_matches;
 }
 
 }  // namespace mithril

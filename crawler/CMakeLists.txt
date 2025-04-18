@@ -27,3 +27,11 @@ add_executable(mithril_crawler
 target_link_libraries(mithril_crawler PRIVATE
     crawler
 )
+
+add_executable(mithril_manual_crawl
+    src/ManualCrawl.cpp
+)
+
+target_link_libraries(mithril_manual_crawl PRIVATE
+    crawler
+)

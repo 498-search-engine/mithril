@@ -1,20 +1,28 @@
 #include "TermReader.h"
 
 #include "PostingBlock.h"
+#include "core/mem_map_file.h"
 
 #include <iostream>
 #include <stdexcept>
+#include <cstdlib>
+#include <concepts>
 
 namespace mithril {
 
-TermReader::TermReader(const std::string& index_path, const std::string& term, TermDictionary& term_dict)
-    : term_dict_(term_dict), term_(term), index_path_(index_path + "/final_index.data"), index_dir_(index_path) {
+template<std::integral T>
+static inline T CopyFromBytes(const char* ptr) {
+    T val;
+    std::memcpy(&val, ptr, sizeof(val));
+    return val;
+}
 
-    // Open the index file
-    index_file_.open(index_path_, std::ios::binary);
-    if (!index_file_) {
-        throw std::runtime_error("Failed to open index file: " + index_path_);
-    }
+TermReader::TermReader(const std::string& index_path, const std::string& term,
+                       const core::MemMapFile& index_file, TermDictionary& term_dict,
+                       PositionIndex& position_index)
+    : term_dict_(term_dict), term_(term), index_path_(index_path + "/final_index.data"),
+      index_dir_(index_path), index_file_(index_file), position_index_(position_index)
+{
 
     if (term_dict_.is_loaded()) {
         found_term_ = findTermWithDict(term, term_dict_);
@@ -29,11 +37,7 @@ TermReader::TermReader(const std::string& index_path, const std::string& term, T
     }
 }
 
-TermReader::~TermReader() {
-    if (index_file_.is_open()) {
-        index_file_.close();
-    }
-}
+TermReader::~TermReader() { }
 
 bool TermReader::findTermWithDict(const std::string& term, const TermDictionary& dictionary) {
     auto entry_opt = dictionary.lookup(term);
@@ -41,36 +45,36 @@ bool TermReader::findTermWithDict(const std::string& term, const TermDictionary&
         return false;
     }
 
-    // Calculate abs file position (skip past term count)
-    std::streampos term_start_pos = sizeof(uint32_t);
-    std::streampos absolute_pos = term_start_pos + static_cast<std::streampos>(entry_opt->index_offset);
+    // Calculate abs file position (skip past 32bit term count)
+    const auto list_offset = sizeof(uint32_t) + entry_opt->index_offset;
 
     // Seek directly to the term position
-    index_file_.seekg(absolute_pos);
+    auto file_ptr = index_file_.data() + list_offset;
 
     // Read term length and verify
-    uint32_t term_len;
-    index_file_.read(reinterpret_cast<char*>(&term_len), sizeof(term_len));
+    const uint32_t term_len = CopyFromBytes<uint32_t>(file_ptr);
+    file_ptr += sizeof(uint32_t);
     if (term_len != term.length()) {
         std::cerr << "Dictionary offset error: term length mismatch" << std::endl;
         return false;
     }
 
     // Skip term content since we already know it matches
-    index_file_.seekg(term_len, std::ios::cur);
+    file_ptr += term_len;
 
     // Read postings size
-    uint32_t postings_size;
-    index_file_.read(reinterpret_cast<char*>(&postings_size), sizeof(postings_size));
+    const uint32_t postings_size = CopyFromBytes<uint32_t>(file_ptr);
+    file_ptr += sizeof(postings_size);
 
     // Read sync points
-    uint32_t sync_points_size;
-    index_file_.read(reinterpret_cast<char*>(&sync_points_size), sizeof(sync_points_size));
+    const uint32_t sync_points_size = CopyFromBytes<uint32_t>(file_ptr);
+    file_ptr += sizeof(sync_points_size);
 
     // Load sync points
     sync_points_.resize(sync_points_size);
     if (sync_points_size > 0) {
-        index_file_.read(reinterpret_cast<char*>(sync_points_.data()), sync_points_size * sizeof(SyncPoint));
+        std::memcpy(sync_points_.data(), file_ptr, sync_points_size * sizeof(SyncPoint));
+        file_ptr += sync_points_size * sizeof(SyncPoint);
     }
 
     // Read postings
@@ -80,17 +84,16 @@ bool TermReader::findTermWithDict(const std::string& term, const TermDictionary&
     // First read all doc ID deltas and calculate actual doc IDs
     std::vector<uint32_t> doc_ids(postings_size);
     uint32_t last_doc_id = 0;
-    for (uint32_t j = 0; j < postings_size; j++) {
-        uint32_t doc_id_delta = decodeVByte(index_file_);
-        uint32_t doc_id = last_doc_id + doc_id_delta;
-        doc_ids[j] = doc_id;
-        last_doc_id = doc_id;
+    for (uint32_t j = 0; j < postings_size; ++j) {
+        const uint32_t doc_id_delta = decodeVByte(file_ptr);
+        last_doc_id += doc_id_delta;
+        doc_ids[j] = last_doc_id;
     }
 
     // Then read all frequencies
     std::vector<uint32_t> freqs(postings_size);
     for (uint32_t j = 0; j < postings_size; j++) {
-        freqs[j] = decodeVByte(index_file_);
+        freqs[j] = decodeVByte(file_ptr);
     }
 
     // Combine doc IDs and frequencies into postings
@@ -104,19 +107,17 @@ bool TermReader::findTermWithDict(const std::string& term, const TermDictionary&
     return true;
 }
 
-uint32_t TermReader::decodeVByte(std::istream& in) {
-    uint32_t result = 0;
-    uint32_t shift = 0;
+uint32_t TermReader::decodeVByte(const char*& ptr) {
+    uint32_t result = 0, shift = 0;
     uint8_t byte;
 
-    do {
-        byte = in.get();
-        if (in.fail()) {
-            throw std::runtime_error("Failed to read VByte encoded value");
-        }
-        result |= (byte & 127) << shift;
+    const auto end = index_file_.data() + index_file_.size();
+    while (ptr < end) [[likely]] {
+        uint8_t byte = *reinterpret_cast<const uint8_t*>(ptr++);
+        result |= (uint32_t)(byte & 0x7f) << shift;
+        if (!(byte & 0x80)) break;
         shift += 7;
-    } while (byte & 128);
+    }
 
     return result;
 }
@@ -211,28 +212,15 @@ bool TermReader::hasPositions() const {
         return false;
     }
 
-    if (!position_index_) {
-        // // Extract just the dir part of the index path
-        // std::string index_dir = index_path_;
-        // size_t last_slash = index_dir.find_last_of("/\\");
-        // if (last_slash != std::string::npos) {
-        //     index_dir = index_dir.substr(0, last_slash);
-        // }
-
-        position_index_ = std::make_shared<PositionIndex>(index_dir_);
-    }
-
-    return position_index_->hasPositions(term_, currentDocID());
+    return position_index_.hasPositions(term_, currentDocID());
 }
 
 std::vector<uint16_t> TermReader::currentPositions() const {
     if (!found_term_ || at_end_) {
         return {};
     }
-    if (!position_index_) {
-        position_index_ = std::make_shared<PositionIndex>(index_dir_);
-    }
-    return position_index_->getPositions(term_, currentDocID());
+
+    return position_index_.getPositions(term_, currentDocID());
 }
 
 double TermReader::getAverageFrequency() const {
