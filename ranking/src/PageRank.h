@@ -38,7 +38,7 @@ int GetLinkNode(const std::string& link);
 /**
     @brief Writes PageRank info per docID to a file in byte format (big endian)
 */
-void Write();
+void Write(const std::string& outputBinaryFile);
 
 /**
     @brief Cleanup all associated memory with PageRank.
@@ -64,12 +64,13 @@ extern size_t StartDocument;
 */
 static core::Config Config = core::Config("pagerank.conf");
 const static inline std::string InputDirectory = std::string(Config.GetString("document_folder").Cstr());
-const static inline std::string OutputFile = std::string(Config.GetString("output_file").Cstr());
+const static inline std::string OutputBinarytFile = std::string(Config.GetString("output_file").Cstr());
 
 /**
     @brief Builds the CSR matrix and performs page rank on it.
 */
-void PerformPageRank(const std::string& inputDirectory = InputDirectory);
+void PerformPageRank(const std::string& inputDirectory = InputDirectory,
+                     const std::string& outputBinaryFile = OutputBinarytFile);
 
 };  // namespace mithril::pagerank
 #endif
