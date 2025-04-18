@@ -50,7 +50,6 @@ public:
     // Optional: Get query type as string
     [[nodiscard]] virtual std::string get_type() const { return "Query"; }
 
-private:
 };
 
 class TermQuery : public Query {

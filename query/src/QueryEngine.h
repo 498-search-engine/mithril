@@ -7,6 +7,7 @@
 #include "QueryConfig.h"
 #include "TermDictionary.h"
 #include "PositionIndex.h"
+#include "core/mem_map_file.h"
 
 #include <iostream>
 #include <memory>
@@ -16,7 +17,10 @@ using namespace mithril;
 
 class QueryEngine {
 public:
-    QueryEngine(const std::string& index_dir) : map_reader_(index_dir), term_dict_(index_dir), position_index_(index_dir) {
+    QueryEngine(const std::string& index_dir)
+        : map_reader_(index_dir), index_file_(index_dir),
+          term_dict_(index_dir), position_index_(index_dir)
+    {
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
 
@@ -24,17 +28,17 @@ public:
     }
 
     auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
-        Parser parser(input, term_dict_, position_index_);
+        Parser parser(input, index_file_, term_dict_, position_index_);
         return std::move(parser.parse());
     }
 
     std::vector<Token> GetTokens(const std::string& input) {
-        Parser parser(input, term_dict_, position_index_);
+        Parser parser(input, index_file_, term_dict_, position_index_);
         return parser.get_tokens();
     }
 
     std::vector<uint32_t> EvaluateQuery(std::string input) {
-        Parser parser(input, term_dict_, position_index_);
+        Parser parser(input, index_file_, term_dict_, position_index_);
         auto queryTree = parser.parse();
         if (!queryTree) {
             std::cerr << "Failed to parse query: " << input << std::endl;
@@ -69,6 +73,7 @@ public:
 
 private:
     mithril::DocumentMapReader map_reader_;
+    core::MemMapFile index_file_;
     mithril::TermDictionary term_dict_;
     mithril::PositionIndex position_index_;
 };
