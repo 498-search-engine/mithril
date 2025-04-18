@@ -1,11 +1,22 @@
 #include "PositionIndex.h"
 
 #include "TextPreprocessor.h"
+#include "Utils.h"
+#include "data/Writer.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
-#include <unordered_set>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 #include <spdlog/spdlog.h>
 
 namespace fs = std::filesystem;
@@ -132,35 +143,31 @@ void PositionIndex::flushBuffer(const std::string& output_dir) {
         }
 
         std::string buffer_file = pos_dir + "/buffer_" + std::to_string(buffer_counter_++) + ".data";
-        std::ofstream out(buffer_file, std::ios::binary);
-        if (!out) {
-            spdlog::error("Failed to create position buffer file: {}", buffer_file);
-            return;
-        }
+        auto out = data::FileWriter{buffer_file.c_str()};
 
         // Write number of terms
         uint32_t term_count = position_buffer_.size();
-        out.write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
+        out.Write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
 
         // Write each term's data
         for (const auto& [term, entries] : position_buffer_) {
             // Write term length and term
             uint32_t term_len = term.length();
-            out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
-            out.write(term.data(), term_len);
+            out.Write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
+            out.Write(term.data(), term_len);
 
             // Write doc count
             uint32_t doc_count = entries.size();
-            out.write(reinterpret_cast<const char*>(&doc_count), sizeof(doc_count));
+            out.Write(reinterpret_cast<const char*>(&doc_count), sizeof(doc_count));
 
             // Write each doc's positions
             for (const auto& entry : entries) {
                 // Write doc ID and position count
-                out.write(reinterpret_cast<const char*>(&entry.doc_id), sizeof(entry.doc_id));
-                out.write(reinterpret_cast<const char*>(&entry.field_flags), sizeof(entry.field_flags));
+                out.Write(reinterpret_cast<const char*>(&entry.doc_id), sizeof(entry.doc_id));
+                out.Write(reinterpret_cast<const char*>(&entry.field_flags), sizeof(entry.field_flags));
 
                 uint32_t pos_count = entry.positions.size();
-                out.write(reinterpret_cast<const char*>(&pos_count), sizeof(pos_count));
+                out.Write(reinterpret_cast<const char*>(&pos_count), sizeof(pos_count));
 
                 // Write delta-encoded positions
                 uint16_t prev_pos = 0;
@@ -208,16 +215,9 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
 
         // Open output files
         std::string data_file = output_dir + "/positions.data";
-        std::ofstream data_out(data_file, std::ios::binary);
-        if (!data_out) {
-            throw std::runtime_error("Failed to create output data file: " + data_file);
-        }
-
+        data::FileWriter data_out(data_file.c_str());
         std::string posDict_file = output_dir + "/positions.dict";
-        std::ofstream posDict_out(posDict_file, std::ios::binary);
-        if (!posDict_out) {
-            throw std::runtime_error("Failed to create output dictionary file: " + posDict_file);
-        }
+        data::FileWriter posDict_out(posDict_file.c_str());
 
         // Structure to track a term being processed from a file
         struct TermInfo {
@@ -282,10 +282,7 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
 
         // Write placeholder for term count (will update later)
         uint32_t total_terms = 0;
-        posDict_out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
-        if (!posDict_out) {
-            throw std::runtime_error("Failed to write term count placeholder");
-        }
+        posDict_out.Write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
 
         // Process all terms
         std::string current_term;
@@ -401,15 +398,12 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
         }
 
         // Update term count
-        posDict_out.seekp(0);
-        posDict_out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
-        if (!posDict_out) {
-            throw std::runtime_error("Failed to update term count");
-        }
+        posDict_out.Fseek(0);
+        posDict_out.Write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
 
         // Close files
-        data_out.close();
-        posDict_out.close();
+        data_out.Close();
+        posDict_out.Close();
 
         // Clean up
         for (const auto& buffer_file : buffer_files) {
@@ -425,8 +419,8 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
 
 bool PositionIndex::writeTerm(const std::string& term,
                               const TermPositions& docs_positions,
-                              std::ofstream& data_out,
-                              std::ofstream& posDict_out) {
+                              data::FileWriter& data_out,
+                              data::FileWriter& posDict_out) {
     try {
         // Sort docs by ID
         TermPositions sorted_docs = docs_positions;
@@ -435,17 +429,12 @@ bool PositionIndex::writeTerm(const std::string& term,
 
         // Write term to dictionary
         uint32_t term_len = term.length();
-        posDict_out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
-        if (!posDict_out)
-            return false;
-
-        posDict_out.write(term.data(), term_len);
-        if (!posDict_out)
-            return false;
+        posDict_out.Write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
+        posDict_out.Write(term.data(), term_len);
 
         // Prepare metadata
         PositionMetadata metadata;
-        metadata.data_offset = static_cast<uint64_t>(data_out.tellp());
+        metadata.data_offset = static_cast<uint64_t>(data_out.Ftell());
         metadata.doc_count = sorted_docs.size();
         metadata.total_positions = 0;
 
@@ -453,33 +442,23 @@ bool PositionIndex::writeTerm(const std::string& term,
             metadata.total_positions += data.second.size();
         }
 
-        posDict_out.write(reinterpret_cast<const char*>(&metadata), sizeof(metadata));
-        if (!posDict_out)
-            return false;
+        posDict_out.Write(reinterpret_cast<const char*>(&metadata), sizeof(metadata));
 
         // Write docs
         for (const auto& [doc_id, data] : sorted_docs) {
             const auto& [field_flags, positions] = data;
 
-            data_out.write(reinterpret_cast<const char*>(&doc_id), sizeof(doc_id));
-            if (!data_out)
-                return false;
+            data_out.Write(reinterpret_cast<const char*>(&doc_id), sizeof(doc_id));
 
-            data_out.write(reinterpret_cast<const char*>(&field_flags), sizeof(field_flags));
-            if (!data_out)
-                return false;
+            data_out.Write(reinterpret_cast<const char*>(&field_flags), sizeof(field_flags));
 
             uint32_t pos_count = positions.size();
-            data_out.write(reinterpret_cast<const char*>(&pos_count), sizeof(pos_count));
-            if (!data_out)
-                return false;
+            data_out.Write(reinterpret_cast<const char*>(&pos_count), sizeof(pos_count));
 
             uint16_t prev_pos = 0;
             for (uint16_t pos : positions) {
                 uint16_t delta = pos - prev_pos;
                 VByteCodec::encode(delta, data_out);
-                if (!data_out)
-                    return false;
                 prev_pos = pos;
             }
         }

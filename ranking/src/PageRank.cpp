@@ -179,8 +179,9 @@ void PerformPageRank(const std::string& inputDirectory) {
 
         // This scope allows us to nicely clear document path.
         std::vector<std::string> documentPaths;
+        std::filesystem::directory_options options = std::filesystem::directory_options::follow_directory_symlink;
 
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(inputDirectory)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(inputDirectory, options)) {
             if (!entry.is_regular_file()) {
                 continue;  // skip chunk dir
             }

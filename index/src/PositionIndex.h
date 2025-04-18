@@ -3,6 +3,7 @@
 
 #include "TextPreprocessor.h"
 #include "Utils.h"
+#include "data/Writer.h"
 
 #include <array>
 #include <fstream>
@@ -74,8 +75,8 @@ private:
     static void mergePositionBuffers(const std::string& output_dir);
     static bool writeTerm(const std::string& term,
                           const TermPositions& docs_positions,
-                          std::ofstream& data_out,
-                          std::ofstream& posDict_out);
+                          data::FileWriter& data_out,
+                          data::FileWriter& posDict_out);
 };
 
 }  // namespace mithril
