@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
         core::MemMapFile index_file(index_dir + "/final_index.data");
 
         std::cout << "Creating TermQuote for quote '" << original_quote << "'" << std::endl;
-        mithril::TermQuote term_quote(doc_reader, index_dir, quote, index_file, term_dict, position_index);
+        mithril::TermQuote term_quote(index_dir, quote, index_file, term_dict, position_index);
 
         std::cout << "Searching for quote: \"" << original_quote << "\"" << std::endl;
 
