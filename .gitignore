@@ -1,4 +1,5 @@
 build/*
+build/
 build_debug/
 build_release/
 build_perf/
