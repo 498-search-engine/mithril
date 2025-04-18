@@ -59,7 +59,6 @@ auto main(int argc, char* argv[]) -> int {
     }
 
     DocumentMapReader doc_reader(indexPath);
-    PositionIndex position_index(indexPath);
 
     // Set the index path in the QueryConfig
     query::QueryConfig::SetIndexPath(indexPath);
