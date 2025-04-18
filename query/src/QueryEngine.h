@@ -12,6 +12,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <unordered_map>
 
 using namespace mithril;
 
@@ -30,6 +31,49 @@ public:
     auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
         Parser parser(input, index_file_, term_dict_, position_index_);
         return std::move(parser.parse());
+    }
+
+    static std::vector<std::pair<std::string, int>> get_alL_terms(std::string query){
+        std::vector<Token> tokens = GetTokens(query);
+        std::vector<std::pair<std::string, int>> term_counts;
+        std::unordered_map<std::string, int> term_map;
+        
+        // Track if we're in a NOT operation
+        bool in_not = false;
+        
+        for (size_t i = 0; i < tokens.size(); ++i) {
+            const Token& token = tokens[i];
+            
+            // Check for NOT operator
+            if (token.type == TokenType::OPERATOR && token.value == "NOT") {
+                in_not = true;
+                continue;
+            }
+            
+            // Skip terms after NOT
+            if (in_not) {
+                in_not = false;
+                continue;
+            }
+            
+            // Process WORD and QUOTE tokens
+            if (token.type == TokenType::WORD) {
+                term_map[token.value]++;
+            } else if (token.type == TokenType::QUOTE) {
+                // Split quoted phrases into individual terms
+                std::vector<std::string> quote_terms = extract_quote_terms(token);
+                for (const auto& term : quote_terms) {
+                    term_map[term]++;
+                }
+            }
+        }
+        
+        // Convert map to vector of pairs
+        for (const auto& [term, count] : term_map) {
+            term_counts.emplace_back(term, count);
+        }
+        
+        return term_counts;
     }
 
     std::vector<Token> GetTokens(const std::string& input) {

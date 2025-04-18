@@ -36,6 +36,7 @@ public:
     }
 
     [[nodiscard]] auto get_tokens() const -> const std::vector<Token>& { return tokens_; }
+    
 
     std::unique_ptr<Query> parse() {
         if (tokens_.empty()) {
