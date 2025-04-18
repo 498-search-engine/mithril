@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -18,7 +19,6 @@
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
-#include <concepts>
 
 namespace fs = std::filesystem;
 
@@ -37,14 +37,13 @@ static inline T CopyFromBytes(const char* ptr) {
     return val;
 }
 
-PositionIndex::PositionIndex(const std::string& index_dir) : index_dir_(index_dir),
-                                                             data_file_(index_dir + "/positions.data")
-{
+PositionIndex::PositionIndex(const std::string& index_dir)
+    : index_dir_(index_dir), data_file_(index_dir + "/positions.data") {
     // Load term -> position mapping
     loadPosDict();
 }
 
-PositionIndex::~PositionIndex() { }
+PositionIndex::~PositionIndex() {}
 
 // void PositionIndex::addPositions(const std::string& output_dir,
 //                                  const std::string& term,
@@ -550,7 +549,7 @@ std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint3
     auto data_ptr = data_file_.data();
     const auto data_end = data_ptr + data_file_.size();
 
-    try { // TODO: remove exceptions
+    try {  // TODO: remove exceptions
         const PositionMetadata& metadata = it->second;
         data_ptr += metadata.data_offset;
 
@@ -600,7 +599,7 @@ uint8_t PositionIndex::getFieldFlags(const std::string& term, uint32_t doc_id) c
     auto data_ptr = data_file_.data();
     const auto data_end = data_ptr + data_file_.size();
 
-    try { // TODO: remove exceptions
+    try {  // TODO: remove exceptions
         const PositionMetadata& metadata = it->second;
         data_ptr += metadata.data_offset;
 
@@ -670,7 +669,8 @@ uint32_t PositionIndex::decodeVByte(const char*& ptr) const {
     while (ptr < end) [[likely]] {
         uint8_t byte = *reinterpret_cast<const uint8_t*>(ptr++);
         result |= (uint32_t)(byte & 0x7f) << shift;
-        if (!(byte & 0x80)) break;
+        if (!(byte & 0x80))
+            break;
         shift += 7;
     }
 
