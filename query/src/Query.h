@@ -16,6 +16,9 @@
 #include "TermReader.h"
 #include "Token.h"
 #include "intersect.h"
+// #include "PositionIndex.h"
+#include "../../index/src/PositionIndex.h"
+#include "core/mem_map_file.h"
 
 #include <memory>
 #include <string>

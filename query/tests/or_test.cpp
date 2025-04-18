@@ -2,6 +2,7 @@
 
 #include "TermDictionary.h"
 #include "PositionIndex.h"
+#include "core/mem_map_file.h"
 
 #include <iostream>
 #include <string>
@@ -76,6 +77,7 @@ int main(int argc, char* argv[]) {
 
     mithril::TermDictionary term_dict(query::QueryConfig::GetIndexPath());
     mithril::PositionIndex position_index(query::QueryConfig::GetIndexPath());
+    core::MemMapFile index_file(query::QueryConfig::GetIndexPath());
     
     // Determine which mode to run
     std::string mode = argv[4];
@@ -91,8 +93,8 @@ int main(int argc, char* argv[]) {
     
     try {
         // Create two term queries from command line arguments
-        TermQuery* term1 = new TermQuery(Token(TokenType::WORD, argv[2]), term_dict, position_index);
-        TermQuery* term2 = new TermQuery(Token(TokenType::WORD, argv[3]), term_dict, position_index);
+        TermQuery* term1 = new TermQuery(Token(TokenType::WORD, argv[2]), index_file, term_dict, position_index);
+        TermQuery* term2 = new TermQuery(Token(TokenType::WORD, argv[3]), index_file, term_dict, position_index);
         
         // Create an OR query combining both terms
         OrQuery orQuery(term1, term2);
