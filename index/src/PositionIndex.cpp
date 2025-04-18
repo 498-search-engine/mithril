@@ -218,22 +218,9 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
 
         // Open output files
         std::string data_file = output_dir + "/positions.data";
-<<<<<<< HEAD
-        std::ofstream data_out(data_file, std::ios::binary);
-        if (!data_out) {
-            throw std::runtime_error("Failed to create output data file: " + data_file);
-        }
-
-        std::string posDict_file = output_dir + "/positions.dict";
-        std::ofstream posDict_out(posDict_file, std::ios::binary);
-        if (!posDict_out) {
-            throw std::runtime_error("Failed to create output dictionary file: " + posDict_file);
-        }
-=======
         data::FileWriter data_out(data_file.c_str());
         std::string posDict_file = output_dir + "/positions.dict";
         data::FileWriter posDict_out(posDict_file.c_str());
->>>>>>> main
 
         // Structure to track a term being processed from a file
         struct TermInfo {
@@ -276,13 +263,6 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
                 if (!stream.read(reinterpret_cast<char*>(&term_len), sizeof(term_len))) {
                     spdlog::warn("Failed to read term length from file: {}", buffer_files[i]);
                     continue;
-<<<<<<< HEAD
-                }
-
-                std::string term(term_len, ' ');
-                if (!stream.read(&term[0], term_len)) {
-                    spdlog::warn("Failed to read term string from file: {}", buffer_files[i]);
-=======
                 }
 
                 std::string term(term_len, ' ');
@@ -398,121 +378,6 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
                 // Read term
                 std::string term(term_len, ' ');
                 if (!stream.read(&term[0], term_len)) {
->>>>>>> main
-                    continue;
-                }
-
-                // Read doc count
-                uint32_t doc_count;
-                if (!stream.read(reinterpret_cast<char*>(&doc_count), sizeof(doc_count))) {
-<<<<<<< HEAD
-                    spdlog::warn("Failed to read doc count from file: {}", buffer_files[i]);
-                    continue;
-                }
-
-                // Add to priority queue
-                queue.push({term, doc_count, i});
-            }
-        }
-
-        // Write placeholder for term count (will update later)
-        uint32_t total_terms = 0;
-        posDict_out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
-        if (!posDict_out) {
-            throw std::runtime_error("Failed to write term count placeholder");
-        }
-
-        // Process all terms
-        std::string current_term;
-        TermPositions current_positions;
-
-        while (!queue.empty()) {
-            // Get next term from queue
-            TermInfo info = queue.top();
-            queue.pop();
-
-            // Safety check for stream index
-            if (info.stream_index >= streams.size() || !streams[info.stream_index]) {
-                spdlog::error("Invalid stream index or bad stream: {}", info.stream_index);
-                continue;
-            }
-
-            std::ifstream& stream = streams[info.stream_index];
-
-            // If new term, write previous term data
-            if (current_term != info.term) {
-                if (!current_term.empty()) {
-                    // Write previous term
-                    if (!writeTerm(current_term, current_positions, data_out, posDict_out)) {
-                        throw std::runtime_error("Failed to write term: " + current_term);
-                    }
-                    total_terms++;
-                }
-
-                // Start new term
-                current_term = info.term;
-                current_positions.clear();
-            }
-
-            // Read all docs for this term
-            for (uint32_t i = 0; i < info.doc_count && stream.good(); i++) {
-                // Read doc ID
-                uint32_t doc_id;
-                if (!stream.read(reinterpret_cast<char*>(&doc_id), sizeof(doc_id))) {
-                    spdlog::error("Failed to read doc ID for term: {}", info.term);
-                    break;
-                }
-
-                // Read field flags
-                uint8_t field_flags;
-                if (!stream.read(reinterpret_cast<char*>(&field_flags), sizeof(field_flags))) {
-                    spdlog::error("Failed to read field flags for doc: {}", doc_id);
-                    break;
-                }
-
-                // Read position count
-                uint32_t pos_count;
-                if (!stream.read(reinterpret_cast<char*>(&pos_count), sizeof(pos_count))) {
-                    spdlog::error("Failed to read position count for doc: {}", doc_id);
-                    break;
-                }
-
-                // Read positions
-                std::vector<uint16_t> positions;
-                positions.reserve(pos_count);
-
-                uint16_t prev_pos = 0;
-                bool read_success = true;
-
-                for (uint32_t j = 0; j < pos_count; j++) {
-                    try {
-                        uint16_t delta = VByteCodec::decode(stream);
-                        prev_pos += delta;
-                        positions.push_back(prev_pos);
-                    } catch (const std::exception& e) {
-                        spdlog::error("Error decoding position: {}", e.what());
-                        read_success = false;
-                        break;
-                    }
-                }
-
-                if (read_success) {
-                    current_positions.emplace_back(doc_id, std::make_pair(field_flags, std::move(positions)));
-                }
-            }
-
-            // Try to read next term from this file
-            if (stream.good()) {
-                // Read next term length
-                uint32_t term_len;
-                if (!stream.read(reinterpret_cast<char*>(&term_len), sizeof(term_len))) {
-                    // End of file or error, continue to next stream
-                    continue;
-                }
-
-                // Read term
-                std::string term(term_len, ' ');
-                if (!stream.read(&term[0], term_len)) {
                     continue;
                 }
 
@@ -527,16 +392,6 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
             }
         }
 
-=======
-                    continue;
-                }
-
-                // Add to queue
-                queue.push({term, doc_count, info.stream_index});
-            }
-        }
-
->>>>>>> main
         // Write final term if any
         if (!current_term.empty()) {
             if (!writeTerm(current_term, current_positions, data_out, posDict_out)) {
