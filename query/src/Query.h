@@ -10,11 +10,12 @@
 #include "TermAND.h"
 #include "TermDictionary.h"
 #include "TermOR.h"
-#include "TermQuote.h"
+// #include "TermQuote.h"
+#include "../../index/src/TermQuote.h"
+#include "PositionIndex.h"
 #include "TermReader.h"
 #include "Token.h"
 #include "intersect.h"
-#include "PositionIndex.h"
 
 #include <memory>
 #include <string>
@@ -49,20 +50,21 @@ public:
 
     // Optional: Get query type as string
     [[nodiscard]] virtual std::string get_type() const { return "Query"; }
-
 };
 
 class TermQuery : public Query {
 public:
-    TermQuery(Token token, const core::MemMapFile& index_file,
-              mithril::TermDictionary& term_dict, mithril::PositionIndex& position_index)
-        : token_(std::move(token)), index_file_(index_file),
-          term_dict_(term_dict), position_index_(position_index) {}
+    TermQuery(Token token,
+              const core::MemMapFile& index_file,
+              mithril::TermDictionary& term_dict,
+              mithril::PositionIndex& position_index)
+        : token_(std::move(token)), index_file_(index_file), term_dict_(term_dict), position_index_(position_index) {}
 
     Token get_token() { return token_; }
 
     std::vector<uint32_t> evaluate() const override {
-        mithril::TermReader term(query::QueryConfig::GetIndexPath(), token_.value, index_file_, term_dict_, position_index_);
+        mithril::TermReader term(
+            query::QueryConfig::GetIndexPath(), token_.value, index_file_, term_dict_, position_index_);
 
         std::vector<uint32_t> results;
         results.reserve(MAX_DOCUMENTS);
@@ -77,7 +79,8 @@ public:
     }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        return std::make_unique<mithril::TermReader>(query::QueryConfig::GetIndexPath(), token_.value, index_file_, term_dict_, position_index_);
+        return std::make_unique<mithril::TermReader>(
+            query::QueryConfig::GetIndexPath(), token_.value, index_file_, term_dict_, position_index_);
     }
 
     [[nodiscard]] std::string to_string() const override { return "TERM(" + token_.value + ")"; }
@@ -215,40 +218,37 @@ private:
     std::unique_ptr<mithril::NotISR> not_isr_;
 };
 
-// class QuoteQuery : public Query {
-// public:
-//     QuoteQuery
-//     ~QuoteQuery() = default;
+class QuoteQuery : public Query {
+public:
+    QuoteQuery(Token quote_token,
+               const core::MemMapFile& index_file,
+               mithril::TermDictionary& term_dict,
+               mithril::PositionIndex& position_index)
+        : quote_token_(std::move(quote_token)),
+          index_file_(index_file),
+          term_dict_(term_dict),
+          position_index_(position_index) {}
 
-//     // Evaluates everything in one go
-//     [[nodiscard]] std::vector<uint32_t> evaluate() const;
+    std::vector<uint32_t> evaluate() const override { return {}; }
 
-//     // Helps us do some more fine grained stream reading
-//     uint32_t get_next_doc() const;
-//     bool has_next() const;
 
-//     [[nodiscard]] std::unique_ptr<mithril::IndexStreamReader> generate_isr() const;
+    [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
+        return std::make_unique<mithril::TermQuote>(query::QueryConfig::GetIndexPath(),
+                                                    extract_quote_terms(quote_token_),
+                                                    index_file_,
+                                                    term_dict_,
+                                                    position_index_);
+    }
 
-//     // Returns a string representation of the query for debugging/display
-//     [[nodiscard]] virtual std::string to_string() const;
+    [[nodiscard]] std::string to_string() const override { return "QUOTE(" + quote_token_.value + ")"; }
 
-//     // Optional: Get query type as string
-//     [[nodiscard]] virtual std::string get_type() const {
-//         return "Quote";
-//     }
+    [[nodiscard]] std::string get_type() const override { return "QuoteQuery"; }
 
-// private:
-// };
-
-// }  // namespace mithril
-
-// class FieldQuery : public Query {
-//     // Restricts search to specific fields (TITLE, TEXT)
-// };
-
-// class PhraseQuery : public Query {
-//     // For exact phrase matching with quotes
-//     // Will need to use position information
-// };
+private:
+    Token quote_token;
+    const core::MemMapFile& index_file_;
+    mithril::TermDictionary& term_dict_;
+    mithril::PositionIndex& position_index_;
+}
 
 #endif  // QUERY_H_
