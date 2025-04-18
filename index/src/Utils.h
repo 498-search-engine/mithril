@@ -1,6 +1,8 @@
 #ifndef INDEX_UTILS_H
 #define INDEX_UTILS_H
 
+#include "data/Writer.h"
+
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -10,16 +12,12 @@ namespace mithril {
 
 class VByteCodec {
 public:
-    static void encode(uint32_t value, std::ostream& out) {
+    static void encode(uint32_t value, data::FileWriter& out) {
         while (value >= 128) {
-            out.put((value & 127) | 128);
-            if (!out)
-                throw std::runtime_error("Failed to write VByte");
+            out.Write((value & 127) | 128);
             value >>= 7;
         }
-        out.put(value);
-        if (!out)
-            throw std::runtime_error("Failed to write VByte");
+        out.Write(value);
     }
 
     static uint32_t decode(std::istream& in) {
@@ -75,7 +73,7 @@ public:
         return 5;
     }
 
-    static void encodeBatch(const std::vector<uint32_t>& deltas, std::ostream& out) {
+    static void encodeBatch(const std::vector<uint32_t>& deltas, data::FileWriter& out) {
         const size_t BATCH_SIZE = 1024;
         char buffer[BATCH_SIZE];
         char* ptr = buffer;
@@ -84,7 +82,7 @@ public:
         for (uint32_t delta : deltas) {
             // Check if we need to flush the buffer
             if (remaining < 5) {  // Max 5 bytes per VByte
-                out.write(buffer, BATCH_SIZE - remaining);
+                out.Write(buffer, BATCH_SIZE - remaining);
                 ptr = buffer;
                 remaining = BATCH_SIZE;
             }
@@ -92,14 +90,11 @@ public:
             // Encode delta into buffer
             size_t before = remaining;
             encode_to_memory(delta, ptr, remaining);
-            if (!out.good()) {
-                throw std::runtime_error("Failed to write VByte batch");
-            }
         }
 
         // Write any remaining data
         if (remaining < BATCH_SIZE) {
-            out.write(buffer, BATCH_SIZE - remaining);
+            out.Write(buffer, BATCH_SIZE - remaining);
         }
     }
 };

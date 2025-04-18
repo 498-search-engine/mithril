@@ -29,7 +29,7 @@ private:
 
 class Dictionary {
 public:
-    explicit Dictionary(size_t bucket_size_hint = (1 << 23));
+    explicit Dictionary(size_t bucket_size_hint = (1 << 24));
 
     PostingList& get_or_create(const std::string& term);
     bool contains(const std::string& term) const;

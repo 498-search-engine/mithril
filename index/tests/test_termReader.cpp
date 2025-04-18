@@ -1,9 +1,10 @@
 #include "DocumentMapReader.h"
+#include "PositionIndex.h"
 #include "TermDictionary.h"
 #include "TermReader.h"
-#include "PositionIndex.h"
 #include "core/mem_map_file.h"
 
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <chrono>
@@ -31,8 +32,8 @@ int main(int argc, char* argv[]) {
 
         std::chrono::duration<double, std::milli> doc_time = t1 - t0;
         double doc_ms = std::ceil(doc_time.count() * 100.0) / 100.0;
-        std::cout << "Loaded document map with " << doc_reader.documentCount()
-                  << " documents in " << std::fixed << std::setprecision(2) << doc_ms << "ms" << std::endl;
+        std::cout << "Loaded document map with " << doc_reader.documentCount() << " documents in " << std::fixed
+                  << std::setprecision(2) << doc_ms << "ms" << std::endl;
 
         std::cout << "Loading position index from " << index_dir << std::endl;
         auto t2 = Clock::now();

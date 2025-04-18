@@ -3,12 +3,12 @@
 
 #include "DocumentMapReader.h"
 #include "IndexStreamReader.h"
+#include "PositionIndex.h"
 #include "TermAND.h"
 #include "TermDictionary.h"
 #include "TermReader.h"
-#include "data/Document.h"
-#include "PositionIndex.h"
 #include "core/mem_map_file.h"
+#include "data/Document.h"
 
 #include <memory>
 #include <string>

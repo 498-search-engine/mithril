@@ -24,8 +24,8 @@ using Document = data::Document;
 using docid_t = data::docid_t;
 
 // Constants
-constexpr size_t DEFAULT_MAX_TERMS_PER_BLOCK = 250000;
-constexpr size_t DEFAULT_MERGE_FACTOR = 16;
+constexpr size_t DEFAULT_MAX_TERMS_PER_BLOCK = 750000;
+constexpr size_t DEFAULT_MERGE_FACTOR = 32;
 
 struct DocumentMetadata {
     data::docid_t id;
@@ -70,7 +70,7 @@ struct IndexStatistics {
 class IndexBuilder {
 public:
     explicit IndexBuilder(const std::string& output_dir,
-                          size_t num_threads = std::thread::hardware_concurrency() * 2,
+                          size_t num_threads = std::thread::hardware_concurrency() * 3 / 2,
                           size_t max_terms_per_block = DEFAULT_MAX_TERMS_PER_BLOCK);
 
     ~IndexBuilder();
