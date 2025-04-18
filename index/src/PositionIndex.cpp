@@ -7,6 +7,7 @@
 #include <iostream>
 #include <unordered_set>
 #include <spdlog/spdlog.h>
+#include <concepts>
 
 namespace fs = std::filesystem;
 
@@ -18,18 +19,21 @@ std::unordered_map<std::string, std::vector<PositionEntry>> PositionIndex::posit
 size_t PositionIndex::buffer_size_ = 0;
 int PositionIndex::buffer_counter_ = 0;
 
-PositionIndex::PositionIndex(const std::string& index_dir) : index_dir_(index_dir) {
-    // Load term -> position mapping
-    loadPosDict();
-    std::string data_file = index_dir + "/positions.data";
-    data_file_.open(data_file, std::ios::binary);
+template<std::integral T>
+static inline T CopyFromBytes(const char* ptr) {
+    T val;
+    std::memcpy(&val, ptr, sizeof(val));
+    return val;
 }
 
-PositionIndex::~PositionIndex() {
-    if (data_file_.is_open()) {
-        data_file_.close();
-    }
+PositionIndex::PositionIndex(const std::string& index_dir) : index_dir_(index_dir),
+                                                             data_file_(index_dir + "/positions.data")
+{
+    // Load term -> position mapping
+    loadPosDict();
 }
+
+PositionIndex::~PositionIndex() { }
 
 // void PositionIndex::addPositions(const std::string& output_dir,
 //                                  const std::string& term,
@@ -564,27 +568,30 @@ std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint3
         return {};
     }
 
-    try {
+    auto data_ptr = data_file_.data();
+    const auto data_end = data_ptr + data_file_.size();
+
+    try { // TODO: remove exceptions
         const PositionMetadata& metadata = it->second;
-        data_file_.seekg(metadata.data_offset);
+        data_ptr += metadata.data_offset;
 
-        for (uint32_t i = 0; i < metadata.doc_count && data_file_.good(); i++) {
-            uint32_t curr_doc_id;
-            data_file_.read(reinterpret_cast<char*>(&curr_doc_id), sizeof(curr_doc_id));
+        for (uint32_t i = 0; i < metadata.doc_count; i++) {
+            const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(curr_doc_id);
 
-            uint8_t field_flags;
-            data_file_.read(reinterpret_cast<char*>(&field_flags), sizeof(field_flags));
+            const uint8_t field_flags = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(field_flags);
 
-            uint32_t pos_count;
-            data_file_.read(reinterpret_cast<char*>(&pos_count), sizeof(pos_count));
+            const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(pos_count);
 
             if (curr_doc_id == doc_id) {
                 std::vector<uint16_t> positions;
                 positions.reserve(pos_count);
 
                 uint16_t prev_pos = 0;
-                for (uint32_t j = 0; j < pos_count && data_file_.good(); j++) {
-                    uint16_t delta = VByteCodec::decode(data_file_);
+                for (uint32_t j = 0; j < pos_count; j++) {
+                    uint16_t delta = decodeVByte(data_ptr);
                     prev_pos += delta;
                     positions.push_back(prev_pos);
                 }
@@ -592,9 +599,9 @@ std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint3
                 return positions;
             }
 
-            // Skip positions for this doc
-            for (uint32_t j = 0; j < pos_count && data_file_.good(); j++) {
-                VByteCodec::decode(data_file_);
+            // Otherwise, skip positions for this doc
+            for (uint32_t j = 0; j < pos_count; j++) {
+                (void)decodeVByte(data_ptr);
             }
         }
 
@@ -608,30 +615,33 @@ std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint3
 uint8_t PositionIndex::getFieldFlags(const std::string& term, uint32_t doc_id) const {
     auto it = posDict_.find(term);
     if (it == posDict_.end()) {
-        return 0;
+        return {};
     }
 
-    try {
+    auto data_ptr = data_file_.data();
+    const auto data_end = data_ptr + data_file_.size();
+
+    try { // TODO: remove exceptions
         const PositionMetadata& metadata = it->second;
-        data_file_.seekg(metadata.data_offset);
+        data_ptr += metadata.data_offset;
 
-        for (uint32_t i = 0; i < metadata.doc_count && data_file_.good(); i++) {
-            uint32_t curr_doc_id;
-            data_file_.read(reinterpret_cast<char*>(&curr_doc_id), sizeof(curr_doc_id));
+        for (uint32_t i = 0; i < metadata.doc_count; i++) {
+            const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(curr_doc_id);
 
-            uint8_t field_flags;
-            data_file_.read(reinterpret_cast<char*>(&field_flags), sizeof(field_flags));
+            const uint8_t field_flags = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(field_flags);
 
-            uint32_t pos_count;
-            data_file_.read(reinterpret_cast<char*>(&pos_count), sizeof(pos_count));
+            const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(pos_count);
 
             if (curr_doc_id == doc_id) {
                 return field_flags;
             }
 
-            // Skip positions for this doc
-            for (uint32_t j = 0; j < pos_count && data_file_.good(); j++) {
-                VByteCodec::decode(data_file_);
+            // Otherwise, skip positions for this doc
+            for (uint32_t j = 0; j < pos_count; j++) {
+                (void)decodeVByte(data_ptr);
             }
         }
 
@@ -671,6 +681,21 @@ bool PositionIndex::checkPhrase(const std::string& term1,
         spdlog::error("Error checking phrase: {}", e.what());
         return false;
     }
+}
+
+uint32_t PositionIndex::decodeVByte(const char*& ptr) const {
+    uint32_t result = 0, shift = 0;
+    uint8_t byte;
+
+    const auto end = data_file_.data() + data_file_.size();
+    while (ptr < end) [[likely]] {
+        uint8_t byte = *reinterpret_cast<const uint8_t*>(ptr++);
+        result |= (uint32_t)(byte & 0x7f) << shift;
+        if (!(byte & 0x80)) break;
+        shift += 7;
+    }
+
+    return result;
 }
 
 }  // namespace mithril
