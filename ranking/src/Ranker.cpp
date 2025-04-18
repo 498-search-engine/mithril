@@ -2,6 +2,7 @@
 
 #include "DynamicRanker.h"
 #include "StaticRanker.h"
+#include "TextPreprocessor.h"
 #include "spdlog/sinks/basic_file_sink.h"
 
 #include <spdlog/spdlog.h>
@@ -18,47 +19,36 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         logger = spdlog::basic_logger_mt("ranker_logger", "ranker.log");
     }
 
-    bool isInURL = false;
-    bool isInTitle = false;
-    bool isInDescription = false;
-    bool isInBody = false;
+    uint8_t fieldFlags = position_index.getFieldFlags(query[0].first, doc.id);
+    bool isInURL = fieldTypeToFlag(FieldType::URL) & fieldFlags;
+    bool isInTitle = fieldTypeToFlag(FieldType::TITLE) & fieldFlags;
+    bool isInDescription = fieldTypeToFlag(FieldType::DESC) & fieldFlags;
+    bool isInBody = fieldTypeToFlag(FieldType::BODY) & fieldFlags;
 
     std::string title;
-    std::string description;
-    std::string body;
 
     for (const auto& term : doc.title) {
-        std::cout << "document has title: " << term << std::endl;
         title += term;
     }
 
-    for (const auto& term : doc.description) {
-        std::cout << "document has descript: " << term << std::endl;
-        description += term;
-    }
-
-    for (const auto& term : doc.words) {
-        std::cout << "document has word: " << term << std::endl;
-        body += term;
-    }
+    std::transform(title.begin(), title.end(), title.begin(), [](unsigned char c) { return std::tolower(c); });
 
     for (const auto& [term, multiplicity] : query) {
         if (doc.url.find(term) != std::string::npos) {
+            if (!isInURL) {
+                logger->error("Term {} not found in URL", term);
+            }
             isInURL = true;
         }
         if (title.find(term) != std::string::npos) {
+            if (!isInURL) {
+                logger->error("Term {} not found in title", term);
+            }
             isInTitle = true;
-        }
-        if (description.find(term) != std::string::npos) {
-            isInDescription = true;
-        }
-        if (body.find(term) != std::string::npos) {
-            isInBody = true;
         }
     }
 
     logger->info("\nQuery: {}, URL: {}, Title: {}", query[0].first, doc.url, title);
-    logger->info("Description: {}, Body: {}", description, body);
 
     dynamic::RankerFeatures features{
         // Boolean presence flags

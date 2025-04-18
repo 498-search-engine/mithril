@@ -30,6 +30,14 @@ void Log(const RankerFeatures& features, float total, uint32_t normalizedScore) 
                        Weights.percent_query_url,
                        features.percent_query_url);
 
+    rankerLogger->info("- Description: presence={} ({:.2f}*{}), coverage={:.2f} ({:.2f}*{:.2f})",
+                       features.query_in_description,
+                       Weights.query_in_description,
+                       features.query_in_description,
+                       Weights.percent_query_description * features.percent_query_description,
+                       Weights.percent_query_description,
+                       features.percent_query_description);
+
     rankerLogger->info("- Body: presence={} ({:.2f}*{}), coverage={:.2f} ({:.2f}*{:.2f}), freq={:.2f} ({:.2f}*{:.2f})",
                        features.query_in_body,
                        Weights.query_in_body,
