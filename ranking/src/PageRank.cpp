@@ -85,8 +85,8 @@ int GetLinkNode(const std::string& link) {
     return nodeNo;
 }
 
-void Write() {
-    FILE* f = fopen(OutputFile.c_str(), "wb+");
+void Write(const std::string& outputBinaryFile) {
+    FILE* f = fopen(outputBinaryFile.c_str(), "wb+");
     assert(f != nullptr);
 
     std::vector<float>& scores = *mithril::pagerank::StandardizedResults;
@@ -169,7 +169,7 @@ void PerformPageRank(core::CSRMatrix& matrix_, int N) {
     }
 }
 
-void PerformPageRank(const std::string& inputDirectory) {
+void PerformPageRank(const std::string& inputDirectory, const std::string& outputBinaryFile) {
     spdlog::info("Starting page rank...");
 
     auto start = std::chrono::steady_clock::now();
@@ -321,15 +321,15 @@ void PerformPageRank(const std::string& inputDirectory) {
     auto duration = doubleDuration.count();
     spdlog::info("Finished pagerank in: {}s", duration);
 
-    spdlog::info("Writing pagerank results to {}...", OutputFile);
+    spdlog::info("Writing pagerank results to {}...", outputBinaryFile);
 
-    Write();
+    Write(outputBinaryFile);
 
     end = std::chrono::steady_clock::now();
     std::chrono::duration<double> writeDurationDouble = end - start;
     auto writeDuration = writeDurationDouble.count();
 
-    spdlog::info("Finished writing pagerank results to {}. Time taken: {}s", OutputFile, writeDuration);
+    spdlog::info("Finished writing pagerank results to {}. Time taken: {}s", outputBinaryFile, writeDuration);
 
     spdlog::info("Total time taken: {}s", (duration + csrMatrixDuration + processDuration + writeDuration));
 }
