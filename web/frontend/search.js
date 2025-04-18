@@ -126,10 +126,16 @@ document.addEventListener('DOMContentLoaded', function() {
         resultsContainer.innerHTML = '';
 
         // Check client-side cache first
+        const urlParams = new URLSearchParams(window.location.search);
         const cachedResults = queryCache.get(query);
-        if (cachedResults) {
+        if (!localStorage.getItem('nocache') && cachedResults) {
             displayResults(cachedResults, true);
             return;
+        }
+
+        if (query == 'nocache') {
+            localStorage.setItem('nocache', '1');
+            console.log('Disabled cache on this device');
         }
 
         // Fetch search results from API
