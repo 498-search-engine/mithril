@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <chrono>
+#include <cmath>
 
 using Clock = std::chrono::high_resolution_clock;
 using MsBetween = std::chrono::duration<double, std::milli>;
