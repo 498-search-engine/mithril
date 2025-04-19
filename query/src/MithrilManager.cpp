@@ -6,7 +6,12 @@
 #include <iostream>
 #include <memory>
 
-const int PORT = 8080;
+void printUsage(const char* programName) {
+    std::cout << "Usage: " << programName << " --port PORT --index INDEX_PATH [--index INDEX_PATH ...]" << std::endl;
+    std::cout << "Options:" << std::endl;
+    std::cout << "  --port PORT                Set the server port (required)" << std::endl;
+    std::cout << "  --index INDEX_PATH         Set an index path (at least one required)" << std::endl;
+}
 
 struct MithrilManager {
     private:
@@ -53,32 +58,24 @@ struct MithrilManager {
         }
     }
 
-    MithrilManager(int argc, char** argv){
-
-        std::vector<std::string> indexPaths;
-
-        for (int i = 1; i < argc; ++i) {
-            std::string arg = argv[i];
-    
-            if (arg == "--index" && i + 1 < argc) {
-                indexPaths.push_back(argv[++i]);
-            } else {
-                std::cerr << "Unknown or incomplete argument: " << arg << std::endl;
-                throw std::runtime_error("Failed to make MithrilManager");
-            }
-
-
-            server_fd = create_server_sockfd(PORT, 10);
-
-            if (server_fd == -1) throw std::runtime_error("Failed to make MithrilManager");
-
-            std::cout << "Server running on localhost:" << PORT << std::endl;
-            //std::cout << "Using index path: " << indexPath << std::endl;
-
-            manager = make_unique<QueryManager>(indexPaths);
-
-            std::cout << "Successfully created MithrilManager" << std::endl;
+    MithrilManager(int port, const std::vector<std::string>& indexPaths){
+        if (indexPaths.empty()) {
+            throw std::runtime_error("At least one index path is required");
         }
+
+        server_fd = create_server_sockfd(port, 10);
+
+        if (server_fd == -1) throw std::runtime_error("Failed to create server socket");
+
+        std::cout << "Server running on localhost:" << port << std::endl;
+        
+        for (const auto& path : indexPaths) {
+            std::cout << "Using index path: " << path << std::endl;
+        }
+
+        manager = std::make_unique<QueryManager>(indexPaths);
+
+        std::cout << "Successfully created MithrilManager" << std::endl;
     }
 
     ~MithrilManager(){
@@ -91,11 +88,38 @@ std::unique_ptr<QueryManager> MithrilManager::manager;
 
 int main(int argc, char** argv){
     try {
-        MithrilManager mm(argc, argv);
+        int port = -1;
+        std::vector<std::string> indexPaths;
+
+        // Parse command line arguments
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = argv[i];
+    
+            if (arg == "--port" && i + 1 < argc) {
+                port = std::stoi(argv[++i]);
+            } else if (arg == "--index" && i + 1 < argc) {
+                indexPaths.push_back(argv[++i]);
+            } else {
+                std::cerr << "Unknown or incomplete argument: " << arg << std::endl;
+                printUsage(argv[0]);
+                return 1;
+            }
+        }
+
+        // Validate required arguments
+        if (port == -1 || indexPaths.empty()) {
+            std::cerr << "Error: --port and at least one --index are required arguments." << std::endl;
+            printUsage(argv[0]);
+            return 1;
+        }
+
+        MithrilManager mm(port, indexPaths);
         mm.Listen();
     } catch (std::exception& e) {
         std::cerr << e.what() << std::endl;
+        return 1;
     }
-
     
+    return 0;
 }
+

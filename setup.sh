@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd mithril
+rm -rf build
 
 mkdir build
 
