@@ -4,6 +4,8 @@
 
 #include <spdlog/spdlog.h>
 
+#define LOGGING 1
+
 namespace mithril::ranking::dynamic {
 namespace {
 std::shared_ptr<spdlog::logger> rankerLogger = spdlog::basic_logger_mt("ranker_logger", "ranker.log");
@@ -99,8 +101,10 @@ uint32_t GetUrlDynamicRank(const RankerFeatures& features) {
     score += Weights.percent_query_description * features.percent_query_description;
 
     uint32_t finalScore = static_cast<uint32_t>(((score - MinScore) / ScoreRange) * 10000);
-    if (finalScore > 3000) {
+    if (finalScore > 2000) {
+#if LOGGING == 1
         Log(features, score, finalScore);
+#endif
     }
 
     return finalScore;

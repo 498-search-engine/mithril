@@ -70,6 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - added CLI option for binary output to pagerank_sim and no longer saves human readable output by default (#146)
 - add boolean presence ranking flags (#139)
 - Made GenericTermReader to union over all fields, not just search the body (#152)
+- add basic multiterm support for ranking (#153)
 
 ### Fixed
 
