@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
+#include <stdexcept>
 
 using namespace core;
 using namespace mithril;
@@ -143,7 +144,7 @@ QueryResults mithril::QueryCoordinator::handle_worker_response(const ServerConfi
 
         close(client_fd);
 
-        spdlog::info("Received {} results from worker at {}:{}", result_count, server_config.ip, server_config.port);
+        spdlog::info("Received {} results from worker at {}:{}", results.size(), server_config.ip, server_config.port);
     } catch (const std::exception& e) {
         spdlog::error("Error communicating with worker at {}:{}: {}", server_config.ip, server_config.port, e.what());
     }

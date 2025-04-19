@@ -2,25 +2,16 @@
 #include "QueryManager.cpp"
 #include "network.h"
 #include "rpc_handler.h"
+#include <stdexcept>
+#include <iostream>
+#include <memory>
 
-const PORT = 8080;
-
-
-int main(int argc, char** argv){
-    MithrilManager mm;
-    try {
-        mm(argc, argv);
-    } catch (std::exception& e) {
-        std:cerr << e.what() << std::endl;
-    }
-
-    mm.Listen();
-}
+const int PORT = 8080;
 
 struct MithrilManager {
     private:
     static std::mutex manager_mutex;
-    static QueryManager manager;
+    static std::unique_ptr<QueryManager> manager;
     int server_fd;
 
     void Handle(int client_fd){
@@ -28,21 +19,22 @@ struct MithrilManager {
         //get query from socket
         try{
             std::string query = RPCHandler::ReadQuery(client.connectionfd);
+            manager_mutex.lock();
+            //answer the query and get back vector<pair<uint32_t, uint32_t>> of results
+            auto results = manager->AnswerQuery(query);
+            manager_mutex.unlock();
+    
+            //send the results back
+            RPCHandler::SendResults(client.connectionfd, results);
         } catch (std::exception& e){
             std::cerr << e.what() << std::endl;
             return;
         }
-        
-        //answer the query and get back vector<pair<uint32_t, uint32_t>> of results
-        auto results = manager.AnswerQuery(query);
-
-        //send the results back
-        RPCHandler::SendResults(results);
     }
 
     public:
 
-    void Listen(int clientfd){
+    void Listen(){
         while (true) {
             sockaddr_in client_addr;
             socklen_t client_len = sizeof(client_addr);
@@ -54,8 +46,8 @@ struct MithrilManager {
                 close(client_fd);
                 continue;
             }
-            std::thread t([client_sockfd]() {
-                Handle(client_fd);
+            std::thread t([client_fd, this]() {
+                this->Handle(client_fd);
             });
             t.detach(); // Don't join, just let it run
         }
@@ -71,7 +63,6 @@ struct MithrilManager {
                 indexPath = argv[++i];
             } else {
                 std::cerr << "Unknown or incomplete argument: " << arg << std::endl;
-                printUsage(argv[0]);
                 throw std::runtime_error("Failed to make MithrilManager");
             }
 
@@ -85,7 +76,7 @@ struct MithrilManager {
             std::cout << "Using index path: " << indexPath << std::endl;
 
             std::vector<std::string> indexPaths = {indexPath};
-            manager(indexPaths);
+            manager = make_unique<QueryManager>(indexPaths);
 
             std::cout << "Successfully created MithrilManager" << std::endl;
         }
@@ -94,4 +85,18 @@ struct MithrilManager {
     ~MithrilManager(){
         close(server_fd);
     }
+};
+
+std::mutex MithrilManager::manager_mutex;
+std::unique_ptr<QueryManager> MithrilManager::manager;
+
+int main(int argc, char** argv){
+    try {
+        MithrilManager mm(argc, argv);
+        mm.Listen();
+    } catch (std::exception& e) {
+        std::cerr << e.what() << std::endl;
+    }
+
+    
 }

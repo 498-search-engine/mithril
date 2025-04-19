@@ -18,7 +18,7 @@ using namespace mithril;
 class QueryEngine {
 public:
     QueryEngine(const std::string& index_dir)
-        : map_reader_(index_dir), index_file_(index_dir),
+        : map_reader_(index_dir), index_file_(index_dir + "/final_index.data"),
           term_dict_(index_dir), position_index_(index_dir)
     {
         query::QueryConfig::SetIndexPath(index_dir);

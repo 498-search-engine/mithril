@@ -7,6 +7,8 @@
 #include <cstring>
 #include <arpa/inet.h>
 #include <iostream>
+#include <spdlog/spdlog.h>
+#include <stdexcept>
 
 struct RPCHandler {
     public:
@@ -19,7 +21,7 @@ struct RPCHandler {
             spdlog::error("Failed to read query length, received {} bytes", bytes_read);
             uint32_t result_count = 0;
             send(client_fd, &result_count, sizeof(uint32_t), 0);
-            return;
+            return "";
         }
 
         // Convert from network byte order (if needed)
@@ -32,7 +34,7 @@ struct RPCHandler {
             spdlog::error("Failed to read query, expected {} bytes but got {}", query_length, bytes_read);
             uint32_t result_count = 0;
             send(client_fd, &result_count, sizeof(uint32_t), 0);
-            return;
+            return query;
         }
         
         spdlog::info("Received binary query: '{}'", query);
