@@ -164,46 +164,50 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }, 300);
 
-    // Display results function
-    function displayResults(data, fromCache) {
-        // Hide loading indicator
-        loadingIndicator.style.display = 'none';
 
-        // Display results metadata
-        const resultCount = data.total || 0;
-        const searchTime = ((data.time_ms || 0) / 1000).toFixed(3);
+function displayResults(data, fromCache) {
+    
+    loadingIndicator.style.display = 'none';
 
-        resultsCount.textContent = `${resultCount} results`;
-        queryTime.textContent = `${searchTime}s${fromCache ? ' (cached)' : ''}`;
-        resultsMeta.style.display = 'flex';
+    const resultCount = data.total || 0;
+    const searchTime = ((data.time_ms || 0) / 1000).toFixed(3);
 
-        // FIXED: Remove any existing demo indicators first
-        const existingIndicators = resultsMeta.querySelectorAll('.demo-indicator');
-        existingIndicators.forEach(indicator => indicator.remove());
+    resultsCount.textContent = `${resultCount} results`;
+    queryTime.textContent = `${searchTime}s${fromCache ? ' (cached)' : ''}`;
+    resultsMeta.style.display = 'flex';
 
-        // Show demo mode indicator if applicable
-        if (data.demo_mode || data.fallback) {
-            const demoIndicator = document.createElement('div');
-            demoIndicator.className = 'demo-indicator';
-            demoIndicator.textContent = data.fallback ? 'Fallback results' : 'Demo mode';
-            resultsMeta.appendChild(demoIndicator);
-        }
+    const existingIndicators = resultsMeta.querySelectorAll('.demo-indicator');
+    existingIndicators.forEach(indicator => indicator.remove());
 
-        if (data.results && data.results.length > 0) {
-            data.results.forEach(result => {
-                const resultElement = document.createElement('div');
-                resultElement.className = 'result';
-
-                resultElement.innerHTML = `
-                  <h2><a href="${result.url}" target="_blank">${result.title}</a></h2>
-                  <div class="result-url">${result.url}</div>
-                  <p class="result-snippet">${result.snippet}</p>
-              `;
-
-                resultsContainer.appendChild(resultElement);
-            });
-        } else {
-            resultsContainer.innerHTML = '<div class="no-results">No results found</div>';
-        }
+    if (data.demo_mode || data.fallback) {
+        const demoIndicator = document.createElement('div');
+        demoIndicator.className = 'demo-indicator';
+        demoIndicator.textContent = data.fallback ? 'Fallback results' : 'Demo mode';
+        resultsMeta.appendChild(demoIndicator);
     }
+
+    if (data.results && data.results.length > 0) {
+        data.results.forEach(result => {
+            const resultElement = document.createElement('div');
+            resultElement.className = 'result';
+
+            const domain = new URL(result.url).origin;
+            const faviconUrl = `https://www.google.com/s2/favicons?sz=16&domain_url=${domain}`;
+
+            resultElement.innerHTML = `
+                <h2><a href="${result.url}" target="_blank">${result.title}</a></h2>
+                <div class="result-url" style="display: flex; align-items: center; gap: 6px; margin: 4px 0;">
+                    <img src="${faviconUrl}" alt="favicon" class="favicon" style="width: 16px; height: 16px;">
+                    <span>${result.url}</span>
+                </div>
+                <p class="result-snippet">${result.snippet}</p>
+            `;
+
+            resultsContainer.appendChild(resultElement);
+        });
+    } else {
+        resultsContainer.innerHTML = '<div class="no-results">No results found</div>';
+    }
+}
+
 });
