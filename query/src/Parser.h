@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "../../index/src/TextPreprocessor.h"
 
 namespace mithril {
 
@@ -23,7 +24,6 @@ public:
 
 class Parser {
 public:
-    // Updated constructor to take a string and tokenize it using Lexer
     explicit Parser(const std::string& input, const core::MemMapFile& index_file,
                     TermDictionary& term_dict, PositionIndex& position_index)
         : input_(input), index_file_(index_file), term_dict_(term_dict),
@@ -31,7 +31,15 @@ public:
     {
         Lexer lexer(input);
         while (!lexer.EndOfInput()) {
-            tokens_.push_back(lexer.NextToken());
+            auto token = lexer.NextToken();
+            
+            token.value = TokenNormalizer::normalize(token.value);
+
+            if (token.value.empty()) {
+                continue;
+            }
+
+            tokens_.push_back(token);
         }
     }
 
