@@ -54,28 +54,27 @@ struct MithrilManager {
     }
 
     MithrilManager(int argc, char** argv){
-        std::string indexPath;
+
+        std::vector<std::string> indexPaths;
 
         for (int i = 1; i < argc; ++i) {
             std::string arg = argv[i];
     
             if (arg == "--index" && i + 1 < argc) {
-                indexPath = argv[++i];
+                indexPaths.push_back(argv[++i]);
             } else {
                 std::cerr << "Unknown or incomplete argument: " << arg << std::endl;
                 throw std::runtime_error("Failed to make MithrilManager");
             }
 
-            if (indexPath.empty()) throw std::runtime_error("Failed to make MithrilManager");
 
             server_fd = create_server_sockfd(PORT, 10);
 
             if (server_fd == -1) throw std::runtime_error("Failed to make MithrilManager");
 
             std::cout << "Server running on localhost:" << PORT << std::endl;
-            std::cout << "Using index path: " << indexPath << std::endl;
+            //std::cout << "Using index path: " << indexPath << std::endl;
 
-            std::vector<std::string> indexPaths = {indexPath};
             manager = make_unique<QueryManager>(indexPaths);
 
             std::cout << "Successfully created MithrilManager" << std::endl;

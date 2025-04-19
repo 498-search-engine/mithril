@@ -95,7 +95,7 @@ struct RPCHandler {
     static void sendAll(int sockfd, const void* buf, size_t len) {
         const char* ptr = static_cast<const char*>(buf);
         size_t total_sent = 0;
-        std::cout << "sending " << *ptr << std::endl;
+        //std::cout << "sending " << *ptr << std::endl;
         while (total_sent < len) {
             ssize_t sent = send(sockfd, ptr + total_sent, len - total_sent, 0);
             if (sent <= 0) throw std::runtime_error("Failed to send data");
