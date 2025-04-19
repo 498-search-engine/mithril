@@ -231,13 +231,8 @@ public:
     std::vector<uint32_t> evaluate() const override { return {}; }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        // Split the quote into terms
-        std::vector<std::string> quote_terms;
-        std::istringstream iss(quote_token_.value);
-        std::string term;
-        while (iss >> term) {
-            quote_terms.push_back(term);
-        }
+
+        std::vector<std::string> quote_terms = ExtractQuoteTerms(quote_token_);
 
         return std::make_unique<mithril::TermQuote>(
             query::QueryConfig::GetIndexPath(),
