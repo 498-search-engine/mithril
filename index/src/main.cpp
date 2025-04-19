@@ -62,18 +62,20 @@ bool validate_directories(const std::string& input_dir, const std::string& outpu
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <crawl_directory> [--output=<dir>] [--force] [--quiet]" << std::endl;
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0]
+                  << " <crawl_directory> <pagerank binary file> [--output=<dir>] [--force] [--quiet]" << std::endl;
         return 1;
     }
 
     // Parse arguments
     std::string input_dir = argv[1];
+    std::string pagerank_file = argv[2];
     std::string output_dir = "index_output";
     bool force = false;
     bool quiet = false;
 
-    for (int i = 2; i < argc; i++) {
+    for (int i = 3; i < argc; i++) {
         std::string_view arg(argv[i]);
         if (arg.starts_with("--output=")) {
             output_dir = arg.substr(9);
@@ -106,7 +108,7 @@ int main(int argc, char* argv[]) {
         spdlog::info("Input directory: {}", input_dir);
         spdlog::info("Output directory: {}", output_dir);
 
-        mithril::IndexBuilder builder(output_dir);
+        mithril::IndexBuilder builder(output_dir, pagerank_file);
 
         size_t processed = 0;
         auto start_time = std::chrono::steady_clock::now();

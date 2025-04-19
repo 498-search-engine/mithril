@@ -7,9 +7,13 @@
 #include <sys/stat.h>
 
 namespace mithril::pagerank {
-PageRankReader::PageRankReader() {
-    core::Config config = core::Config("pagerank.conf");
-    const std::string outputFile = std::string(config.GetString("output_file").Cstr());
+PageRankReader::PageRankReader(const std::string& pagerank_file) {
+    std::string outputFile = pagerank_file;
+
+    if (outputFile == "") {
+        core::Config config = core::Config("pagerank.conf");
+        outputFile = std::string(config.GetString("output_file").Cstr());
+    }
 
     int fd = open(outputFile.c_str(), O_RDONLY);
     if (fd == -1) {

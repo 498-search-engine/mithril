@@ -41,7 +41,6 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
 
     logger->info("[{}] Query: {}, URL: {}, Title: {}", doc.id, query[0].first, doc.url, title);
 
-
     // for (const auto& [term, multiplicity] : query) {
     //     if (doc.url.find(term) != std::string::npos) {
     //         if (!isInURL) {

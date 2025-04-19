@@ -7,6 +7,7 @@
 #include "data/Gzip.h"
 #include "data/Reader.h"
 #include "data/Writer.h"
+#include "ranking/PageRankReader.h"
 
 #include <algorithm>
 #include <fcntl.h>
@@ -85,13 +86,17 @@ public:
 };
 
 
-IndexBuilder::IndexBuilder(const std::string& output_dir, size_t num_threads, size_t max_terms_per_block)
+IndexBuilder::IndexBuilder(const std::string& output_dir,
+                           const std::string& pagerank_file,
+                           size_t num_threads,
+                           size_t max_terms_per_block)
     : output_dir_(output_dir),
       max_terms_per_block_(max_terms_per_block == 0 ? DEFAULT_MAX_TERMS_PER_BLOCK : max_terms_per_block) {
     spdlog::info("Initializing IndexBuilder: Output='{}', Threads={}, MaxTermsPerBlock={}",
                  output_dir_,
                  num_threads,
                  max_terms_per_block_);
+    pagerank_reader_ = new pagerank::PageRankReader(pagerank_file);
     std::filesystem::create_directories(output_dir);
     std::filesystem::create_directories(output_dir + "/blocks");
     for (size_t i = 0; i < num_threads; ++i) {
@@ -255,7 +260,7 @@ void IndexBuilder::process_document(Document doc) {
                                           static_cast<uint32_t>(doc.title.size()),
                                           static_cast<uint32_t>(url_tokens.size()),
                                           static_cast<uint32_t>(doc.description.size()),
-                                          pagerank_reader_.GetDocumentPageRank(doc.id)});
+                                          pagerank_reader_->GetDocumentPageRank(doc.id)});
         }
 
         // position indexing batching

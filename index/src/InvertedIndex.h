@@ -70,6 +70,7 @@ struct IndexStatistics {
 class IndexBuilder {
 public:
     explicit IndexBuilder(const std::string& output_dir,
+                          const std::string& pagerank_file,
                           size_t num_threads = std::thread::hardware_concurrency() * 3 / 2,
                           size_t max_terms_per_block = DEFAULT_MAX_TERMS_PER_BLOCK);
 
@@ -81,7 +82,7 @@ public:
 
 private:
     // Page rank reader
-    pagerank::PageRankReader pagerank_reader_;
+    pagerank::PageRankReader* pagerank_reader_;
 
     // Doc Metadata Storage
     std::vector<DocumentMetadata> document_metadata_;

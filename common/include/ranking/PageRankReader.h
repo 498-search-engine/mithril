@@ -6,7 +6,7 @@
 namespace mithril::pagerank {
 class PageRankReader {
 public:
-    PageRankReader();
+    PageRankReader(const std::string& pagerank_file = "");
     ~PageRankReader();
 
     float GetDocumentPageRank(data::docid_t docid);
