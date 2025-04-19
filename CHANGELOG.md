@@ -67,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - integrate ranking into everything (#130)
 - manual document crawling (#138)
 - searching `nocache` will disable client side query caching (#142)
+- add boolean presence ranking flags (#139)
 
 ### Fixed
 
