@@ -216,40 +216,48 @@ private:
     std::unique_ptr<mithril::NotISR> not_isr_;
 };
 
-// class QuoteQuery : public Query {
-// public:
-//     QuoteQuery
-//     ~QuoteQuery() = default;
 
-//     // Evaluates everything in one go
-//     [[nodiscard]] std::vector<uint32_t> evaluate() const;
+class QuoteQuery : public Query {
+public:
+    QuoteQuery(Token quote_token,
+               const core::MemMapFile& index_file,
+               mithril::TermDictionary& term_dict,
+               mithril::PositionIndex& position_index)
+        : quote_token_(std::move(quote_token)),
+          index_file_(index_file),
+          term_dict_(term_dict),
+          position_index_(position_index) {}
 
-//     // Helps us do some more fine grained stream reading
-//     uint32_t get_next_doc() const;
-//     bool has_next() const;
+    std::vector<uint32_t> evaluate() const override { return {}; }
 
-//     [[nodiscard]] std::unique_ptr<mithril::IndexStreamReader> generate_isr() const;
+    [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
+        // Split the quote into terms
+        std::vector<std::string> quote_terms;
+        std::istringstream iss(quote_token_.value);
+        std::string term;
+        while (iss >> term) {
+            quote_terms.push_back(term);
+        }
 
-//     // Returns a string representation of the query for debugging/display
-//     [[nodiscard]] virtual std::string to_string() const;
+        return std::make_unique<mithril::TermQuote>(
+            query::QueryConfig::GetIndexPath(),
+            quote_terms,
+            index_file_,
+            term_dict_,
+            position_index_
+        );
+    }
 
-//     // Optional: Get query type as string
-//     [[nodiscard]] virtual std::string get_type() const {
-//         return "Quote";
-//     }
+    [[nodiscard]] std::string to_string() const override { return "QUOTE(" + quote_token_.value + ")"; }
 
-// private:
-// };
+    [[nodiscard]] std::string get_type() const override { return "QuoteQuery"; }
 
-// }  // namespace mithril
+private:
+    Token quote_token_;
+    const core::MemMapFile& index_file_;
+    mithril::TermDictionary& term_dict_;
+    mithril::PositionIndex& position_index_;
+};
 
-// class FieldQuery : public Query {
-//     // Restricts search to specific fields (TITLE, TEXT)
-// };
-
-// class PhraseQuery : public Query {
-//     // For exact phrase matching with quotes
-//     // Will need to use position information
-// };
 
 #endif  // QUERY_H_
