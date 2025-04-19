@@ -155,7 +155,7 @@ private:
             // When you implement PhraseQuery, uncomment this:
             // return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1].value);
             // For now, create a term query with the phrase content
-            return std::make_unique<TermQuery>(Token(TokenType::QUOTE, tokens_[current_position_ - 1].value),
+            return std::make_unique<QuoteQuery>(Token(TokenType::QUOTE, tokens_[current_position_ - 1]),
                                                index_file_, term_dict_, position_index_);
         }
 
