@@ -164,11 +164,12 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }, 300);
 
-
+// Display results function
 function displayResults(data, fromCache) {
-    
+    // Hide loading indicator
     loadingIndicator.style.display = 'none';
 
+    // Display results metadata
     const resultCount = data.total || 0;
     const searchTime = ((data.time_ms || 0) / 1000).toFixed(3);
 
@@ -176,9 +177,11 @@ function displayResults(data, fromCache) {
     queryTime.textContent = `${searchTime}s${fromCache ? ' (cached)' : ''}`;
     resultsMeta.style.display = 'flex';
 
+    // FIXED: Remove any existing demo indicators first
     const existingIndicators = resultsMeta.querySelectorAll('.demo-indicator');
     existingIndicators.forEach(indicator => indicator.remove());
 
+    // Show demo mode indicator if applicable
     if (data.demo_mode || data.fallback) {
         const demoIndicator = document.createElement('div');
         demoIndicator.className = 'demo-indicator';
