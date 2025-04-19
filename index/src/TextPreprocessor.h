@@ -139,7 +139,6 @@ public:
         return "";
     }
 
-private:
     static std::string decorateToken(const std::string& token, FieldType field) {
         switch (field) {
         case FieldType::TITLE:
@@ -156,6 +155,7 @@ private:
         }
     }
 
+private:
     static bool isValidToken(const std::string& str) {
         // Must contain at least one letter and no non-ASCII chars
         return std::any_of(str.begin(), str.end(), ::isalpha) && str.find_first_of("\x80\xFF") == std::string::npos;

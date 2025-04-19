@@ -21,6 +21,7 @@ target_link_libraries(ranking PUBLIC
     spdlog::spdlog
     lib::core
     common
+    index
     OpenMP::OpenMP_CXX
 )
 

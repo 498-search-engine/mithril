@@ -432,6 +432,7 @@ bool PositionIndex::writeTerm(const std::string& term,
 
         // Write term to dictionary
         uint32_t term_len = term.length();
+
         posDict_out.Write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
         posDict_out.Write(term.data(), term_len);
 
@@ -450,6 +451,7 @@ bool PositionIndex::writeTerm(const std::string& term,
         // Write docs
         for (const auto& [doc_id, data] : sorted_docs) {
             const auto& [field_flags, positions] = data;
+
 
             data_out.Write(reinterpret_cast<const char*>(&doc_id), sizeof(doc_id));
 
