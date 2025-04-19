@@ -21,36 +21,50 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         logger = spdlog::basic_logger_mt("ranker_logger", "ranker.log");
     }
 
-    std::vector<uint16_t> urlPositions =
-        position_index.getPositions(mithril::TokenNormalizer::decorateToken(query[0].first, FieldType::URL), doc.id);
-    std::vector<uint16_t> titlePositions =
-        position_index.getPositions(mithril::TokenNormalizer::decorateToken(query[0].first, FieldType::TITLE), doc.id);
-    std::vector<uint16_t> descPositions =
-        position_index.getPositions(mithril::TokenNormalizer::decorateToken(query[0].first, FieldType::DESC), doc.id);
-    std::vector<uint16_t> bodyPositions =
-        position_index.getPositions(mithril::TokenNormalizer::decorateToken(query[0].first, FieldType::BODY), doc.id);
-
-    bool isInURL = urlPositions.size();
-    bool isInTitle = titlePositions.size();
-    bool isInDescription = descPositions.size();
-    bool isInBody = bodyPositions.size();
-
     std::string title;
     for (const auto& term : doc.title) {
         title += term;
     }
     std::transform(title.begin(), title.end(), title.begin(), [](unsigned char c) { return std::tolower(c); });
 
+    bool isInURL = true;
+    bool isInTitle = true;
+    bool isInDescription = true;
+    bool isInBody = true;
+
 #if LOGGING == 1
     logger->info("[{}] Query: {}, URL: {}, Title: {}", doc.id, query[0].first, doc.url, title);
 #endif
 
     for (const auto& [term, multiplicity] : query) {
-        if (doc.url.find(term) != std::string::npos) {
-            isInURL = true;
+        std::vector<uint16_t> urlPositions =
+            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::URL), doc.id);
+        std::vector<uint16_t> titlePositions =
+            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::TITLE), doc.id);
+        std::vector<uint16_t> descPositions =
+            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id);
+        std::vector<uint16_t> bodyPositions =
+            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::BODY), doc.id);
+
+        bool termInUrl = urlPositions.size();
+        bool termInTitle = titlePositions.size();
+        bool termInDescription = descPositions.size();
+        bool termInBody = bodyPositions.size();
+
+        termInUrl = doc.url.find(term) != std::string::npos;
+        termInTitle = title.find(term) != std::string::npos;
+
+        if (!termInUrl) {
+            isInURL = false;
         }
-        if (title.find(term) != std::string::npos) {
-            isInTitle = true;
+        if (!termInTitle) {
+            isInTitle = false;
+        }
+        if (!termInDescription) {
+            isInDescription = false;
+        }
+        if (!termInBody) {
+            isInBody = false;
         }
     }
 
