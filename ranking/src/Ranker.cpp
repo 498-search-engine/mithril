@@ -7,6 +7,8 @@
 
 #include <spdlog/spdlog.h>
 
+#define LOGGING 1
+
 namespace mithril::ranking {
 
 uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
@@ -39,23 +41,18 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
     }
     std::transform(title.begin(), title.end(), title.begin(), [](unsigned char c) { return std::tolower(c); });
 
+#if LOGGING == 1
     logger->info("[{}] Query: {}, URL: {}, Title: {}", doc.id, query[0].first, doc.url, title);
+#endif
 
-
-    // for (const auto& [term, multiplicity] : query) {
-    //     if (doc.url.find(term) != std::string::npos) {
-    //         if (!isInURL) {
-    //             logger->error("Term {} not found in URL", term);
-    //         }
-    //         isInURL = true;
-    //     }
-    //     if (title.find(term) != std::string::npos) {
-    //         if (!isInURL) {
-    //             logger->error("Term {} not found in title", term);
-    //         }
-    //         isInTitle = true;
-    //     }
-    // }
+    for (const auto& [term, multiplicity] : query) {
+        if (doc.url.find(term) != std::string::npos) {
+            isInURL = true;
+        }
+        if (title.find(term) != std::string::npos) {
+            isInTitle = true;
+        }
+    }
 
     dynamic::RankerFeatures features{
         // Boolean presence flags

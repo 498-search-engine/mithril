@@ -100,7 +100,9 @@ uint32_t GetUrlDynamicRank(const RankerFeatures& features) {
 
     uint32_t finalScore = static_cast<uint32_t>(((score - MinScore) / ScoreRange) * 10000);
     if (finalScore > 3000) {
+#if LOGGING == 1
         Log(features, score, finalScore);
+#endif
     }
 
     return finalScore;
