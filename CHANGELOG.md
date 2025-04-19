@@ -69,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - searching `nocache` will disable client side query caching (#142)
 - added CLI option for binary output to pagerank_sim and no longer saves human readable output by default (#146)
 - add boolean presence ranking flags (#139)
+- add basic multiterm support for ranking (#153)
 
 ### Fixed
 
