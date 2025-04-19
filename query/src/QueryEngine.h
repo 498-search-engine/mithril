@@ -33,7 +33,7 @@ public:
         return std::move(parser.parse());
     }
 
-    static std::vector<std::pair<std::string, int>> get_alL_terms(std::string query){
+    std::vector<std::pair<std::string, int>> get_alL_terms(std::string query){
         std::vector<Token> tokens = GetTokens(query);
         std::vector<std::pair<std::string, int>> term_counts;
         std::unordered_map<std::string, int> term_map;
