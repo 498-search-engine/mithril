@@ -125,8 +125,9 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
                 {query, 1}
         },
             doc,
-            docInfo);
-        ranked_matches.push_back({match, score});  // TODO: replace 0 with actual score
+            docInfo,
+            query_engine->position_index_);
+        ranked_matches.push_back({match, score});
     }
 
     return ranked_matches;

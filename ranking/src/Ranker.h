@@ -1,3 +1,4 @@
+#include "PositionIndex.h"
 #include "data/Document.h"
 
 #include <spdlog/spdlog.h>
@@ -9,5 +10,6 @@ namespace mithril::ranking {
  */
 uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
-                       const data::DocInfo& info);
+                       const data::DocInfo& info,
+                       const PositionIndex& position_index);
 }  // namespace mithril::ranking
