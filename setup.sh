@@ -1,6 +1,8 @@
 #!/bin/bash
 
-cd mithril
+# cd mithril
+
+rm -rf build
 
 mkdir build
 
@@ -18,7 +20,7 @@ mkdir data/docs
 mkdir data/state
 
 # Run the crawler in the background
-./crawler/mithril_crawler ../crawler/crawler.conf &
+./crawler/mithril_crawler ../crawler/crawler.conf --force &
 
 # Get the PID of the last background command (the crawler)
 PID=$!
@@ -38,7 +40,7 @@ docs_dir="data/docs"
 for chunk in "$docs_dir"/*/; do
     # Check if it's a directory (chunk)
     if [ -d "$chunk" ]; then
-        echo "Processing chunk: $chunk"
+        # echo "Processing chunk: $chunk"
 
         # Get a list of all files (docs) in the chunk directory
         doc_files=("$chunk"*)

@@ -233,6 +233,7 @@ public:
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
 
         std::vector<std::string> quote_terms = ExtractQuoteTerms(quote_token_);
+        // REMOVE STOP WORDS
 
         return std::make_unique<mithril::TermQuote>(
             query::QueryConfig::GetIndexPath(),
