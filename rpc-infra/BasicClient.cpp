@@ -22,10 +22,10 @@ int main() {
         return 1;
     }
 
-    std::vector<std::pair<uint32_t, std::string>> data = {
-        {1, "hello"},
-        {2, "world"},
-        {42, "rpc test"}
+    std::vector<std::pair<uint32_t, uint32_t>> data = {
+        {1, 2},
+        {2, 3},
+        {42, 45}
     };
 
     RPCHandler::Send(sockfd, data);

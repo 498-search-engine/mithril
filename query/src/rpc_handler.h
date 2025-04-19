@@ -39,34 +39,29 @@ struct RPCHandler {
         return query;
     }
 
-    static void SendResults(int sockfd, const std::vector<std::pair<uint32_t, std::string>>& data){
-        std::string header = std::to_string(data.size())+"\r\n\r\n";
+    static void SendResults(int sockfd, const std::vector<std::pair<uint32_t, uint32_t>>& data){
+        std::string header = std::to_string(data.size()) + "\r\n\r\n";
         sendAll(sockfd, header.c_str(), header.size());
-
-        for (const auto& [num, str] : data) {
-            //send id
-            uint32_t send_num = htonl(num);
-            sendAll(sockfd, &send_num, sizeof(send_num));
-
-            //send c-str
-            sendAll(sockfd, str.c_str(), str.size()+1);
+    
+        for (const auto& [a, b] : data) {
+            uint32_t send_a = htonl(a);
+            uint32_t send_b = htonl(b);
+            sendAll(sockfd, &send_a, sizeof(send_a));
+            sendAll(sockfd, &send_b, sizeof(send_b));
         }
     }
 
-    static std::vector<std::pair<uint32_t, std::string>> ReadResults(int sockfd){
+    static std::vector<std::pair<uint32_t, uint32_t>> ReadResults(int sockfd){
         //blocking until read can happen
-        std::vector<std::pair<uint32_t, std::string>> result;
-
+        std::vector<std::pair<uint32_t, uint32_t>> result;
+    
         auto recv_until_delim = [&](const std::string& delim) {
             std::string buffer;
             char c;
             while (true) {
-                std::cout << "reading\n";
                 ssize_t n = recv(sockfd, &c, 1, 0);
-                std::cout << "read\n";
                 if (n <= 0) throw std::runtime_error("Failed to receive header");
                 buffer += c;
-                std::cout << "curr buffer " << buffer << std::endl;
                 if (buffer.size() >= delim.size() &&
                     buffer.substr(buffer.size() - delim.size()) == delim) {
                     break;
@@ -74,32 +69,23 @@ struct RPCHandler {
             }
             return buffer;
         };
-
-        std::cout << "about to recv header\n";
+    
         std::string header = recv_until_delim("\r\n\r\n");
         size_t pos = header.find("\r\n\r\n");
         if (pos == std::string::npos) throw std::runtime_error("Invalid header format");
-        std::cout << "got header\n";
         uint32_t num_entries = std::stoi(header.substr(0, pos));
-
-        std::cout << "going through entries\n";
+    
         for (size_t i = 0; i < num_entries; ++i) {
-            uint32_t net_num;
-            recvAll(sockfd, &net_num, sizeof(net_num));
-            uint32_t num = ntohl(net_num);
-
-            std::string str;
-            char c;
-            while (true) {
-                ssize_t n = recv(sockfd, &c, 1, 0);
-                if (n <= 0) throw std::runtime_error("Failed to receive string");
-                if (c == '\0') break;
-                str += c;
-            }
-
-            result.emplace_back(num, str);
+            uint32_t net_a, net_b;
+            recvAll(sockfd, &net_a, sizeof(net_a));
+            recvAll(sockfd, &net_b, sizeof(net_b));
+    
+            uint32_t a = ntohl(net_a);
+            uint32_t b = ntohl(net_b);
+    
+            result.emplace_back(a, b);
         }
-
+    
         return result;
     }
 

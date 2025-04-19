@@ -36,7 +36,7 @@ int main() {
 
     auto data = RPCHandler::Read(client_fd);
     std::cout << "Received:\n";
-    for (const auto& [num, str] : data) {
+    for (const auto [num, str] : data) {
         std::cout << "  [" << num << "] " << str << "\n";
     }
 
