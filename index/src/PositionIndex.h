@@ -72,7 +72,7 @@ private:
     static std::unordered_map<std::string, std::vector<PositionEntry>> position_buffer_;
     static size_t buffer_size_;
     static int buffer_counter_;
-    static constexpr size_t MAX_BUFFER_SIZE = 128 * 1024 * 1024;
+    static constexpr size_t MAX_BUFFER_SIZE = 512 * 1024 * 1024;
 
     static void flushBuffer(const std::string& output_dir);
     static void mergePositionBuffers(const std::string& output_dir);
