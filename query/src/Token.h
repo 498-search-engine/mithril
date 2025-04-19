@@ -2,6 +2,7 @@
 #define TOKEN_H_
 
 #include <string>
+#include <vector> 
 
 enum class TokenType {
     WORD,   // simple_term: alphanumeric word
@@ -56,5 +57,30 @@ struct Token {
         return "[" + typeStr + ": \"" + value + "\"]";
     }
 };
+
+
+inline static std::vector<std::string> ExtractQuoteTerms(const Token& quote_token) {
+    if (quote_token.type != TokenType::QUOTE) {
+        throw std::invalid_argument("Token is not a quote but youa re calling extract_quote_terms");
+    }
+
+    std::vector<std::string> terms;
+    std::string currentTerm;
+    
+    for (char c : quote_token.value) {
+        if (c == ' ') {
+            if (!currentTerm.empty()) {
+                terms.push_back(currentTerm);
+                currentTerm.clear();
+            }
+        } else {
+            currentTerm += c;
+        }
+    }
+    if (!currentTerm.empty()) {
+        terms.push_back(currentTerm);
+    }
+    return terms;
+}
 
 #endif  // TOKEN_H_
