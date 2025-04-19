@@ -32,12 +32,12 @@ public:
         Lexer lexer(input);
         while (!lexer.EndOfInput()) {
             auto token = lexer.NextToken();
-            
-            token.value = TokenNormalizer::normalize(token.value);
 
-            if (token.value.empty()) {
-                continue;
-            }
+            // token.value = TokenNormalizer::normalize(token.value);
+
+            // if (token.value.empty()) {
+            //     continue;
+            // }
 
             tokens_.push_back(token);
         }
