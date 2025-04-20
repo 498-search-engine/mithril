@@ -71,6 +71,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add boolean presence ranking flags (#139)
 - Made GenericTermReader to union over all fields, not just search the body (#152)
 - add basic multiterm support for ranking (#153)
+- query coverage, density + position based ranking (#159)
 
 ### Fixed
 
@@ -114,6 +115,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Changes from the runs on VM (perf/fixes for idx and ranking)(#132)
 - Fixed mmap bug in QueryEngine (#144)
 - Added favicon to front end (#150)
+
 ## [0.1.0] - 2025-02-07
 
 ### Added
