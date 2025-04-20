@@ -189,7 +189,7 @@ private:
     }
 
     void makeTokenMap(){
-        for (auto& token : tokens){
+        for (auto& token : tokens_){
             if (token.type == TokenType::WORD or token.type == TokenType::QUOTE) {
                 ++token_mult[token.value];
             }

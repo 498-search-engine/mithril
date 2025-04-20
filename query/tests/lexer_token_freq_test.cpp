@@ -1,4 +1,4 @@
-#include "Lexer.h"
+#include "Parser.h"
 #include "Token.h"
 
 #include <iostream>
@@ -8,7 +8,7 @@
 #include <unordered_map>
 
 
-void PrintFrequencies(const std::vector<std::pair<std::string, int>>& freqs) {
+void PrintFrequencies(const std::unordered_map<std::string, int>& freqs) {
     std::cout << "Frequencies:\n";
     for (const auto& [val, count] : freqs) {
         std::cout << "  \"" << val << "\": " << count << "\n";
