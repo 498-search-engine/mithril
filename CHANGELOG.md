@@ -72,6 +72,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Made GenericTermReader to union over all fields, not just search the body (#152)
 - add basic multiterm support for ranking (#153)
 - add scripts that made us build idx1(/5)
+- query coverage, density + position based ranking (#159)
 
 ### Fixed
 
