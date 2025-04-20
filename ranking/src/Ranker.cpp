@@ -36,6 +36,14 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
     logger->info("[{}] Query: {}, URL: {}, Title: {}", doc.id, query[0].first, doc.url, title);
 #endif
 
+    float totalTermsSize = (float)query.size();
+
+    // Percentage feature (i.e whether each tokenized word exists in this space or not)
+    float wordsInUrl = 0;
+    float wordsInTitle = 0;
+    float wordsInDesc = 0;
+    float wordsInBody = 0;
+
     for (const auto& [term, multiplicity] : query) {
         std::vector<uint16_t> urlPositions =
             position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::URL), doc.id);
@@ -56,15 +64,26 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
 
         if (!termInUrl) {
             isInURL = false;
+        } else {
+            wordsInUrl++;
         }
+
         if (!termInTitle) {
             isInTitle = false;
+        } else {
+            wordsInTitle++;
         }
+
         if (!termInDescription) {
             isInDescription = false;
+        } else {
+            wordsInDesc++;
         }
+
         if (!termInBody) {
             isInBody = false;
+        } else {
+            wordsInBody++;
         }
     }
 
@@ -74,7 +93,15 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         .query_in_title = isInTitle,
         .query_in_description = isInDescription,
         .query_in_body = isInBody,
-        .query_in_order = false,  // TODO: implement this
+
+        // Query Coverage percentage features
+        .coverage_percent_query_url = (wordsInUrl / totalTermsSize),
+        .coverage_percent_query_title = (wordsInTitle / totalTermsSize),
+        .coverage_percent_query_description = (wordsInDesc / totalTermsSize),
+
+        // Query Density percentage features
+
+        // Position features
 
         // Precomputed scores
         .static_rank = static_cast<float>(GetUrlStaticRank(doc.url)),
