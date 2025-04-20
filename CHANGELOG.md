@@ -115,6 +115,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fixed mmap bug in QueryEngine (#144)
 - Added favicon to front end (#150)
 - Added frequency count for queries (#151)
+- Added some code into QueryManager for token multiplicities (#152)
 ## [0.1.0] - 2025-02-07
 
 ### Added
