@@ -109,6 +109,14 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
     auto& query_engine = query_engines_[worker_id];
 
+    //Anu - code for getting the multiplicities here
+    Lexer lex(query);
+
+    //unordered_map<string, int> of token multiplicities you can just index
+    auto token_multiplicities = lex.GetTokenFrequencies();
+
+    //you can do whatever you want with token_multiplicities now
+
     std::vector<std::pair<std::string, int>> tokens;
     std::string current;
     std::cout << "tokens: ";

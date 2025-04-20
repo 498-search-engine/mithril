@@ -14,6 +14,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <unordered_map>
 
 class Lexer {
 public:
@@ -42,7 +43,7 @@ public:
     /** 
      * Goes through the query and returns a frequency count of all the tokens
     */
-    [[nodiscard]] auto GetTokenFrequencies() const -> std::vector<std::pair<std::string, int>>;
+    [[nodiscard]] auto GetTokenFrequencies() const -> std::unordered_map<std::string, int>;
 
 private:
     std::string input_;                                   // The input string to be tokenized

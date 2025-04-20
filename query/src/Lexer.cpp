@@ -4,7 +4,6 @@
 
 #include <cctype>
 #include <stdexcept>
-#include <unordered_map>
 
 Lexer::Lexer(const std::string& input) : input_(input), position_(0), hasPeeked_(false) {}
 
@@ -48,7 +47,7 @@ bool Lexer::EndOfInput() {
     return PeekToken().type == TokenType::EOFTOKEN;
 }
 
-std::vector<std::pair<std::string, int>> Lexer::GetTokenFrequencies() const {
+std::unordered_map<std::string, int> Lexer::GetTokenFrequencies() const {
     auto tokens = PeekWithoutConsuming();
     std::unordered_map<std::string, int> token_ct;
     for (auto& token : tokens){
@@ -56,11 +55,7 @@ std::vector<std::pair<std::string, int>> Lexer::GetTokenFrequencies() const {
             ++token_ct[token.value];
         }
     }
-
-    //add to vector
-    std::vector<std::pair<std::string, int>> freq_vec;
-    for (auto& pr : token_ct) freq_vec.emplace_back(pr);
-    return freq_vec;
+    return token_ct;
 }
 
 // Private helpers
