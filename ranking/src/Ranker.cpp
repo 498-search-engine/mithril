@@ -11,6 +11,24 @@
 
 namespace mithril::ranking {
 
+namespace {
+int CountWordOccurrences(const std::string& text, const std::string& word) {
+    int count = 0;
+    std::string tempText = text;
+    std::string tempWord = word;
+
+    std::transform(tempText.begin(), tempText.end(), tempText.begin(), ::tolower);
+    std::transform(tempWord.begin(), tempWord.end(), tempWord.begin(), ::tolower);
+
+    size_t position = tempText.find(tempWord, 0);
+    while (position != std::string::npos) {
+        count++;
+        position = tempText.find(tempWord, position + tempWord.length());
+    }
+    return count;
+}
+}  // namespace
+
 uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
                        const data::DocInfo& info,
@@ -47,6 +65,10 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
     float earliestPosTitle = 0.0F;
     float earliestPosBody = 0.0F;
 
+    float densityUrl = 0.0F;
+    float densityTitle = 0.0F;
+    float densityDescription = 0.0F;
+
     for (const auto& [term, multiplicity] : query) {
         std::vector<uint16_t> urlPositions =
             position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::URL), doc.id);
@@ -60,10 +82,6 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         bool termInDescription = descPositions.size() > 0;
         bool termInBody = bodyPositions.size() > 0;
 
-        if (termInBody) {
-            std::cout << doc.url << std::endl;
-        }
-
         termInUrl = doc.url.find(term) != std::string::npos;
 
         size_t pos = title.find(term);
@@ -73,6 +91,10 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             isInURL = false;
         } else {
             wordsInUrl++;
+
+            size_t urlOccurences = std::max(CountWordOccurrences(doc.url, term) * term.size(), doc.url.size());
+            densityUrl += (static_cast<float>(urlOccurences) / static_cast<float>(doc.url.size())) *
+                          (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
 
         if (!termInTitle) {
@@ -81,6 +103,10 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             wordsInTitle++;
             earliestPosTitle += (1 / static_cast<float>(pos + 1)) *
                                 (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+
+            int titleOccurences = std::max(CountWordOccurrences(title, term), (int)doc.title.size());
+            densityTitle += (static_cast<float>(titleOccurences) / static_cast<float>(doc.title.size())) *
+                            (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
 
         if (!termInDescription) {
@@ -111,6 +137,9 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         .coverage_percent_query_description = (wordsInDesc / totalTermsSize),
 
         // Query Density percentage features
+        .density_percent_query_url = densityUrl,
+        .density_percent_query_title = densityTitle,
+        .density_percent_query_description = densityDescription,
 
         // Position features
         .earliest_pos_title = earliestPosTitle,
