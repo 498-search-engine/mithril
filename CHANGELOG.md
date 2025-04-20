@@ -67,10 +67,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - integrate ranking into everything (#130)
 - manual document crawling (#138)
 - searching `nocache` will disable client side query caching (#142)
-- added CLI option for binary output to pagerank_sim and no longer saves human readable output by default (#146)
+- added CLI option for binary output to `pagerank_sim` and no longer saves human readable output by default (#146)
 - add boolean presence ranking flags (#139)
 - Made GenericTermReader to union over all fields, not just search the body (#152)
 - add basic multiterm support for ranking (#153)
+- add scripts that made us build idx1(/5)
 - query coverage, density + position based ranking (#159)
 
 ### Fixed
@@ -115,7 +116,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Changes from the runs on VM (perf/fixes for idx and ranking)(#132)
 - Fixed mmap bug in QueryEngine (#144)
 - Added favicon to front end (#150)
-
+- Added frequency count for queries (#151)
 ## [0.1.0] - 2025-02-07
 
 ### Added
