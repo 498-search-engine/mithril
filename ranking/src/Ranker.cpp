@@ -7,7 +7,7 @@
 
 #include <spdlog/spdlog.h>
 
-#define LOGGING 1
+#define LOGGING 0
 
 namespace mithril::ranking {
 
@@ -44,6 +44,9 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
     float wordsInDesc = 0;
     float wordsInBody = 0;
 
+    float earliestPosTitle = 0.0F;
+    float earliestPosBody = 0.0F;
+
     for (const auto& [term, multiplicity] : query) {
         std::vector<uint16_t> urlPositions =
             position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::URL), doc.id);
@@ -51,16 +54,20 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::TITLE), doc.id);
         std::vector<uint16_t> descPositions =
             position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id);
-        std::vector<uint16_t> bodyPositions =
-            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::BODY), doc.id);
+        std::vector<uint16_t> bodyPositions = position_index.getPositions(term, doc.id);
 
-        bool termInUrl = urlPositions.size();
-        bool termInTitle = titlePositions.size();
-        bool termInDescription = descPositions.size();
-        bool termInBody = bodyPositions.size();
+        bool termInUrl = urlPositions.size() > 0;
+        bool termInDescription = descPositions.size() > 0;
+        bool termInBody = bodyPositions.size() > 0;
+
+        if (termInBody) {
+            std::cout << doc.url << std::endl;
+        }
 
         termInUrl = doc.url.find(term) != std::string::npos;
-        termInTitle = title.find(term) != std::string::npos;
+
+        size_t pos = title.find(term);
+        bool termInTitle = pos != std::string::npos;
 
         if (!termInUrl) {
             isInURL = false;
@@ -72,6 +79,8 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             isInTitle = false;
         } else {
             wordsInTitle++;
+            earliestPosTitle += (1 / static_cast<float>(pos + 1)) *
+                                (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
 
         if (!termInDescription) {
@@ -84,6 +93,8 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             isInBody = false;
         } else {
             wordsInBody++;
+            earliestPosBody += (1 / static_cast<float>(bodyPositions[0] + 1)) *
+                               (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
     }
 
@@ -102,6 +113,8 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         // Query Density percentage features
 
         // Position features
+        .earliest_pos_title = earliestPosTitle,
+        .earliest_pos_body = earliestPosBody,
 
         // Precomputed scores
         .static_rank = static_cast<float>(GetUrlStaticRank(doc.url)),

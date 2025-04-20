@@ -4,7 +4,7 @@
 
 #include <spdlog/spdlog.h>
 
-#define LOGGING 0
+#define LOGGING 1
 
 namespace mithril::ranking::dynamic {
 namespace {
@@ -56,8 +56,8 @@ void Log(const RankerFeatures& features, float total, uint32_t normalizedScore) 
         "- Body: presence={} ({:.2f}*{})", features.query_in_body, Weights.query_in_body, features.query_in_body);
 
     rankerLogger->info("- Positions: title={:.4f}, body={:.4f}",
-                       (1.0F - features.earliest_pos_title) * Weights.earliest_pos_title,
-                       (1.0F - features.earliest_pos_body) * Weights.earliest_pos_body);
+                       (features.earliest_pos_title) * Weights.earliest_pos_title,
+                       (features.earliest_pos_body) * Weights.earliest_pos_body);
 
     rankerLogger->info("- Precomputed ranking: static={:.4f}, pagerank={:.4f}",
                        Weights.static_rank * features.static_rank,
@@ -90,15 +90,15 @@ uint32_t GetUrlDynamicRank(const RankerFeatures& features) {
     score += Weights.density_percent_query_description * features.density_percent_query_description;
 
     // Positional bonuses (inverted so earlier = higher score)
-    score += Weights.earliest_pos_title * (1.0F - features.earliest_pos_title);
-    score += Weights.earliest_pos_body * (1.0F - features.earliest_pos_body);
+    score += Weights.earliest_pos_title * (features.earliest_pos_title);
+    score += Weights.earliest_pos_body * (features.earliest_pos_body);
 
     // Precomputed/authority features
     score += Weights.static_rank * features.static_rank;
     score += Weights.pagerank * features.pagerank;
 
     uint32_t finalScore = static_cast<uint32_t>(((score - MinScore) / ScoreRange) * 10000);
-    if (finalScore > 2000) {
+    if (finalScore > 3000) {
 #if LOGGING == 1
         Log(features, score, finalScore);
 #endif
