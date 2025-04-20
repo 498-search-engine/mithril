@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
+#include <queue>
 
 namespace fs = std::filesystem;
 
