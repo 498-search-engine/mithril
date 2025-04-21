@@ -9,6 +9,11 @@ enum class TokenType {
     QUOTE,  // quoted_term: quoted phrase
     PHRASE, // fuzzy phrase matching, looser than QUOTE
     FIELD,     // TITLE or TEXT
+    TITLE,
+    URL,
+    ANCHOR,
+    DESC,
+    BODY,
     COLON,     // ':'
     OPERATOR,  // AND, OR, NOT, or implicit SPACE
     LPAREN,    // '('
