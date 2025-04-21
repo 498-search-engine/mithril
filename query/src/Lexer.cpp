@@ -32,9 +32,13 @@ auto Lexer::NextToken() -> Token {
         return LexSingleQuotedPhrase();
     } else if (c == ':' || c == '(' || c == ')') {
         return LexSymbol();
+    } else {
+        // Allow any other character to be part of a word
+        return LexWordOrKeyword();
     }
 
-    throw std::runtime_error(std::string("Unexpected character: ") + c);
+    // This line will never be reached as all cases are handled above
+    // throw std::runtime_error(std::string("Unexpected character: ") + c);
 }
 
 auto Lexer::PeekToken() -> Token {
@@ -93,7 +97,14 @@ auto Lexer::IsFieldKeyword(const std::string& word) const -> bool {
 
 auto Lexer::LexWordOrKeyword() -> Token {
     size_t start = position_;
-    while (position_ < input_.length() && IsAlnum(input_[position_])) {
+    // Allow any characters except whitespace and special symbols
+    while (position_ < input_.length() && 
+           !std::isspace(input_[position_]) && 
+           input_[position_] != ':' && 
+           input_[position_] != '(' && 
+           input_[position_] != ')' && 
+           input_[position_] != '"' && 
+           input_[position_] != '\'') {
         ++position_;
     }
 
