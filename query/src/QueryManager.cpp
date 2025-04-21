@@ -109,6 +109,36 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
     auto& query_engine = query_engines_[worker_id];
 
+    //Anu - code for getting the multiplicities here
+    Lexer lex(query);
+
+    //unordered_map<string, int> of token multiplicities you can just index
+    auto token_multiplicities = lex.GetTokenFrequencies();
+
+    //you can do whatever you want with token_multiplicities now
+
+    std::vector<std::pair<std::string, int>> tokens;
+    std::string current;
+    std::cout << "tokens: ";
+    for (char c : query) {
+        if (c == ' ') {
+            if (!current.empty()) {
+                std::cout << current << " ";
+                tokens.emplace_back(std::move(current), 1);
+                current = "";
+            }
+            continue;
+        }
+        current += c;
+    }
+
+    if (!current.empty()) {
+        std::cout << current << " ";
+        tokens.emplace_back(std::move(current), 1);
+    }
+
+    std::cout << std::endl;
+
     for (uint32_t match : matches) {
         const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
         if (!doc_opt.has_value()) {
@@ -119,14 +149,8 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         const data::Document& doc = doc_opt.value();
         const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
 
-        // TODO: replace query with actual query terms (currently will only work for single term queries or phrases)
-        uint32_t score = ranking::GetFinalScore(
-            {
-                {query, 1}
-        },
-            doc,
-            docInfo);
-        ranked_matches.push_back({match, score});  // TODO: replace 0 with actual score
+        uint32_t score = ranking::GetFinalScore(tokens, doc, docInfo, query_engine->position_index_);
+        ranked_matches.emplace_back(match, score);
     }
 
     return ranked_matches;

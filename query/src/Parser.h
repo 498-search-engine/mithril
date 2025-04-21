@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include "../../index/src/TextPreprocessor.h"
+#include <unordered_map>
 
 namespace mithril {
 
@@ -58,6 +59,8 @@ public:
 
         return result;
     }
+
+    inline int getTokenMultiplicity(std::string& token) { return token_mult.contains(token) ? token_mult[token] : 0; }
 
 private:
     // Navigation and token checking methods
@@ -200,12 +203,21 @@ private:
         throw ParseException("Expected ':' after field name");
     }
 
+    void makeTokenMap(){
+        for (auto& token : tokens_){
+            if (token.type == TokenType::WORD or token.type == TokenType::QUOTE) {
+                ++token_mult[token.value];
+            }
+        }
+    }
+
     std::string input_;  // Store the original input string
     const core::MemMapFile& index_file_;
     TermDictionary& term_dict_;
     PositionIndex& position_index_;
     std::vector<Token> tokens_;
     size_t current_position_;
+    std::unordered_map<std::string, int> token_mult;
 };
 
 }  // namespace mithril

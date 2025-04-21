@@ -21,10 +21,12 @@ target_link_libraries(query PUBLIC
 add_executable_with_copy(mithril_lexer src/main.cpp)
 add_executable_with_copy(mithril_coordinator src/mithril_coordinator.cpp)
 add_executable_with_copy(mithril_worker src/mithril_worker.cpp)
+add_executable_with_copy(mithril_manager src/MithrilManager.cpp)
 
 target_link_libraries(mithril_lexer PRIVATE query)
 target_link_libraries(mithril_coordinator PRIVATE query)
 target_link_libraries(mithril_worker PRIVATE query index)
+target_link_libraries(mithril_manager PRIVATE query index)
 
 # Test executables
 set(TEST_LIBS
@@ -40,7 +42,12 @@ add_executable(lexer_driver tests/lexer_driver.cpp)
 add_executable(query_driver tests/query_driver.cpp)
 add_executable(and_test tests/and_test.cpp)
 add_executable(or_test tests/or_test.cpp)
+<<<<<<< HEAD
 add_executable(quote_test tests/quote_test.cpp)
+=======
+add_executable(test_freq_ct tests/lexer_token_freq_test.cpp)
+
+>>>>>>> main
 # Test targets linking
 target_link_libraries(test_lexer PRIVATE ${TEST_LIBS})
 target_link_libraries(test_query PRIVATE ${TEST_LIBS} index)
@@ -50,7 +57,12 @@ target_link_libraries(lexer_driver PRIVATE query)
 target_link_libraries(query_driver PRIVATE query index)
 target_link_libraries(and_test PRIVATE query index common)
 target_link_libraries(or_test PRIVATE query index common)
+<<<<<<< HEAD
 target_link_libraries(quote_test PRIVATE query index common)
+=======
+target_link_libraries(test_freq_ct PRIVATE query)
+
+>>>>>>> main
 # Tests registration
 add_test(NAME LexerTest COMMAND test_lexer)
 

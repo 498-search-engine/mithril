@@ -3,13 +3,17 @@
 #include "NetworkHelper.h"
 #include "TextPreprocessor.h"
 #include "network.h"
+#include "rpc_handler.h"
 
 #include <algorithm>
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
+#include <stdexcept>
 
 using namespace core;
 using namespace mithril;
+
+using QueryResults = std::vector<std::pair<uint32_t, uint32_t>>;
 
 mithril::QueryCoordinator::QueryCoordinator(const std::string& conf_path) {
     try {
@@ -53,7 +57,7 @@ void mithril::QueryCoordinator::print_server_configs() const {
     }
 }
 
-std::vector<uint32_t> mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
+QueryResults mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
     mithril::TokenNormalizer token_normalizer;
     std::string normalized_query = token_normalizer.normalize(query);
 
@@ -62,8 +66,8 @@ std::vector<uint32_t> mithril::QueryCoordinator::send_query_to_workers(const std
         return {};
     }
 
-    std::vector<std::vector<uint32_t>> worker_results;
-    std::vector<std::future<std::vector<uint32_t>>> futures;
+    std::vector<QueryResults> worker_results;
+    std::vector<std::future<QueryResults>> futures;
 
     // Create futures for each worker
     for (const auto& config : server_configs_) {
@@ -84,7 +88,7 @@ std::vector<uint32_t> mithril::QueryCoordinator::send_query_to_workers(const std
     }
 
     // Aggregate all results
-    std::vector<uint32_t> all_results;
+    QueryResults all_results;
     for (const auto& results : worker_results) {
         all_results.insert(all_results.end(), results.begin(), results.end());
     }
@@ -99,10 +103,10 @@ std::vector<uint32_t> mithril::QueryCoordinator::send_query_to_workers(const std
     return all_results;
 }
 
-std::vector<uint32_t> mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
+QueryResults mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
                                                                         const std::string& query) {
 
-    std::vector<uint32_t> results;
+    QueryResults results;
 
     try {
         int client_fd = create_client_sockfd(server_config.ip.c_str(), server_config.port);
@@ -118,27 +122,29 @@ std::vector<uint32_t> mithril::QueryCoordinator::handle_worker_response(const Se
         // 2. Send query string
         send(client_fd, query.c_str(), query_length, 0);
 
-        // 3. Receive result count
-        uint32_t result_count = 0;
-        ssize_t bytes_read = recv(client_fd, &result_count, sizeof(uint32_t), MSG_WAITALL);
+        // // 3. Receive result count
+        // uint32_t result_count = 0;
+        // ssize_t bytes_read = recv(client_fd, &result_count, sizeof(uint32_t), MSG_WAITALL);
 
-        if (bytes_read != sizeof(uint32_t)) {
-            throw std::runtime_error("Failed to read result count");
-        }
+        // if (bytes_read != sizeof(uint32_t)) {
+        //     throw std::runtime_error("Failed to read result count");
+        // }
 
-        // 4. Receive document IDs
-        if (result_count > 0) {
-            results.resize(result_count);
-            bytes_read = recv(client_fd, results.data(), result_count * sizeof(uint32_t), MSG_WAITALL);
+        // // 4. Receive document IDs
+        // if (result_count > 0) {
+        //     results.resize(result_count);
+        //     bytes_read = recv(client_fd, results.data(), result_count * sizeof(uint32_t), MSG_WAITALL);
 
-            if (bytes_read != result_count * sizeof(uint32_t)) {
-                throw std::runtime_error("Failed to read full results");
-            }
-        }
+        //     if (bytes_read != result_count * sizeof(uint32_t)) {
+        //         throw std::runtime_error("Failed to read full results");
+        //     }
+        // }
+
+        results = RPCHandler::ReadResults(client_fd);
 
         close(client_fd);
 
-        spdlog::info("Received {} results from worker at {}:{}", result_count, server_config.ip, server_config.port);
+        spdlog::info("Received {} results from worker at {}:{}", results.size(), server_config.ip, server_config.port);
     } catch (const std::exception& e) {
         spdlog::error("Error communicating with worker at {}:{}: {}", server_config.ip, server_config.port, e.what());
     }

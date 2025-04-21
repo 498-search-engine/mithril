@@ -4,6 +4,7 @@
 
 #include <cctype>
 #include <stdexcept>
+#include <unordered_map>
 
 Lexer::Lexer(const std::string& input) : input_(input), position_(0), hasPeeked_(false) {}
 
@@ -53,7 +54,29 @@ auto Lexer::EndOfInput() -> bool {
     return PeekToken().type == TokenType::EOFTOKEN;
 }
 
+std::unordered_map<std::string, int> Lexer::GetTokenFrequencies() const {
+    auto tokens = PeekWithoutConsuming();
+    std::unordered_map<std::string, int> token_ct;
+    for (auto& token : tokens){
+        if (token.type == TokenType::WORD or token.type == TokenType::QUOTE) {
+            ++token_ct[token.value];
+        }
+    }
+    return token_ct;
+}
+
 // Private helpers
+
+std::vector<Token> Lexer::PeekWithoutConsuming() const {
+    Lexer copy = *this;
+    std::vector<Token> tokens;
+
+    while (!copy.EndOfInput()) {
+        tokens.push_back(copy.NextToken());
+    }
+
+    return tokens;
+}
 
 void Lexer::SkipWhitespace() {
     while (position_ < input_.length() && std::isspace(input_[position_])) {

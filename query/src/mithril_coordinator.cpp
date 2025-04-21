@@ -4,6 +4,8 @@
 
 #include <iostream>
 #include <string>
+#include <spdlog/spdlog.h>
+
 
 constexpr int BUFFER_SIZE = 1024;
 
