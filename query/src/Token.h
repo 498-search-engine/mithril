@@ -7,7 +7,7 @@
 enum class TokenType {
     WORD,   // simple_term: alphanumeric word
     QUOTE,  // quoted_term: quoted phrase
-    // PHRASE,     // Fuzzy phrase matching, looser than QUOTE
+    PHRASE, // fuzzy phrase matching, looser than QUOTE
     FIELD,     // TITLE or TEXT
     COLON,     // ':'
     OPERATOR,  // AND, OR, NOT, or implicit SPACE
@@ -31,6 +31,9 @@ struct Token {
             break;
         case TokenType::QUOTE:
             typeStr = "QUOTE";
+            break;
+        case TokenType::PHRASE:
+            typeStr = "PHRASE";
             break;
         case TokenType::FIELD:
             typeStr = "FIELD";
@@ -60,8 +63,8 @@ struct Token {
 
 
 inline static std::vector<std::string> ExtractQuoteTerms(const Token& quote_token) {
-    if (quote_token.type != TokenType::QUOTE) {
-        throw std::invalid_argument("Token is not a quote but youa re calling extract_quote_terms");
+    if (quote_token.type != TokenType::QUOTE && quote_token.type != TokenType::PHRASE) {
+        throw std::invalid_argument("Token is not a quote or phrase but you are calling extract_quote_terms");
     }
 
     std::vector<std::string> terms;

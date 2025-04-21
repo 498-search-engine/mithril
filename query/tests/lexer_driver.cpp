@@ -7,7 +7,8 @@
 auto TokenTypeToString(TokenType type) -> std::string {
     switch (type) {
         case TokenType::WORD:     return "WORD";
-        case TokenType::QUOTE:   return "QUOTE";
+        case TokenType::QUOTE:    return "QUOTE";
+        case TokenType::PHRASE:   return "PHRASE";
         case TokenType::FIELD:    return "FIELD";
         case TokenType::COLON:    return "COLON";
         case TokenType::OPERATOR: return "OPERATOR";
@@ -54,7 +55,7 @@ auto main(int argc, char* argv[]) -> int {
         
         // Print token information
         std::cout << "Token " << ++tokenCount << ":" << std::endl;
-        std::cout << "  Type: " << TokenTypeToString(token.type) << std::endl;
+        std::cout << "  Type: " << token.toString() << std::endl;
         std::cout << "  Value: \"" << token.value << "\"" << std::endl;
         
         // Stop if we reach EOF token
