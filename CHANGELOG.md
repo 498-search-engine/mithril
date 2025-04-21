@@ -112,6 +112,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - better integration of ranking, query & index (#137)
 - Fixed parser driver (#140)
 - ISRs and Position Index now use memory mapped files instead of reading byte-by-byte from ifstreams (#141)
+- Network support for query engine (#142)
 - Fixed parser drive (#143)
 - Changes from the runs on VM (perf/fixes for idx and ranking)(#132)
 - Fixed mmap bug in QueryEngine (#144)
