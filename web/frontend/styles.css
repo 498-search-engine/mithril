@@ -184,3 +184,13 @@ footer {
   border-radius: 5px;
   color: #6b7280;
 }
+
+.result-url {
+  color: #202124;
+  font-size: 14px;
+}
+
+.result-snippet {
+  font-size: 14px;
+  color: #4d5156;
+}

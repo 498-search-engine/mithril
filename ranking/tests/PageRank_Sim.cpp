@@ -56,12 +56,20 @@ void WriteBackToFile() {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    std::string binaryOutFile;
     if (argc > 1) {
         UseInputDirectory = std::string(argv[1]);
+        if (argc > 2) {
+            binaryOutFile = std::string(argv[2]);
+        }
     }
 
     spdlog::info("Using input crawler data from: {}", UseInputDirectory);
-    mithril::pagerank::PerformPageRank(UseInputDirectory);
+    if (binaryOutFile.empty()) {
+        mithril::pagerank::PerformPageRank(UseInputDirectory);
+    } else {
+        mithril::pagerank::PerformPageRank(UseInputDirectory, binaryOutFile);
+    }
 
     if (WriteToFile) {
         WriteBackToFile();

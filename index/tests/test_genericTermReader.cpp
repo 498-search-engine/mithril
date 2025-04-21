@@ -1,7 +1,7 @@
 #include "DocumentMapReader.h"
 #include "PositionIndex.h"
 #include "TermDictionary.h"
-#include "TermReader.h"
+#include "GenericTermReader.h"
 #include "core/mem_map_file.h"
 
 #include <chrono>
@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Creating TermReader for term '" << term << "'" << std::endl;
         auto t6 = Clock::now();
-        mithril::TermReader term_reader(index_dir, term, index_file, term_dict, position_index);
+        mithril::GenericTermReader term_reader(term, index_file, term_dict, position_index);
         auto t7 = Clock::now();
 
         std::chrono::duration<double, std::milli> read_time = t7 - t6;
@@ -80,9 +80,9 @@ int main(int argc, char* argv[]) {
 
         while (term_reader.hasNext() && count < MAX_DOCS) {
             mithril::data::docid_t doc_id = term_reader.currentDocID();
-            uint32_t frequency = term_reader.currentFrequency();
+            // uint32_t frequency = term_reader.currentFrequency();
 
-            std::cout << "Document ID: " << doc_id << " (appears " << frequency << " times)" << std::endl;
+            std::cout << "Document ID: " << doc_id << /* " (appears " << frequency << " times)" << */ std::endl;
 
             auto doc_opt = doc_reader.getDocument(doc_id);
             if (doc_opt) {
@@ -94,17 +94,17 @@ int main(int argc, char* argv[]) {
                 std::cout << std::endl;
             }
 
-            if (term_reader.hasPositions()) {
-                auto positions = term_reader.currentPositions();
-                std::cout << "  Positions:";
-                for (size_t i = 0; i < positions.size() && i < 20; ++i) {
-                    std::cout << " " << positions[i];
-                }
-                if (positions.size() > 20) {
-                    std::cout << " ... (" << positions.size() - 20 << " more)";
-                }
-                std::cout << std::endl;
-            }
+            // if (term_reader.hasPositions()) {
+            //     auto positions = term_reader.currentPositions();
+            //     std::cout << "  Positions:";
+            //     for (size_t i = 0; i < positions.size() && i < 20; ++i) {
+            //         std::cout << " " << positions[i];
+            //     }
+            //     if (positions.size() > 20) {
+            //         std::cout << " ... (" << positions.size() - 20 << " more)";
+            //     }
+            //     std::cout << std::endl;
+            // }
 
             term_reader.moveNext();
             count++;

@@ -11,6 +11,7 @@ add_library(index STATIC
     src/TermPhrase.cpp
     src/TermQuote.cpp
     src/PositionIndex.cpp
+    src/GenericTermReader.cpp
 )
 target_include_directories(index PUBLIC src)
 target_link_libraries(index PUBLIC
@@ -30,6 +31,7 @@ add_executable(test_termOR tests/test_termOR.cpp)
 add_executable(test_termAND tests/test_termAND.cpp)
 add_executable(test_termQuote tests/test_termQuote.cpp)
 add_executable(test_termPhrase tests/test_termPhrase.cpp)
+add_executable(test_genericTermReader tests/test_genericTermReader.cpp)
 
 # Test targets linking
 target_link_libraries(test_docReader PRIVATE index)
@@ -38,6 +40,7 @@ target_link_libraries(test_termOR PRIVATE index)
 target_link_libraries(test_termAND PRIVATE index)
 target_link_libraries(test_termQuote PRIVATE index)
 target_link_libraries(test_termPhrase PRIVATE index)
+target_link_libraries(test_genericTermReader PRIVATE index)
 
 
 # add_executable(index_debug

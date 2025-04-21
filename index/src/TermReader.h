@@ -17,8 +17,10 @@ namespace mithril {
 
 class TermReader : public IndexStreamReader {
 public:
-    TermReader(const std::string& index_path, const std::string& term,
-               const core::MemMapFile& index_file, TermDictionary& term_dict,
+    TermReader(const std::string& index_path,
+               const std::string& term,
+               const core::MemMapFile& index_file,
+               TermDictionary& term_dict,
                PositionIndex& position_index);
     ~TermReader();
 

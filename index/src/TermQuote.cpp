@@ -14,9 +14,12 @@ TermQuote::TermQuote(DocumentMapReader& doc_reader,
                      const core::MemMapFile& index_file,
                      TermDictionary& term_dict,
                      PositionIndex& position_index)
-    : doc_reader_(doc_reader), index_path_(index_path), quote_(quote),
-      index_file_(index_file), term_dict_(term_dict), position_index_(position_index)
-{
+    : doc_reader_(doc_reader),
+      index_path_(index_path),
+      quote_(quote),
+      index_file_(index_file),
+      term_dict_(term_dict),
+      position_index_(position_index) {
     std::vector<std::unique_ptr<IndexStreamReader>> term_readers;
     for (const auto& term : quote) {
         auto ptr = new TermReader(index_path_, term, index_file_, term_dict_, position_index_);

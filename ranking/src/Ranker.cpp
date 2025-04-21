@@ -2,12 +2,150 @@
 
 #include "DynamicRanker.h"
 #include "StaticRanker.h"
+#include "TextPreprocessor.h"
+#include "spdlog/sinks/basic_file_sink.h"
+
+#include <spdlog/spdlog.h>
+
+#define LOGGING 0
 
 namespace mithril::ranking {
+
+namespace {
+int CountWordOccurrences(const std::string& text, const std::string& word) {
+    int count = 0;
+    std::string tempText = text;
+    std::string tempWord = word;
+
+    std::transform(tempText.begin(), tempText.end(), tempText.begin(), ::tolower);
+    std::transform(tempWord.begin(), tempWord.end(), tempWord.begin(), ::tolower);
+
+    size_t position = tempText.find(tempWord, 0);
+    while (position != std::string::npos) {
+        count++;
+        position = tempText.find(tempWord, position + tempWord.length());
+    }
+    return count;
+}
+}  // namespace
+
 uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
-                       const data::DocInfo& info) {
+                       const data::DocInfo& info,
+                       const PositionIndex& position_index) {
+
+    auto logger = spdlog::get("ranker_logger");
+    if (!logger) {
+        logger = spdlog::basic_logger_mt("ranker_logger", "ranker.log");
+    }
+
+    std::string title;
+    for (const auto& term : doc.title) {
+        title += term;
+    }
+    std::transform(title.begin(), title.end(), title.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    bool isInURL = true;
+    bool isInTitle = true;
+    bool isInDescription = true;
+    bool isInBody = true;
+
+#if LOGGING == 1
+    logger->info("[{}] Query: {}, URL: {}, Title: {}", doc.id, query[0].first, doc.url, title);
+#endif
+
+    float totalTermsSize = (float)query.size();
+
+    // Percentage feature (i.e whether each tokenized word exists in this space or not)
+    float wordsInUrl = 0;
+    float wordsInTitle = 0;
+    float wordsInDesc = 0;
+    float wordsInBody = 0;
+
+    float earliestPosTitle = 0.0F;
+    float earliestPosBody = 0.0F;
+
+    float densityUrl = 0.0F;
+    float densityTitle = 0.0F;
+    float densityDescription = 0.0F;
+
+    for (const auto& [term, multiplicity] : query) {
+        std::vector<uint16_t> urlPositions =
+            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::URL), doc.id);
+        std::vector<uint16_t> titlePositions =
+            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::TITLE), doc.id);
+        std::vector<uint16_t> descPositions =
+            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id);
+        std::vector<uint16_t> bodyPositions = position_index.getPositions(term, doc.id);
+
+        bool termInUrl = urlPositions.size() > 0;
+        bool termInDescription = descPositions.size() > 0;
+        bool termInBody = bodyPositions.size() > 0;
+
+        termInUrl = doc.url.find(term) != std::string::npos;
+
+        size_t pos = title.find(term);
+        bool termInTitle = pos != std::string::npos;
+
+        if (!termInUrl) {
+            isInURL = false;
+        } else {
+            wordsInUrl++;
+
+            size_t urlOccurences = std::max(CountWordOccurrences(doc.url, term) * term.size(), doc.url.size());
+            densityUrl += (static_cast<float>(urlOccurences) / static_cast<float>(doc.url.size())) *
+                          (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+        }
+
+        if (!termInTitle) {
+            isInTitle = false;
+        } else {
+            wordsInTitle++;
+            earliestPosTitle += (1 / static_cast<float>(pos + 1)) *
+                                (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+
+            int titleOccurences = std::max(CountWordOccurrences(title, term), (int)doc.title.size());
+            densityTitle += (static_cast<float>(titleOccurences) / static_cast<float>(doc.title.size())) *
+                            (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+        }
+
+        if (!termInDescription) {
+            isInDescription = false;
+        } else {
+            wordsInDesc++;
+        }
+
+        if (!termInBody) {
+            isInBody = false;
+        } else {
+            wordsInBody++;
+            earliestPosBody += (1 / static_cast<float>(bodyPositions[0] + 1)) *
+                               (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+        }
+    }
+
     dynamic::RankerFeatures features{
+        // Boolean presence flags
+        .query_in_url = isInURL,
+        .query_in_title = isInTitle,
+        .query_in_description = isInDescription,
+        .query_in_body = isInBody,
+
+        // Query Coverage percentage features
+        .coverage_percent_query_url = (wordsInUrl / totalTermsSize),
+        .coverage_percent_query_title = (wordsInTitle / totalTermsSize),
+        .coverage_percent_query_description = (wordsInDesc / totalTermsSize),
+
+        // Query Density percentage features
+        .density_percent_query_url = densityUrl,
+        .density_percent_query_title = densityTitle,
+        .density_percent_query_description = densityDescription,
+
+        // Position features
+        .earliest_pos_title = earliestPosTitle,
+        .earliest_pos_body = earliestPosBody,
+
+        // Precomputed scores
         .static_rank = static_cast<float>(GetUrlStaticRank(doc.url)),
         .pagerank = info.pagerank_score,
     };

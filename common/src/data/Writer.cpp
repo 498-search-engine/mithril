@@ -1,7 +1,9 @@
 #include "data/Writer.h"
 
 #include <cassert>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <fcntl.h>
 #include <stdexcept>
 #include <string>
@@ -52,7 +54,37 @@ void FileWriter::Write(const void* data, size_t size) {
     }
     assert(file_ != nullptr);
     if (fwrite(data, 1, size, file_) != size) {
-        throw std::runtime_error("Failed to write to file");
+        auto err = ferror(file_);
+        if (err) {
+            throw std::runtime_error(std::string{"Failed to write to file: "} + std::strerror(errno));
+        } else {
+            throw std::runtime_error("Failed to write to file: unexpected write size");
+        }
+    }
+}
+
+void FileWriter::Write(char byte) {
+    assert(file_ != nullptr);
+    int res = fputc(byte, file_);
+    if (res == EOF) {
+        throw std::runtime_error(std::string{"Failed to write to file: "} + std::strerror(errno));
+    }
+}
+
+long FileWriter::Ftell() const {
+    assert(file_ != nullptr);
+    auto pos = ftell(file_);
+    if (pos < 0) {
+        throw std::runtime_error(std::string{"Failed to get file position: "} + std::strerror(errno));
+    } else {
+        return pos;
+    }
+}
+
+void FileWriter::Fseek(long pos, int origin) {
+    assert(file_ != nullptr);
+    if (fseek(file_, pos, origin) != 0) {
+        throw std::runtime_error(std::string{"Failed to seek file: "} + std::strerror(errno));
     }
 }
 

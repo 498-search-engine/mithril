@@ -3,10 +3,10 @@
 
 #include "DocumentMapReader.h"
 #include "Parser.h"
+#include "PositionIndex.h"
 #include "Query.h"
 #include "QueryConfig.h"
 #include "TermDictionary.h"
-#include "PositionIndex.h"
 #include "core/mem_map_file.h"
 
 #include <iostream>
@@ -18,13 +18,12 @@ using namespace mithril;
 class QueryEngine {
 public:
     QueryEngine(const std::string& index_dir)
-        : map_reader_(index_dir), index_file_(index_dir + "/final_index.data"),
-          term_dict_(index_dir), position_index_(index_dir)
-    {
+        : map_reader_(index_dir),
+          index_file_(index_dir + "/final_index.data"),
+          term_dict_(index_dir),
+          position_index_(index_dir) {
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
-
-        std::cout << "Query engine initialized\n";
     }
 
     auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
@@ -71,11 +70,12 @@ public:
     std::optional<data::Document> GetDocument(uint32_t doc_id) const { return map_reader_.getDocument(doc_id); }
     DocInfo GetDocumentInfo(uint32_t doc_id) const { return map_reader_.getDocInfo(doc_id); }
 
+    mithril::PositionIndex position_index_;
+
 private:
     mithril::DocumentMapReader map_reader_;
     core::MemMapFile index_file_;
     mithril::TermDictionary term_dict_;
-    mithril::PositionIndex position_index_;
 };
 
 #endif /* QUERYENGINE_H */

@@ -6,6 +6,7 @@
 #include "data/Deserialize.h"
 #include "data/Gzip.h"
 #include "data/Reader.h"
+#include "data/Writer.h"
 
 #include <algorithm>
 #include <fcntl.h>
@@ -418,15 +419,10 @@ std::string IndexBuilder::merge_block_subset(
                       std::to_string(start_idx) + "_" + std::to_string(end_idx) + ".data";
     }
 
-    // Use ofstream for RAII
-    std::ofstream out(output_path, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        spdlog::error("Failed to create output file: {}", output_path);
-        throw std::runtime_error("Failed to create output file: " + output_path);
-    }
+    data::FileWriter out(output_path.c_str());
 
     uint32_t total_terms = 0;
-    out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
+    out.Write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
 
     using BlockReaderPtr = std::unique_ptr<BlockReader>;
     auto cmp = [](const BlockReaderPtr& a, const BlockReaderPtr& b) {
@@ -487,12 +483,12 @@ std::string IndexBuilder::merge_block_subset(
 
         // Write term string
         uint32_t term_len = current_term.size();
-        out.write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
-        out.write(current_term.c_str(), term_len);
+        out.Write(reinterpret_cast<const char*>(&term_len), sizeof(term_len));
+        out.Write(current_term.c_str(), term_len);
 
         // Write postings count
         uint32_t postings_size = merged_postings.size();
-        out.write(reinterpret_cast<const char*>(&postings_size), sizeof(postings_size));
+        out.Write(reinterpret_cast<const char*>(&postings_size), sizeof(postings_size));
 
         // Calculate and write sync points for postings
         std::vector<SyncPoint> sync_points;
@@ -505,9 +501,9 @@ std::string IndexBuilder::merge_block_subset(
         }
 
         uint32_t sync_points_size = sync_points.size();
-        out.write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
+        out.Write(reinterpret_cast<const char*>(&sync_points_size), sizeof(sync_points_size));
         if (sync_points_size > 0) {
-            out.write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(SyncPoint));
+            out.Write(reinterpret_cast<const char*>(sync_points.data()), sync_points_size * sizeof(SyncPoint));
         }
 
         if (!merged_postings.empty()) {
@@ -527,7 +523,7 @@ std::string IndexBuilder::merge_block_subset(
                 VByteCodec::encodeBatch(doc_id_deltas, out);
                 VByteCodec::encodeBatch(freqs, out);
             } else {
-                out.write(reinterpret_cast<const char*>(merged_postings.data()), postings_size * sizeof(Posting));
+                out.Write(reinterpret_cast<const char*>(merged_postings.data()), postings_size * sizeof(Posting));
             }
         }
 
@@ -535,9 +531,9 @@ std::string IndexBuilder::merge_block_subset(
     }
 
     // Update total terms count at the beginning of the file
-    out.seekp(0);
-    out.write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
-    out.close();
+    out.Fseek(0);
+    out.Write(reinterpret_cast<const char*>(&total_terms), sizeof(total_terms));
+    out.Close();
 
     for (size_t i = start_idx; i < end_idx && i < block_paths.size(); i++) {
         std::error_code ec;
