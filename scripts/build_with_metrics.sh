@@ -10,8 +10,12 @@ DOCS_DIR="$1"
 INDEX_DIR="$2"
 SHARD_NAME=$(basename "$INDEX_DIR")
 
+# Extract the base mount point from INDEX_DIR path
+# Assumes path format like /mnt/idx{N}/indices/...
+MOUNT_BASE=$(echo "$INDEX_DIR" | grep -o '/mnt/idx[0-9]\+' || echo "/mnt/idx4")
+
 # metrics directory outside the index so it won't get clobbered
-METRICS_DIR="/mnt/idx1/metrics"
+METRICS_DIR="${MOUNT_BASE}/metrics"
 mkdir -p "$METRICS_DIR"
 
 # shard-specific filenames
@@ -26,12 +30,22 @@ SUMMARY_LOG="${METRICS_DIR}/summary_${SHARD_NAME}.log"
 > "$TIME_LOG"
 > "$SUMMARY_LOG"
 
+# Initialize PIDs as empty
+VMSTAT_PID=""
+IOSTAT_PID=""
+
 # Function to clean up background processes
 cleanup() {
   # Kill background processes if they're still running
-  kill "$VMSTAT_PID" "$IOSTAT_PID" 2>/dev/null || true
-  # Wait for them to actually terminate
-  wait "$VMSTAT_PID" "$IOSTAT_PID" 2>/dev/null || true
+  if [[ -n "$VMSTAT_PID" ]]; then
+    kill "$VMSTAT_PID" 2>/dev/null || true
+    wait "$VMSTAT_PID" 2>/dev/null || true
+  fi
+  
+  if [[ -n "$IOSTAT_PID" ]]; then
+    kill "$IOSTAT_PID" 2>/dev/null || true
+    wait "$IOSTAT_PID" 2>/dev/null || true
+  fi
 }
 
 # Register cleanup function to run on script exit
@@ -42,13 +56,25 @@ START_TIME=$(date +%s)
 echo "Starting build metrics collection at $(date)" >> "$SUMMARY_LOG"
 
 # Start monitoring in background processes
-# vmstat: Memory and CPU activity every second
-vmstat 1 > "$VMSTAT_LOG" &
-VMSTAT_PID=$!
+# Check if vmstat is available
+if command -v vmstat &>/dev/null; then
+  # vmstat: Memory and CPU activity every second
+  vmstat 1 > "$VMSTAT_LOG" &
+  VMSTAT_PID=$!
+  echo "Started vmstat monitoring (PID: $VMSTAT_PID)" >> "$SUMMARY_LOG"
+else
+  echo "Warning: vmstat command not found. Memory metrics will not be collected." >> "$SUMMARY_LOG"
+fi
 
-# iostat: Disk I/O activity every second
-iostat -dx 1 > "$IOSTAT_LOG" &
-IOSTAT_PID=$!
+# Check if iostat is available
+if command -v iostat &>/dev/null; then
+  # iostat: Disk I/O activity every second
+  iostat -dx 1 > "$IOSTAT_LOG" &
+  IOSTAT_PID=$!
+  echo "Started iostat monitoring (PID: $IOSTAT_PID)" >> "$SUMMARY_LOG"
+else
+  echo "Warning: iostat command not found. Disk I/O metrics will not be collected." >> "$SUMMARY_LOG"
+fi
 
 # Give monitors a moment to start
 sleep 1
@@ -69,7 +95,7 @@ echo "Build exit status: ${BUILD_STATUS}" >> "$SUMMARY_LOG"
 # Extract essential time metrics from GNU time output
 echo "----- PERFORMANCE METRICS -----" >> "$SUMMARY_LOG"
 {
-  grep -E "User time|System time|Elapsed|Maximum resident|Page faults|File system" "$TIME_LOG" || 
+  grep -E "User time|System time|Elapsed|Maximum resident|Page faults|File system" "$TIME_LOG" ||
   echo "Warning: Some time metrics not found" >> "$SUMMARY_LOG"
 } >> "$SUMMARY_LOG"
 
@@ -107,5 +133,5 @@ echo
 echo "Metrics for shard '$SHARD_NAME' written to:"
 echo "  • $SUMMARY_LOG"
 
-# Exit with the build status
+# Exit with the build status from the barebones builder
 exit $BUILD_STATUS

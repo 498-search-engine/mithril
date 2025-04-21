@@ -70,7 +70,7 @@ struct IndexStatistics {
 class IndexBuilder {
 public:
     explicit IndexBuilder(const std::string& output_dir,
-                          size_t num_threads = std::thread::hardware_concurrency(),
+                          size_t num_threads = std::thread::hardware_concurrency() * 3/2,
                           size_t max_terms_per_block = DEFAULT_MAX_TERMS_PER_BLOCK);
 
     ~IndexBuilder();

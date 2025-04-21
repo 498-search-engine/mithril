@@ -115,6 +115,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Changes from the runs on VM (perf/fixes for idx and ranking)(#132)
 - Fixed mmap bug in QueryEngine (#144)
 - Added favicon to front end (#150)
+- improve idx devops scripts
+
 ## [0.1.0] - 2025-02-07
 
 ### Added
