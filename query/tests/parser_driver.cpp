@@ -84,7 +84,7 @@ auto main(int argc, char* argv[]) -> int {
     
     // Loop to handle multiple queries
     while (true) {
-        std::cout << "\nParsing query: \"" << input << "\"" << std::endl;
+        std::cout << "\nParsing query: " << input << std::endl;
         std::cout << "-----------------------------------" << std::endl;
 
         try {
@@ -97,7 +97,7 @@ auto main(int argc, char* argv[]) -> int {
             for (size_t i = 0; i < parser.get_tokens().size(); ++i) {
                 const auto& token = parser.get_tokens()[i];
                 std::cout << "  " << i+1 << ": ";
-                std::cout << token.toString() << "\"" << std::endl;
+                std::cout << token.toString() << " " << std::endl;
             }
 
             // Parse tokens
@@ -112,20 +112,36 @@ auto main(int argc, char* argv[]) -> int {
             std::cout << "\nEvaluating Query..." << std::endl;
             std::cout << "-----------------------------------" << std::endl;
             try {
-                std::vector<uint32_t> results = queryTree->evaluate();
-                std::cout << "Query returned " << results.size() << " results." << std::endl;
+                // Get an IndexStreamReader from the query
+                std::unique_ptr<mithril::IndexStreamReader> isr = queryTree->generate_isr();
                 
-                // Display first few results if any
-                const size_t maxDisplay = 10;
-                if (!results.empty()) {
-                    std::cout << "First " << std::min(maxDisplay, results.size()) << " document IDs:" << std::endl;
-                    for (size_t i = 0; i < std::min(maxDisplay, results.size()); ++i) {
-                        std::cout << "  " << results[i];
-                        if (i < std::min(maxDisplay, results.size()) - 1) {
-                            std::cout << ", ";
-                        }
+                if (!isr) {
+                    std::cout << "No IndexStreamReader available for this query." << std::endl;
+                } else {
+                    std::vector<uint32_t> results;
+                    size_t count = 0;
+                    
+                    // Read results from the IndexStreamReader
+                    while (isr->hasNext() && count < MAX_DOCUMENTS) {
+                        results.push_back(isr->currentDocID());
+                        isr->moveNext();
+                        count++;
                     }
-                    std::cout << std::endl;
+                    
+                    std::cout << "Query returned " << results.size() << " results." << std::endl;
+                    
+                    // Display first few results if any
+                    const size_t maxDisplay = 10;
+                    if (!results.empty()) {
+                        std::cout << "First " << std::min(maxDisplay, results.size()) << " document IDs:" << std::endl;
+                        for (size_t i = 0; i < std::min(maxDisplay, results.size()); ++i) {
+                            std::cout << "  " << results[i];
+                            if (i < std::min(maxDisplay, results.size()) - 1) {
+                                std::cout << ", ";
+                            }
+                        }
+                        std::cout << std::endl;
+                    }
                 }
             }
             catch (const std::exception& e) {

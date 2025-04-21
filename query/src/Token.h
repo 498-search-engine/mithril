@@ -54,7 +54,7 @@ struct Token {
             typeStr = "UNKNOWN";
         }
 
-        return "[" + typeStr + ": \"" + value + "\"]";
+        return "[" + typeStr + ": " + value + "]";
     }
 };
 
