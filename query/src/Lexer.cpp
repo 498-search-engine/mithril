@@ -4,6 +4,7 @@
 
 #include <cctype>
 #include <stdexcept>
+#include <unordered_map>
 
 Lexer::Lexer(const std::string& input) : input_(input), position_(0), hasPeeked_(false) {}
 

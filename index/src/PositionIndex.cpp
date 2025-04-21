@@ -14,11 +14,13 @@
 #include <fstream>
 #include <iostream>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
+#include <queue>
 
 namespace fs = std::filesystem;
 

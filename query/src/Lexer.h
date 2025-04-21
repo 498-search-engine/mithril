@@ -45,6 +45,7 @@ public:
     */
     [[nodiscard]] auto GetTokenFrequencies() const -> std::unordered_map<std::string, int>;
 
+
 private:
     std::string input_;                                   // The input string to be tokenized
     size_t position_ = 0;                                 // Current position in the input string
