@@ -168,6 +168,12 @@ private:
             //                                    index_file_, term_dict_, position_index_);
         }
 
+        // Handle fuzzy phrase matching
+        if (match(TokenType::PHRASE)) {
+            // return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1], index_file_, term_dict_, position_index_);
+            return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1], index_file_, term_dict_, position_index_);
+        }
+
         // Handle grouped expressions
         if (match(TokenType::LPAREN)) {
             auto expr = parseExpression();
@@ -182,7 +188,7 @@ private:
         Token field = tokens_[current_position_ - 1];
         if (match(TokenType::COLON)) {
             // Now we need either a keyword or exact match
-            if (match(TokenType::WORD) || match(TokenType::QUOTE)) {
+            if (match(TokenType::WORD) || match(TokenType::QUOTE) || match(TokenType::PHRASE)) {
                 Token term = tokens_[current_position_ - 1];
                 // When you implement FieldQuery, uncomment this:
                 // return std::make_unique<FieldQuery>(field.value,

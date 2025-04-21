@@ -11,14 +11,12 @@ namespace mithril {
 
 constexpr uint32_t kMaxSpanSize = 5;
 
-TermPhrase::TermPhrase(DocumentMapReader& doc_reader,
-                       const std::string& index_path,
+TermPhrase::TermPhrase(const std::string& index_path,
                        const std::vector<std::string>& phrase,
                        const core::MemMapFile& index_file,
                        TermDictionary& term_dict,
                        PositionIndex& position_index)
-    : doc_reader_(doc_reader),
-      index_path_(index_path),
+    : index_path_(index_path),
       phrase_(phrase),
       index_file_(index_file),
       term_dict_(term_dict),

@@ -11,6 +11,7 @@
 #include "TermDictionary.h"
 #include "TermOR.h"
 #include "TermQuote.h"
+#include "TermPhrase.h"
 #include "TermReader.h"
 #include "Token.h"
 #include "intersect.h"
@@ -23,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+
+using namespace mithril;
 
 // TODO: Determine if we should limit the number of documents we read
 using DocIDArray = std::vector<int32_t>;
@@ -238,7 +241,7 @@ public:
             std::cout << "Quote term: " << term << std::endl;
         }
 
-        return std::make_unique<mithril::TermQuote>(
+        return std::make_unique<::mithril::TermQuote>(
             query::QueryConfig::GetIndexPath(),
             quote_terms,
             index_file_,
@@ -258,5 +261,45 @@ private:
     mithril::PositionIndex& position_index_;
 };
 
+class PhraseQuery : public Query {
+public:
+    PhraseQuery(Token phrase_token,
+               const core::MemMapFile& index_file,
+               mithril::TermDictionary& term_dict,
+               mithril::PositionIndex& position_index)
+        : phrase_token_(std::move(phrase_token)),
+          index_file_(index_file),
+          term_dict_(term_dict),
+          position_index_(position_index) {}
+
+    std::vector<uint32_t> evaluate() const override { return {}; }
+
+    [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
+        std::vector<std::string> phrase_terms = ExtractQuoteTerms(phrase_token_);
+        std::cout << "Phrase terms: ";
+        for (const auto& term : phrase_terms) {
+            std::cout << "Phrase term: " << term << std::endl;
+        }
+
+        // Use TermPhrase for fuzzy phrase matching
+        return std::make_unique<::mithril::TermPhrase>(
+            query::QueryConfig::GetIndexPath(),
+            phrase_terms,
+            index_file_,
+            term_dict_,
+            position_index_
+        );
+    }
+
+    [[nodiscard]] std::string to_string() const override { return "PHRASE(" + phrase_token_.value + ")"; }
+
+    [[nodiscard]] std::string get_type() const override { return "PhraseQuery"; }
+
+private:
+    Token phrase_token_;
+    const core::MemMapFile& index_file_;
+    mithril::TermDictionary& term_dict_;
+    mithril::PositionIndex& position_index_;
+};
 
 #endif  // QUERY_H_
