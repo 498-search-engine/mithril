@@ -65,7 +65,7 @@ auto main(int argc, char* argv[]) -> int {
     std::cout << "Using index path: " << query::QueryConfig::GetIndexPath() << std::endl;
 
     TermDictionary term_dict(indexPath);
-    PositionIndex position_index(indexPath);
+    // PositionIndex position_index(indexPath);
     core::MemMapFile index_file(indexPath + "/final_index.data");
     
     // If query terms were provided, join them as input

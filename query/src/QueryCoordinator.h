@@ -35,6 +35,7 @@ namespace mithril {
 // The main coordinator that distributes tasks to workers
 class QueryCoordinator {
 public:
+    using QueryResults = std::vector<std::pair<uint32_t, uint32_t>>;
     struct ServerConfig {
         std::string ip;
         uint16_t port;
@@ -44,15 +45,15 @@ public:
 
     void print_server_configs() const;
 
-    std::vector<uint32_t> send_query_to_workers(const std::string& query);
+    QueryResults send_query_to_workers(const std::string& query);
 
     static void
-    handle_worker_response(const ServerConfig& server_config, std::vector<uint32_t>& results, const std::string& query);
+    handle_worker_response(const ServerConfig& server_config, QueryResults& results, const std::string& query);
 
 private:
     std::vector<ServerConfig> server_configs_;
 
-    static std::vector<uint32_t> handle_worker_response(const ServerConfig& server_config, const std::string& query);
+    static QueryResults handle_worker_response(const ServerConfig& server_config, const std::string& query);
 
     // TODO: Add caching for frequently executed queries
     // TODO: Add query suggestion/autocomplete functionality
