@@ -26,7 +26,6 @@ public:
     };
 
     static std::string FormatDocumentTitle(const std::vector<std::string>& title_words);
-    static std::string SanitizeText(const std::string& input);
     static std::string EscapeJsonString(const std::string& input);
     static std::string DecodeUrlString(const std::string& encoded);
 

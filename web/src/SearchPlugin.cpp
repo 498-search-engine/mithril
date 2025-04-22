@@ -1,12 +1,21 @@
 #include "SearchPlugin.h"
 
+#include "QueryCoordinator.h"
 #include "QueryManager.h"
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <exception>
+#include <fstream>
 #include <future>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <utility>
+#include <vector>
 #include <spdlog/spdlog.h>
 
 using namespace std::chrono_literals;
@@ -281,10 +290,10 @@ std::string SearchPlugin::GenerateJsonResults(const std::vector<std::pair<uint32
             auto doc_opt = query_manager_->query_engines_[0]->GetDocument(doc_id);
 
             if (doc_opt) {
-                json += ",\"url\":\"" + EscapeJsonString(SanitizeText(doc_opt->url)) + "\"";
+                json += ",\"url\":\"" + EscapeJsonString(doc_opt->url) + "\"";
 
                 std::string title = FormatDocumentTitle(doc_opt->title);
-                json += ",\"title\":\"" + EscapeJsonString(SanitizeText(title)) + "\"";
+                json += ",\"title\":\"" + EscapeJsonString(title) + "\"";
 
                 json +=
                     ",\"snippet\":\"Document #" + std::to_string(doc_id) + ", Score: " + std::to_string(score) + "\"";
@@ -334,36 +343,115 @@ std::string SearchPlugin::EscapeJsonString(const std::string& input) {
     std::string output;
     output.reserve(input.size() * 2);
 
-    for (char c : input) {
-        switch (c) {
-        case '\"':
-            output += "\\\"";
-            break;
-        case '\\':
-            output += "\\\\";
-            break;
-        case '\b':
-            output += "\\b";
-            break;
-        case '\f':
-            output += "\\f";
-            break;
-        case '\n':
-            output += "\\n";
-            break;
-        case '\r':
-            output += "\\r";
-            break;
-        case '\t':
-            output += "\\t";
-            break;
-        default:
-            if (c < 32) {
-                char buffer[8];
-                snprintf(buffer, sizeof(buffer), "\\u%04x", static_cast<unsigned char>(c));
-                output += buffer;
+    for (size_t i = 0; i < input.size(); ++i) {
+        auto c = static_cast<unsigned char>(input[i]);
+
+        // Handle ASCII characters and escape sequences
+        if (c < 128) {
+            switch (c) {
+            case '\"':
+                output += "\\\"";
+                break;
+            case '\\':
+                output += "\\\\";
+                break;
+            case '\b':
+                output += "\\b";
+                break;
+            case '\f':
+                output += "\\f";
+                break;
+            case '\n':
+                output += "\\n";
+                break;
+            case '\r':
+                output += "\\r";
+                break;
+            case '\t':
+                output += "\\t";
+                break;
+            default:
+                if (c < 32) {
+                    char buffer[8];
+                    snprintf(buffer, sizeof(buffer), "\\u%04x", c);
+                    output += buffer;
+                } else {
+                    output += c;
+                }
+            }
+        }
+        // Handle UTF-8 multi-byte sequences
+        else {
+            // Determine the number of bytes in this UTF-8 sequence
+            int sequence_length = 0;
+            uint32_t code_point = 0;
+
+            if ((c & 0xE0) == 0xC0) {  // 110xxxxx - 2-byte sequence
+                sequence_length = 2;
+                code_point = c & 0x1F;
+            } else if ((c & 0xF0) == 0xE0) {  // 1110xxxx - 3-byte sequence
+                sequence_length = 3;
+                code_point = c & 0x0F;
+            } else if ((c & 0xF8) == 0xF0) {  // 11110xxx - 4-byte sequence
+                sequence_length = 4;
+                code_point = c & 0x07;
             } else {
-                output += c;
+                // Invalid UTF-8 start byte, escape it
+                char buffer[8];
+                snprintf(buffer, sizeof(buffer), "\\u%04x", c);
+                output += buffer;
+                continue;
+            }
+
+            // Check if we have enough bytes left in the input
+            if (i + sequence_length > input.size()) {
+                // Not enough bytes, treat as invalid and escape the current byte
+                char buffer[8];
+                snprintf(buffer, sizeof(buffer), "\\u%04x", c);
+                output += buffer;
+                continue;
+            }
+
+            // Validate and decode continuation bytes
+            bool valid_sequence = true;
+            for (int j = 1; j < sequence_length; ++j) {
+                unsigned char next_byte = static_cast<unsigned char>(input[i + j]);
+                if ((next_byte & 0xC0) != 0x80) {
+                    valid_sequence = false;
+                    break;
+                }
+                // Accumulate bits from continuation bytes
+                code_point = (code_point << 6) | (next_byte & 0x3F);
+            }
+
+            // Additional validation rules
+            if (valid_sequence) {
+                // Check for overlong encodings
+                if ((sequence_length == 2 && code_point < 0x80) || (sequence_length == 3 && code_point < 0x800) ||
+                    (sequence_length == 4 && code_point < 0x10000)) {
+                    valid_sequence = false;
+                }
+                // Check for reserved code points
+                else if (code_point >= 0xD800 && code_point <= 0xDFFF) {
+                    valid_sequence = false;  // Surrogate range
+                } else if (code_point > 0x10FFFF) {
+                    valid_sequence = false;  // Beyond Unicode range
+                }
+            }
+
+            if (valid_sequence) {
+                // Valid UTF-8 sequence, copy all bytes as-is
+                for (int j = 0; j < sequence_length; ++j) {
+                    output += input[i + j];
+                }
+
+                // Skip the additional bytes we've already processed
+                i += sequence_length - 1;
+            } else {
+                // Invalid sequence, escape the current byte
+                char buffer[8];
+                snprintf(buffer, sizeof(buffer), "\\u%04x", c);
+                output += buffer;
             }
         }
     }
@@ -391,26 +479,6 @@ std::string SearchPlugin::FormatDocumentTitle(const std::vector<std::string>& ti
     }
 
     return title;
-}
-
-std::string SearchPlugin::SanitizeText(const std::string& input) {
-    std::string output;
-    output.reserve(input.size());
-
-    for (unsigned char c : input) {
-        // Keep ASCII printable and valid UTF-8 start bytes
-        if ((c >= 0x20 && c <= 0x7E) || (c >= 0xC2 && c <= 0xF4)) {
-            output += c;
-        } else {
-            // Replace invalid characters with space
-            // Avoid consecutive spaces
-            if (output.empty() || output.back() != ' ') {
-                output += ' ';
-            }
-        }
-    }
-
-    return output;
 }
 
 void SearchPlugin::CleanExpiredCache() {
