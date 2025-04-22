@@ -9,8 +9,10 @@
 #include <iostream>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
+#include "QueryManager.h"
 
 struct RPCHandler {
+    using QueryResults = QueryManager::QueryResult;
     public:
     static std::string ReadQuery(int client_fd){
         uint32_t query_length = 0;
@@ -41,21 +43,34 @@ struct RPCHandler {
         return query;
     }
 
-    static void SendResults(int sockfd, const std::vector<std::pair<uint32_t, uint32_t>>& data){
+    static void SendResults(int sockfd, const QueryResults& data){
         std::string header = std::to_string(data.size()) + "\r\n\r\n";
         sendAll(sockfd, header.c_str(), header.size());
     
-        for (const auto& [a, b] : data) {
-            uint32_t send_a = htonl(a);
-            uint32_t send_b = htonl(b);
+        for (const auto& tup : data) {
+            //send the uints
+            uint32_t send_a = htonl(std::get<0>(tup));
+            uint32_t send_b = htonl(std::get<1>(tup));
             sendAll(sockfd, &send_a, sizeof(send_a));
             sendAll(sockfd, &send_b, sizeof(send_b));
+
+            //send the string
+            auto url = std::get<2>(tup);
+            sendAll(sockfd, url.c_str(), url.size()+1);
+
+            //send the title -> vector<string>
+            auto title = std::get<3>(tup);
+            std::string num_results = std::to_string(title.size()) + "\r\n\r\n";
+            sendAll(sockfd, header.c_str(), header.size());
+            for (const auto& word : title){
+                sendAll(sockfd, word.c_str(), word.size()+1);
+            }
         }
     }
 
-    static std::vector<std::pair<uint32_t, uint32_t>> ReadResults(int sockfd){
+    static QueryResults ReadResults(int sockfd){
         //blocking until read can happen
-        std::vector<std::pair<uint32_t, uint32_t>> result;
+        QueryResults result;
     
         auto recv_until_delim = [&](const std::string& delim) {
             std::string buffer;
@@ -84,8 +99,21 @@ struct RPCHandler {
     
             uint32_t a = ntohl(net_a);
             uint32_t b = ntohl(net_b);
+
+            std::string url = recv_until_delim("\0");
+
+            std::string title_len = recv_until_delim("\r\n\r\n");
+            size_t pos_entry = header.find("\r\n\r\n");
+            if (pos_entry == std::string::npos) throw std::runtime_error("Invalid title format");
+            uint32_t title_entries = std::stoi(title_len.substr(0, pos));
+
+            std::vector<std::string> title;
+            for (size_t i = 0; i < title_entries; ++i){
+                std::string word = recv_until_delim("\0");
+                title.push_back(word);
+            }
     
-            result.emplace_back(a, b);
+            result.emplace_back(a, b, url, title);
         }
     
         return result;
