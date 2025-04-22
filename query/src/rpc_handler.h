@@ -133,7 +133,7 @@ struct RPCHandler {
         //std::cout << "sending " << *ptr << std::endl;
         while (total_sent < len) {
             ssize_t sent = send(sockfd, ptr + total_sent, len - total_sent, 0);
-            if (sent <= 0) throw std::runtime_error("Failed to send data");
+            if (sent < 0) throw std::runtime_error("Failed to send data");
             total_sent += sent;
         }
     }
