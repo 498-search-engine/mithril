@@ -5,6 +5,7 @@
 #include "Query.h"
 #include "QueryConfig.h"
 #include "Util.h"
+#include "QueryManager.h"
 
 #include <condition_variable>
 #include <future>
@@ -35,7 +36,7 @@ namespace mithril {
 // The main coordinator that distributes tasks to workers
 class QueryCoordinator {
 public:
-    using QueryResults = std::vector<std::pair<uint32_t, uint32_t>>;
+    using QueryResults = QueryManager::QueryResult;
     struct ServerConfig {
         std::string ip;
         uint16_t port;

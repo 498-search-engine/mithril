@@ -73,6 +73,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add basic multiterm support for ranking (#153)
 - add scripts that made us build idx1(/5)
 - query coverage, density + position based ranking (#159)
+- Link server to mithril managers
 
 ### Fixed
 
@@ -119,7 +120,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added favicon to front end (#150)
 - Added frequency count for queries (#151)
 - Added some code into QueryManager for token multiplicities (#152)
-- improve idx devops scripts (#153)
+- cloud orchestration with scripting and loop closure (#160)
+- Added support for config files on mithril_manager and wrote documentation for how to use (#153)
+- better utf8 handling in json escaping for frontend (#161)
+- Hooked up distributed backend with frontend web-server (#162)
+- Sending urls and titles over network from backend (#163)
 
 ## [0.1.0] - 2025-02-07
 

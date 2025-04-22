@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
         spdlog::info("Found {} matches in {}ms", result.size(), query_ms);
     
         if (result.size() > 0) {
-            std::cout << "Best: doc " << result[0].first << " with score " << result[0].second << "\n\n";
+            std::cout << "Best: doc " << std::get<0>(result[0]) << " with score " << std::get<2>(result[0]) << "\n\n";
         }
 
         std::cout << ">> ";

@@ -30,7 +30,7 @@ namespace mithril {
  */
 class QueryManager {
 public:
-    using QueryResult = std::vector<std::pair<uint32_t, uint32_t>>;
+    using QueryResult = std::vector<std::tuple<uint32_t, uint32_t, std::string, std::vector<std::string>>>;
 
     /**
      * @brief Construct a new Query Manager object
