@@ -17,6 +17,8 @@
 #include "intersect.h"
 #include "PositionIndex.h"
 #include "core/mem_map_file.h"
+#include "ISRFactory.h"
+#include "IdentityISR.h"
 
 #include <memory>
 #include <string>
@@ -66,15 +68,16 @@ public:
     Token get_token() { return token_; }
 
     std::vector<uint32_t> evaluate() const override {
-        mithril::TermReader term(query::QueryConfig::GetIndexPath(), token_.value, index_file_, term_dict_, position_index_);
+        TermReaderFactory term_reader_factory(index_file_, term_dict_, position_index_);
+        auto term = term_reader_factory.CreateISR(token_.value);
 
         std::vector<uint32_t> results;
         results.reserve(MAX_DOCUMENTS);
 
-        while (term.hasNext()) {
-            const uint32_t docId = term.currentDocID();
+        while (term->hasNext()) {
+            const uint32_t docId = term->currentDocID();
             results.emplace_back(docId);
-            term.moveNext();
+            term->moveNext();
         }
 
         return results;
@@ -95,7 +98,6 @@ private:
     mithril::TermDictionary& term_dict_;
     mithril::PositionIndex& position_index_;
 };
-
 
 class AndQuery : public Query {
     Query* left_;
@@ -118,10 +120,22 @@ public:
     }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
-        readers.push_back(std::move(left_->generate_isr()));
-        readers.push_back(std::move(right_->generate_isr()));
-        return std::make_unique<mithril::TermAND>(std::move(readers));
+        auto left_isr = left_->generate_isr();
+        auto right_isr = right_->generate_isr();
+
+        // TODO: decide if this is the right behaviour
+        if (left_isr->isIdentity() && right_isr->isIdentity()) {
+            return std::make_unique<mithril::IdentityISR>();
+        } else if (left_isr->isIdentity()) {
+            return std::move(right_isr);
+        } else if (right_isr->isIdentity()) {
+            return std::move(left_isr);
+        } else {
+            std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
+            readers.push_back(std::move(left_isr));
+            readers.push_back(std::move(right_isr));
+            return std::make_unique<mithril::TermAND>(std::move(readers));
+        }
     }
 
     [[nodiscard]] std::string to_string() const override {
@@ -152,10 +166,22 @@ public:
     }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
-        readers.push_back(std::move(left_->generate_isr()));
-        readers.push_back(std::move(right_->generate_isr()));
-        return std::make_unique<mithril::TermOR>(std::move(readers));
+        auto left_isr = left_->generate_isr();
+        auto right_isr = right_->generate_isr();
+
+        // TODO: decide if this is the right behaviour
+        if (left_isr->isIdentity() && right_isr->isIdentity()) {
+            return std::make_unique<mithril::IdentityISR>();
+        } else if (left_isr->isIdentity()) {
+            return std::move(right_isr);
+        } else if (right_isr->isIdentity()) {
+            return std::move(left_isr);
+        } else {
+            std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
+            readers.push_back(std::move(left_isr));
+            readers.push_back(std::move(right_isr));
+            return std::make_unique<mithril::TermAND>(std::move(readers));
+        }
     }
 
     [[nodiscard]] std::string to_string() const override {
