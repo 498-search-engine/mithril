@@ -13,7 +13,7 @@
 using namespace core;
 using namespace mithril;
 
-using QueryResults = std::vector<std::pair<uint32_t, uint32_t>>;
+using QueryResults = QueryManager::QueryResult;
 
 mithril::QueryCoordinator::QueryCoordinator(const std::string& conf_path) {
     try {

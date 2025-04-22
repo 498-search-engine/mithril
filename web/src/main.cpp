@@ -21,7 +21,7 @@ void signal_handler(int signal) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 5) {
+    if (argc != 5 && argc != 4) {
         std::cerr << "Usage: " << argv[0] << " <port> <web_root> <server_config_path> <index_path>" << std::endl;
         return 1;
     }
@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
         int port = std::stoi(argv[1]);
         std::string web_root = argv[2];
         std::string server_config_path = argv[3];
-        std::string index_path = argv[4];
+        std::string index_path = argc == 5 ? argv[4] : "";
 
         // Initialize logging
         spdlog::set_level(spdlog::level::info);

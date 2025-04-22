@@ -61,3 +61,5 @@ target_link_libraries(test_freq_ct PRIVATE query)
 add_test(NAME LexerTest COMMAND test_lexer)
 
 file(COPY server.conf DESTINATION ${CMAKE_SOURCE_DIR}/bin)
+file(COPY mithril_manager.conf DESTINATION ${CMAKE_SOURCE_DIR}/bin)
+file(COPY mithril_manager.conf DESTINATION ${DESTINATION_DIR})
