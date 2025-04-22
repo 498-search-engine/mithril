@@ -9,7 +9,7 @@ fi
 # Use environment variable if set, otherwise use the shared location
 # You can set this in your .bashrc or before running the script
 BIN_DIR="${MITHRIL_BIN_DIR:-/home/dnsge/mithril/bin}"
-CONFIG_DIR="${MITHRIL_CONFIG_DIR:-/home/dnsge/mithril/config}"
+CONFIG_DIR="${MITHRIL_CONFIG_DIR:-/home/dnsge/mithril/bin/config}"
 
 if [[ ! -d "$BIN_DIR" ]]; then
   echo "Error: Mithril binary directory not found at $BIN_DIR"
@@ -41,7 +41,7 @@ if [[ ! -d "./config" ]]; then
 fi
 
 echo "[$(date +%T)] ▶︎ Running PageRank on $DOCS_DIR"
-"$BIN_DIR/pagerank_sim" "$DOCS_DIR"
+# "$BIN_DIR/pagerank_sim" "$DOCS_DIR"
 
 echo "[$(date +%T)] ▶︎ Building index at $INDEX_DIR"
 # pagerank.bin still lives in pwd, so PageRankReader can open it
