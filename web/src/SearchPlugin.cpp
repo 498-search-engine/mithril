@@ -40,6 +40,9 @@ SearchPlugin::SearchPlugin(const std::string& server_config_path, const std::str
     if (!coordinator_initialized_ && !engine_initialized_) {
         spdlog::warn("Running in DEMO mode with mock results - no query engine available");
     }
+
+    spdlog::info("Coordinator initalized: {}", coordinator_initialized_);
+    spdlog::info("Engine initalized: {}", engine_initialized_);
 }
 
 SearchPlugin::~SearchPlugin() {
@@ -53,9 +56,11 @@ bool SearchPlugin::TryInitializeCoordinator() {
         if (!config_file.good()) {
             spdlog::error("Server config file not found: {}", config_path_);
             return false;
-        }
+        }  
 
+        spdlog::info("Initializing QueryCoordinator is initalized: {}", config_path_);
         query_coordinator_ = std::make_unique<mithril::QueryCoordinator>(config_path_);
+        query_coordinator_->print_server_configs();
         return true;
     } catch (const std::exception& e) {
         spdlog::error("Failed to initialize QueryCoordinator: {}", e.what());
@@ -226,8 +231,10 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
             spdlog::info("Executing distributed query: '{}'", query_text);
 
             auto doc_ids = query_coordinator_->send_query_to_workers(query_text);
+
             size_t num_results = std::min(doc_ids.size(), static_cast<size_t>(max_results));
 
+            spdlog::info("⭐ Received {} results from coordinator", doc_ids.size());
             json = GenerateJsonResults(doc_ids, num_results, false);
             return json;
         }
