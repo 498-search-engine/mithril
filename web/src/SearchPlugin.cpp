@@ -21,7 +21,6 @@
 using namespace std::chrono_literals;
 
 
-
 const std::vector<std::pair<std::string, std::string>> SearchPlugin::MOCK_RESULTS = {
     {       "https://example.com/search-intro",   "Introduction to Search Engines"},
     {   "https://example.com/cpp-optimization",     "C++ Performance Optimization"},
@@ -67,7 +66,7 @@ bool SearchPlugin::TryInitializeCoordinator() {
         if (!config_file.good()) {
             spdlog::error("Server config file not found: {}", config_path_);
             return false;
-        }  
+        }
 
         spdlog::info("Initializing QueryCoordinator is initalized: {}", config_path_);
         query_coordinator_ = std::make_unique<mithril::QueryCoordinator>(config_path_);
@@ -233,7 +232,7 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
 
             auto results = query_manager_->AnswerQuery(query_text);
             size_t num_results = std::min(results.size(), static_cast<size_t>(max_results));
-            
+
             json = GenerateJsonResults(results, num_results, false, temp);
             return json;
         }
@@ -247,7 +246,7 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
             size_t num_results = std::min(doc_ids.size(), static_cast<size_t>(max_results));
 
             spdlog::info("⭐ Received {} results from coordinator", doc_ids.size());
-          
+
             json = GenerateJsonResults(doc_ids, num_results, false, temp);
             return json;
         }
@@ -361,10 +360,10 @@ std::string SearchPlugin::GenerateJsonResults(const QueryResults& doc_ids,
         std::string title = FormatDocumentTitle(std::get<3>(doc_ids[i]));
 
         if ((not url.empty()) and (not title.empty())) {
-            json += ",\"url\":\"" + EscapeJsonString(SanitizeText(url)) + "\"";
+            json += ",\"url\":\"" + EscapeJsonString(url) + "\"";
 
-            
-            json += ",\"title\":\"" + EscapeJsonString(SanitizeText(title)) + "\"";
+
+            json += ",\"title\":\"" + EscapeJsonString(title) + "\"";
 
             json += ",\"snippet\":\"Document #" + std::to_string(doc_id) + ", Score: " + std::to_string(score) + "\"";
         } else {
