@@ -62,10 +62,10 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     for (const auto& marginal : marginal_results_)
         aggregated.insert(aggregated.end(), marginal.begin(), marginal.end());
     std::sort(aggregated.begin(), aggregated.end(), [](const auto& a, const auto& b) {
-        if (a.second != b.second) {
-            return a.second > b.second;
+        if (std::get<1>(a) != std::get<1>(b)) {
+            return std::get<1>(a) > std::get<1>(b);
         }
-        return a.first > b.first;
+        return std::get<0>(a) > std::get<0>(b);
     });
 
     spdlog::info("Returning results of size: {}", aggregated.size());
@@ -142,7 +142,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
     for (uint32_t match : matches) {
         const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
         if (!doc_opt.has_value()) {
-            ranked_matches.push_back({match, 0});
+            ranked_matches.push_back({match, 0, "", {}});
             continue;
         }
 
@@ -150,7 +150,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
 
         uint32_t score = ranking::GetFinalScore(tokens, doc, docInfo, query_engine->position_index_);
-        ranked_matches.emplace_back(match, score);
+        ranked_matches.emplace_back(match, score, doc.url, doc.title);
     }
 
     return ranked_matches;

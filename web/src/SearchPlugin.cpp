@@ -20,6 +20,8 @@
 
 using namespace std::chrono_literals;
 
+
+
 const std::vector<std::pair<std::string, std::string>> SearchPlugin::MOCK_RESULTS = {
     {       "https://example.com/search-intro",   "Introduction to Search Engines"},
     {   "https://example.com/cpp-optimization",     "C++ Performance Optimization"},
@@ -224,14 +226,15 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
     }
 
     try {
+        std::string temp = "";
         // Local query engine
         if (engine_initialized_) {
             spdlog::info("Executing local query: '{}'", query_text);
 
             auto results = query_manager_->AnswerQuery(query_text);
             size_t num_results = std::min(results.size(), static_cast<size_t>(max_results));
-
-            json = GenerateJsonResults(results, num_results, false);
+            
+            json = GenerateJsonResults(results, num_results, false, temp);
             return json;
         }
 
@@ -244,7 +247,8 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
             size_t num_results = std::min(doc_ids.size(), static_cast<size_t>(max_results));
 
             spdlog::info("⭐ Received {} results from coordinator", doc_ids.size());
-            json = GenerateJsonResults(doc_ids, num_results, false);
+          
+            json = GenerateJsonResults(doc_ids, num_results, false, temp);
             return json;
         }
 
@@ -317,6 +321,56 @@ std::string SearchPlugin::GenerateJsonResults(const std::vector<std::pair<uint32
             json += ",\"title\":\"" + EscapeJsonString(MOCK_RESULTS[mock_index].second) + "\"";
             std::string snippet_type = demo_mode ? "demo" : "fallback";
             json += ",\"snippet\":\"This is a " + snippet_type + " search result.\"";
+        }
+
+        json += "}";
+    }
+
+    json += "],\"total\":" + std::to_string(doc_ids.size());
+    json += ",\"time_ms\":0";  // Placeholder to be replaced with actual timing
+
+    if (demo_mode)
+        json += ",\"demo_mode\":true";
+    if (!error.empty())
+        json += ",\"error\":\"" + EscapeJsonString(error) + "\"";
+
+    json += "}";
+    return json;
+}
+
+std::string SearchPlugin::GenerateJsonResults(const QueryResults& doc_ids,
+                                              size_t num_results,
+                                              bool demo_mode,
+                                              const std::string& error) {
+    std::string json;
+    json.reserve(1024 + num_results * 256);  // Pre-allocate based on result count
+
+    json = "{\"results\":[";
+
+    for (size_t i = 0; i < num_results; i++) {
+        uint32_t doc_id = std::get<0>(doc_ids[i]);
+        uint32_t score = std::get<1>(doc_ids[i]);
+
+        if (i > 0)
+            json += ",";
+
+        json += "{\"id\":" + std::to_string(doc_id);
+
+        // Handle document metadata based on mode
+        std::string url = std::get<2>(doc_ids[i]);
+        std::string title = FormatDocumentTitle(std::get<3>(doc_ids[i]));
+
+        if ((not url.empty()) and (not title.empty())) {
+            json += ",\"url\":\"" + EscapeJsonString(SanitizeText(url)) + "\"";
+
+            
+            json += ",\"title\":\"" + EscapeJsonString(SanitizeText(title)) + "\"";
+
+            json += ",\"snippet\":\"Document #" + std::to_string(doc_id) + ", Score: " + std::to_string(score) + "\"";
+        } else {
+            json += ",\"url\":\"http://example.com/doc/" + std::to_string(doc_id) + "\"";
+            json += ",\"title\":\"Document " + std::to_string(doc_id) + "\"";
+            json += ",\"snippet\":\"Document metadata not available\"";
         }
 
         json += "}";
