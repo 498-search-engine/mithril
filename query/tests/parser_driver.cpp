@@ -114,6 +114,7 @@ auto main(int argc, char* argv[]) -> int {
             try {
                 // Get an IndexStreamReader from the query
                 std::unique_ptr<mithril::IndexStreamReader> isr = queryTree->generate_isr();
+                query::QueryConfig::SetMaxDocId(doc_reader.documentCount());
                 
                 if (!isr) {
                     std::cout << "No IndexStreamReader available for this query." << std::endl;
