@@ -35,6 +35,7 @@ public:
     static constexpr std::chrono::seconds CACHE_TTL{300};  // 5min
 
 private:
+    using QueryResults = std::vector<std::tuple<uint32_t, uint32_t, std::string, std::vector<std::string>>>;
     std::unique_ptr<mithril::QueryCoordinator> query_coordinator_;
     std::unique_ptr<QueryManager> query_manager_;
     bool coordinator_initialized_ = false;
@@ -57,6 +58,11 @@ private:
                                     size_t num_results,
                                     bool demo_mode,
                                     const std::string& error = "");
+
+    std::string GenerateJsonResults(const QueryResults& doc_ids,
+                                                  size_t num_results,
+                                                  bool demo_mode,
+                                                  const std::string& error);
     bool TryInitializeCoordinator();
     void CleanExpiredCache();
 
