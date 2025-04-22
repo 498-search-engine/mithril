@@ -13,9 +13,9 @@ Inside /bin directory, there should be a file called mithril_manager.conf; you c
 *./mithril_manager --port {port_num} --index {index1} {index2} ...*
 
 ## Step 4
-On the query server, edit the server.conf file to contain the IPs and Ports the backend indexes are running on. run either the frontend server or mithril_coordinator binary.
+On the query server, edit the servers.conf file to contain the IPs and Ports the backend indexes are running on. run either the frontend server or mithril_coordinator binary.
 
-*mithril_coordinator --conf server.conf*
+*mithril_coordinator --conf servers.conf*
 
 ## Step 5
 Search the query and you should get results from each sever
