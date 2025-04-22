@@ -44,87 +44,159 @@ struct RPCHandler {
         return query;
     }
 
-    static void SendResults(int sockfd, const QueryResults& data){
-        std::string header = std::to_string(data.size()) + "\r\n\r\n";
-        sendAll(sockfd, header.c_str(), header.size());
+    static void SendResults(int sockfd, const QueryResults& data) {
+        uint32_t num_entries = htonl(data.size());
+        sendAll(sockfd, &num_entries, sizeof(num_entries));
     
         for (const auto& tup : data) {
-            //send the uints
+            // Send uint32_t a and b
             uint32_t send_a = htonl(std::get<0>(tup));
             uint32_t send_b = htonl(std::get<1>(tup));
             sendAll(sockfd, &send_a, sizeof(send_a));
             sendAll(sockfd, &send_b, sizeof(send_b));
-
-            //send the string
-            auto url = std::get<2>(tup);
-            url += "\r\n\r\n";
+    
+            // Send URL as length-prefixed string
+            const std::string& url = std::get<2>(tup);
+            uint32_t url_len = htonl(url.size());
+            sendAll(sockfd, &url_len, sizeof(url_len));
             sendAll(sockfd, url.c_str(), url.size());
-
-            //send the title -> vector<string>
-            auto title = std::get<3>(tup);
-            std::string num_results = std::to_string(title.size()) + "\r\n\r\n";
-            sendAll(sockfd, num_results.c_str(), num_results.size());
-            for (const auto& word : title){
-                auto cpy = word + "\r\n\r\n";
-                sendAll(sockfd, cpy.c_str(), cpy.size());
+    
+            // Send title vector<string>
+            const auto& title_vec = std::get<3>(tup);
+            uint32_t title_count = htonl(title_vec.size());
+            sendAll(sockfd, &title_count, sizeof(title_count));
+            for (const auto& word : title_vec) {
+                uint32_t word_len = htonl(word.size());
+                sendAll(sockfd, &word_len, sizeof(word_len));
+                sendAll(sockfd, word.c_str(), word.size());
             }
         }
     }
 
-    static QueryResults ReadResults(int sockfd){
-        //blocking until read can happen
+    static QueryResults ReadResults(int sockfd) {
         QueryResults result;
     
-        auto recv_until_delim = [&](const std::string& delim, std::string what) {
-            std::string buffer;
-            char c;
-            while (true) {
-                ssize_t n = recv(sockfd, &c, 1, 0);
-                if (n <= 0) throw std::runtime_error("Failed to receive " + what);
-                buffer += c;
-                if (buffer.size() >= delim.size() &&
-                    buffer.substr(buffer.size() - delim.size()) == delim) {
-                    break;
-                }
-            }
-            return buffer;
-        };
+        uint32_t num_entries_net;
+        recvAll(sockfd, &num_entries_net, sizeof(num_entries_net));
+        uint32_t num_entries = ntohl(num_entries_net);
     
-        std::string header = recv_until_delim("\r\n\r\n", "header");
-        size_t pos = header.find("\r\n\r\n");
-        if (pos == std::string::npos) throw std::runtime_error("Invalid header format");
-        uint32_t num_entries = std::stoi(header.substr(0, pos));
-        //std::cout << num_entries <<  " entries" << std::endl;
-        
-        for (size_t i = 0; i < num_entries; ++i) {
+        for (uint32_t i = 0; i < num_entries; ++i) {
             uint32_t net_a, net_b;
             recvAll(sockfd, &net_a, sizeof(net_a));
             recvAll(sockfd, &net_b, sizeof(net_b));
-    
             uint32_t a = ntohl(net_a);
             uint32_t b = ntohl(net_b);
-
-            std::string url_full = recv_until_delim("\r\n\r\n", "url");
-            std::string url = url_full.substr(0, url_full.size()-4);
-            //std::cout << url << std::endl;
-            std::string title_len = recv_until_delim("\r\n\r\n", "title_length");
-            size_t pos_entry = title_len.find("\r\n\r\n");
-            if (pos_entry == std::string::npos) throw std::runtime_error("Invalid title format");
-            uint32_t title_entries = std::stoi(title_len.substr(0, pos));
-            //std::cout << title_entries << " title entries" << std::endl;
+    
+            // Receive URL
+            uint32_t url_len_net;
+            recvAll(sockfd, &url_len_net, sizeof(url_len_net));
+            uint32_t url_len = ntohl(url_len_net);
+            std::string url(url_len, '\0');
+            recvAll(sockfd, &url[0], url_len);
+    
+            // Receive title
+            uint32_t title_count_net;
+            recvAll(sockfd, &title_count_net, sizeof(title_count_net));
+            uint32_t title_count = ntohl(title_count_net);
             std::vector<std::string> title;
-            for (size_t i = 0; i < title_entries; ++i){
-                std::string cpy = recv_until_delim("\r\n\r\n", "title word");
-                std::string word = cpy.substr(0, cpy.size()-4);
-                //std::cout << word << " ";
-                title.push_back(word);
+            for (uint32_t j = 0; j < title_count; ++j) {
+                uint32_t word_len_net;
+                recvAll(sockfd, &word_len_net, sizeof(word_len_net));
+                uint32_t word_len = ntohl(word_len_net);
+                std::string word(word_len, '\0');
+                recvAll(sockfd, &word[0], word_len);
+                title.push_back(std::move(word));
             }
-            std::cout << std::endl;
-            result.emplace_back(a, b, url, title);
+    
+            result.emplace_back(a, b, std::move(url), std::move(title));
         }
     
         return result;
     }
+    
+    
+
+    // static void SendResults(int sockfd, const QueryResults& data){
+    //     std::string header = std::to_string(data.size()) + "\r\n\r\n";
+    //     sendAll(sockfd, header.c_str(), header.size());
+    
+    //     for (const auto& tup : data) {
+    //         //send the uints
+    //         uint32_t send_a = htonl(std::get<0>(tup));
+    //         uint32_t send_b = htonl(std::get<1>(tup));
+    //         sendAll(sockfd, &send_a, sizeof(send_a));
+    //         sendAll(sockfd, &send_b, sizeof(send_b));
+
+    //         //send the string
+    //         auto url = std::get<2>(tup);
+    //         url += "\r\n\r\n";
+    //         sendAll(sockfd, url.c_str(), url.size());
+
+    //         //send the title -> vector<string>
+    //         auto title = std::get<3>(tup);
+    //         std::string num_results = std::to_string(title.size()) + "\r\n\r\n";
+    //         sendAll(sockfd, num_results.c_str(), num_results.size());
+    //         for (const auto& word : title){
+    //             auto cpy = word + "\r\n\r\n";
+    //             sendAll(sockfd, cpy.c_str(), cpy.size());
+    //         }
+    //     }
+    // }
+
+    // static QueryResults ReadResults(int sockfd){
+    //     //blocking until read can happen
+    //     QueryResults result;
+    
+    //     auto recv_until_delim = [&](const std::string& delim, std::string what) {
+    //         std::string buffer;
+    //         char c;
+    //         while (true) {
+    //             ssize_t n = recv(sockfd, &c, 1, 0);
+    //             if (n <= 0) throw std::runtime_error("Failed to receive " + what);
+    //             buffer += c;
+    //             if (buffer.size() >= delim.size() &&
+    //                 buffer.substr(buffer.size() - delim.size()) == delim) {
+    //                 break;
+    //             }
+    //         }
+    //         return buffer;
+    //     };
+    
+    //     std::string header = recv_until_delim("\r\n\r\n", "header");
+    //     size_t pos = header.find("\r\n\r\n");
+    //     if (pos == std::string::npos) throw std::runtime_error("Invalid header format");
+    //     uint32_t num_entries = std::stoi(header.substr(0, pos));
+    //     //std::cout << num_entries <<  " entries" << std::endl;
+        
+    //     for (size_t i = 0; i < num_entries; ++i) {
+    //         uint32_t net_a, net_b;
+    //         recvAll(sockfd, &net_a, sizeof(net_a));
+    //         recvAll(sockfd, &net_b, sizeof(net_b));
+    
+    //         uint32_t a = ntohl(net_a);
+    //         uint32_t b = ntohl(net_b);
+
+    //         std::string url_full = recv_until_delim("\r\n\r\n", "url");
+    //         std::string url = url_full.substr(0, url_full.size()-4);
+    //         //std::cout << url << std::endl;
+    //         std::string title_len = recv_until_delim("\r\n\r\n", "title_length");
+    //         size_t pos_entry = title_len.find("\r\n\r\n");
+    //         if (pos_entry == std::string::npos) throw std::runtime_error("Invalid title format");
+    //         uint32_t title_entries = std::stoi(title_len.substr(0, pos));
+    //         //std::cout << title_entries << " title entries" << std::endl;
+    //         std::vector<std::string> title;
+    //         for (size_t i = 0; i < title_entries; ++i){
+    //             std::string cpy = recv_until_delim("\r\n\r\n", "title word");
+    //             std::string word = cpy.substr(0, cpy.size()-4);
+    //             //std::cout << word << " ";
+    //             title.push_back(word);
+    //         }
+    //         std::cout << std::endl;
+    //         result.emplace_back(a, b, url, title);
+    //     }
+    
+    //     return result;
+    // }
 
     private:
     static void sendAll(int sockfd, const void* buf, size_t len) {
