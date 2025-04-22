@@ -361,10 +361,10 @@ std::string SearchPlugin::GenerateJsonResults(const QueryResults& doc_ids,
         std::string title = FormatDocumentTitle(std::get<3>(doc_ids[i]));
 
         if ((not url.empty()) and (not title.empty())) {
-            json += ",\"url\":\"" + EscapeJsonString(SanitizeText(url)) + "\"";
+            json += ",\"url\":\"" + EscapeJsonString(url) + "\"";
 
             
-            json += ",\"title\":\"" + EscapeJsonString(SanitizeText(title)) + "\"";
+            json += ",\"title\":\"" + EscapeJsonString(title) + "\"";
 
             json += ",\"snippet\":\"Document #" + std::to_string(doc_id) + ", Score: " + std::to_string(score) + "\"";
         } else {
