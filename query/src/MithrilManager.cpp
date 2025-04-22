@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <memory>
+#include "Util.h"
 
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " --port PORT --index INDEX_PATH [--index INDEX_PATH ...]" << std::endl;
@@ -86,11 +87,45 @@ struct MithrilManager {
 std::mutex MithrilManager::manager_mutex;
 std::unique_ptr<QueryManager> MithrilManager::manager;
 
+std::pair<int, std::vector<std::string>> parseConfFile(const std::string& conf_file){
+    std::vector<std::string> result;
+
+    std::string file_contents = ReadFile(conf_file.c_str());
+    auto lines = GetLines(file_contents);
+
+    bool port_found = false;
+    uint16_t port;
+
+    for (auto i = 0; i < lines.size(); i++){
+        auto line = lines[i];
+
+        if (line.empty()) {
+            continue;
+        }
+
+        if (line[0] == '#') {
+            continue;
+        }
+
+        auto parts = GetWords(line);
+
+        if (not port_found) {
+            port = std::stoul(std::string(parts[0]));
+            port_found = true;
+        } else {
+            result.emplace_back(parts[0]);
+        }
+
+    }
+    
+    return {port, result};
+}
+
 int main(int argc, char** argv){
     try {
         int port = -1;
         std::vector<std::string> indexPaths;
-
+        std::string conf_file;
         // Parse command line arguments
         for (int i = 1; i < argc; ++i) {
             std::string arg = argv[i];
@@ -99,12 +134,16 @@ int main(int argc, char** argv){
                 port = std::stoi(argv[++i]);
             } else if (arg == "--index" && i + 1 < argc) {
                 indexPaths.push_back(argv[++i]);
+            } else if (arg == "--conf" && i + 1 < argc) {
+                conf_file = argv[++i];
+                std::tie(port, indexPaths) = parseConfFile(conf_file);
             } else {
                 std::cerr << "Unknown or incomplete argument: " << arg << std::endl;
                 printUsage(argv[0]);
                 return 1;
             }
         }
+
 
         // Validate required arguments
         if (port == -1 || indexPaths.empty()) {
