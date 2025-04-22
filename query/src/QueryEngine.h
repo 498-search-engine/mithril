@@ -8,6 +8,7 @@
 #include "QueryConfig.h"
 #include "TermDictionary.h"
 #include "core/mem_map_file.h"
+#include "spdlog/spdlog.h"
 
 #include <iostream>
 #include <memory>
@@ -38,12 +39,22 @@ public:
 
     std::vector<uint32_t> EvaluateQuery(std::string input) {
         Parser parser(input, index_file_, term_dict_, position_index_);
+        
         auto queryTree = parser.parse();
         if (!queryTree) {
             std::cerr << "Failed to parse query: " << input << std::endl;
             return {};
         }
-        return queryTree->evaluate();
+        spdlog::info("Parsing query: {}", input);
+        spdlog::info("Index file: {}", queryTree->to_string());
+        std::vector<uint32_t> results;
+        results.reserve(10000);
+        auto isr = queryTree->generate_isr(); 
+        while (isr->hasNext()) {
+            results.push_back(isr->currentDocID());
+            isr->moveNext();
+        }
+        return results;
     }
 
     void DisplayTokens(const std::vector<Token>& tokens) const {
