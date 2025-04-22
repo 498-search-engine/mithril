@@ -39,23 +39,30 @@ public:
     }
 
     std::vector<uint32_t> EvaluateQuery(std::string input) {
-        Parser parser(input, index_file_, term_dict_, position_index_);
-        
-        auto queryTree = parser.parse();
-        if (!queryTree) {
-            std::cerr << "Failed to parse query: " << input << std::endl;
+
+        try {
+            spdlog::info("🚀 Evaluating query: {}", input);
+            Parser parser(input, index_file_, term_dict_, position_index_);
+
+            auto queryTree = parser.parse();
+            if (!queryTree) {
+                std::cerr << "Failed to parse query: " << input << std::endl;
+                return {};
+            }
+            spdlog::info("⭐ Parsing query: {}", input);
+            spdlog::info("⭐ Query structure: {}", queryTree->to_string());
+
+            results_.clear();
+            auto isr = queryTree->generate_isr();
+            while (isr->hasNext()) {
+                results_.emplace_back(isr->currentDocID());
+                isr->moveNext();
+            }
+            return std::move(results_);
+        } catch (const std::exception& e) {
+            spdlog::warn("Error evaluating query: {}", e.what());
             return {};
         }
-        spdlog::info("⭐ Parsing query: {}", input);
-        spdlog::info("⭐ Query structure: {}", queryTree->to_string());
-
-        results_.clear();
-        auto isr = queryTree->generate_isr(); 
-        while (isr->hasNext()) {
-            results_.emplace_back(isr->currentDocID());
-            isr->moveNext();
-        }
-        return std::move(results_);
         // return queryTree->evaluate();
     }
 

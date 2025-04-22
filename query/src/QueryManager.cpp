@@ -87,6 +87,16 @@ void QueryManager::WorkerThread(size_t worker_id) {
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
 
+        if (result.empty()) {
+            spdlog::warn("No results found for query: {}", query_to_run);
+            std::scoped_lock lock{mtx_};
+            ++worker_completion_count_;  
+            if (worker_completion_count_ == threads_.size())
+                main_cv_.notify_one();
+            query_available_[worker_id] = 0;
+            continue;
+        }
+
         QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, result);
         // TODO: optimize this to not use mutex
         {
