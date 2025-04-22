@@ -34,6 +34,7 @@ struct MithrilManager {
             RPCHandler::SendResults(client.connectionfd, results);
         } catch (std::exception& e){
             std::cerr << e.what() << std::endl;
+            spdlog::warn("❌ Error answering query (Handle Function): {}", e.what());
             return;
         }
     }
