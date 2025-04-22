@@ -25,6 +25,7 @@ public:
           position_index_(index_dir) {
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
+        results_.reserve(1000);
     }
 
     auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
@@ -47,14 +48,14 @@ public:
         }
         spdlog::info("⭐ Parsing query: {}", input);
         spdlog::info("⭐ Query structure: {}", queryTree->to_string());
-        std::vector<uint32_t> results;
-        results.reserve(10000);
+
+        results_.clear();
         auto isr = queryTree->generate_isr(); 
         while (isr->hasNext()) {
-            results.push_back(isr->currentDocID());
+            results_.push_back(isr->currentDocID());
             isr->moveNext();
         }
-        return results;
+        return std::move(results_);
         // return queryTree->evaluate();
     }
 
@@ -88,6 +89,7 @@ private:
     mithril::DocumentMapReader map_reader_;
     core::MemMapFile index_file_;
     mithril::TermDictionary term_dict_;
+    std::vector<uint32_t> results_;
 };
 
 #endif /* QUERYENGINE_H */
