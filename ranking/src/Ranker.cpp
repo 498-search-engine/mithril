@@ -92,7 +92,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         } else {
             wordsInUrl++;
 
-            size_t urlOccurences = std::max(CountWordOccurrences(doc.url, term) * term.size(), doc.url.size());
+            size_t urlOccurences = std::min(CountWordOccurrences(doc.url, term) * term.size(), doc.url.size());
             densityUrl += (static_cast<float>(urlOccurences) / static_cast<float>(doc.url.size())) *
                           (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
@@ -104,7 +104,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             earliestPosTitle += (1 / static_cast<float>(pos + 1)) *
                                 (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
 
-            int titleOccurences = std::max(CountWordOccurrences(title, term), (int)doc.title.size());
+            int titleOccurences = std::min(CountWordOccurrences(title, term), (int)doc.title.size());
             densityTitle += (static_cast<float>(titleOccurences) / static_cast<float>(doc.title.size())) *
                             (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
