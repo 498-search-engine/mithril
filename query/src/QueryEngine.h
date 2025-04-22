@@ -52,7 +52,7 @@ public:
         results_.clear();
         auto isr = queryTree->generate_isr(); 
         while (isr->hasNext()) {
-            results_.push_back(isr->currentDocID());
+            results_.emplace_back(isr->currentDocID());
             isr->moveNext();
         }
         return std::move(results_);
