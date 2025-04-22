@@ -14,8 +14,12 @@ public:
     virtual bool hasNext() const = 0;
     virtual void moveNext() = 0;
 
+    // TODO: add hasCurrent() to avoid problems with empty ISRs
+
     virtual data::docid_t currentDocID() const = 0;
     virtual void seekToDocID(data::docid_t target_doc_id) = 0;
+
+    virtual bool isIdentity() const { return false; }
 };
 
 }  // namespace mithril

@@ -15,7 +15,8 @@ enum class FieldType {
     TITLE = 1,
     URL = 2,
     ANCHOR = 3,
-    DESC = 4
+    DESC = 4,
+    ALL = 5
     // Can be extended with HEADING, BOLD, etc.
 };
 
@@ -149,7 +150,7 @@ public:
             return "$" + token;
         case FieldType::DESC:
             return "%" + token;
-        case FieldType::BODY:
+        case FieldType::BODY: [[fallthrough]];
         default:
             return token;
         }
