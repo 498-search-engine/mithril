@@ -45,8 +45,8 @@ public:
             std::cerr << "Failed to parse query: " << input << std::endl;
             return {};
         }
-        spdlog::info("Parsing query: {}", input);
-        spdlog::info("Index file: {}", queryTree->to_string());
+        spdlog::info("⭐ Parsing query: {}", input);
+        spdlog::info("⭐ Query structure: {}", queryTree->to_string());
         std::vector<uint32_t> results;
         results.reserve(10000);
         auto isr = queryTree->generate_isr(); 
@@ -55,6 +55,7 @@ public:
             isr->moveNext();
         }
         return results;
+        // return queryTree->evaluate();
     }
 
     void DisplayTokens(const std::vector<Token>& tokens) const {
