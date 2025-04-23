@@ -543,14 +543,14 @@ bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const
     }
 }
 
-std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint32_t doc_id) const {
+std::pair<std::vector<uint16_t>, const char*>
+PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& term, uint32_t doc_id) const {
     auto it = posDict_.find(term);
     if (it == posDict_.end()) {
-        return {};
+        return {{}, data_ptr};
     }
 
-    auto data_ptr = data_file_.data();
-    const auto data_end = data_ptr + data_file_.size();
+    const auto data_end = data_file_.data() + data_file_.size();
 
     try {  // TODO: remove exceptions
         const PositionMetadata& metadata = it->second;
@@ -577,7 +577,7 @@ std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint3
                     positions.push_back(prev_pos);
                 }
 
-                return positions;
+                return {positions, data_ptr};
             }
 
             // Otherwise, skip positions for this doc
@@ -586,11 +586,15 @@ std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint3
             }
         }
 
-        return {};
+        return {{}, data_file_.data()};
     } catch (const std::exception& e) {
         spdlog::error("Error getting positions: {}", e.what());
-        return {};
+        return {{}, data_file_.data()};
     }
+}
+
+std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint32_t doc_id) const {
+    return getPositionsFromByte(data_file_.data(), term, doc_id).first;
 }
 
 uint8_t PositionIndex::getFieldFlags(const std::string& term, uint32_t doc_id) const {

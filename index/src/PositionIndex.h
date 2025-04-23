@@ -43,6 +43,10 @@ public:
     ~PositionIndex();
 
     bool hasPositions(const std::string& term, uint32_t doc_id) const;
+
+    std::pair<std::vector<uint16_t>, const char*>
+    getPositionsFromByte(const char* data_ptr, const std::string& term, uint32_t doc_id) const;
+
     std::vector<uint16_t> getPositions(const std::string& term, uint32_t doc_id) const;
     uint8_t getFieldFlags(const std::string& term, uint32_t doc_id) const;
     bool checkPhrase(const std::string& term1, const std::string& term2, uint32_t doc_id, int distance = 1) const;
