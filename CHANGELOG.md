@@ -136,6 +136,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Limit network throughput and merge amounts (#180)
 - add short circuit for larger rank queries (#179)
 - skip position lookup for stopwords in ranking (#181)
+- fix ranking tokenization (#182)
 
 ## [0.1.0] - 2025-02-07
 
