@@ -54,6 +54,7 @@ public:
 
             results_.clear();
             auto isr = queryTree->generate_isr();
+
             while (isr->hasNext()) {
                 results_.emplace_back(isr->currentDocID());
                 isr->moveNext();
