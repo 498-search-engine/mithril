@@ -69,8 +69,8 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         return std::get<0>(a) > std::get<0>(b);
     });
 
-    auto top50 = std::min<uint32_t>(result.size(), 50);
-    QueryResult_t filtered_results(result.begin(), result.begin()+top50);
+    auto top50 = std::min<uint32_t>(aggregated.size(), 50);
+    QueryResult_t filtered_results(aggregated.begin(), aggregated.begin()+top50);
     spdlog::info("Returning results of size: {}", filtered_results.size());
     return filtered_results;
 }
