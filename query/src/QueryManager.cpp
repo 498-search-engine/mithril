@@ -8,9 +8,90 @@
 #include <string>
 #include <spdlog/spdlog.h>
 
-namespace mithril {
+#define RESULTS_REQUIRED_TO_SHORTCIRCUIT 50000
+#define SCORE_FOR_SHORTCIRCUIT_REQUIRED 5500
+#define RESULTS_COLLECTED_AFTER_SHORTCIRCUIT 100
 
+namespace mithril {
 using QueryResult_t = QueryManager::QueryResult;
+
+namespace {
+#include <algorithm>
+#include <vector>
+
+QueryResult_t TopKElementsFast(QueryResult_t& results, int k = 50) {
+    auto comparator = [](const auto& a, const auto& b) {
+        if (std::get<1>(a) != std::get<1>(b)) {
+            return std::get<1>(a) > std::get<1>(b);
+        }
+        return std::get<0>(a) > std::get<0>(b);
+    };
+
+    if (results.size() <= k) {
+        std::sort(results.begin(), results.end(), comparator);
+        return results;
+    }
+
+    // The partial sort way (seems to be faster)
+    std::partial_sort(results.begin(), results.begin() + k, results.end(), comparator);
+
+    // The nth element way
+    // std::nth_element(results.begin(), results.begin() + k, results.end(), comparator);
+    // std::sort(results.begin(), results.begin() + k, comparator);
+
+    return QueryResult_t(results.begin(), results.begin() + k);
+}
+
+QueryResult_t TopKFromSortedLists(const std::vector<QueryResult_t>& sortedLists, size_t k = 50) {
+    if (sortedLists.size() == 1) {
+        return sortedLists[0];
+    }
+
+    auto comparator = [](const auto& a, const auto& b) {
+        if (std::get<1>(a) != std::get<1>(b)) {
+            return std::get<1>(a) > std::get<1>(b);
+        }
+        return std::get<0>(a) > std::get<0>(b);
+    };
+
+    QueryResult_t sortedList;
+    std::unordered_map<size_t, int> listToIndex;
+
+    for (size_t i = 0; i < k; ++i) {
+        bool allEmpty = true;
+
+        QueryResult_t::value_type el;
+        size_t associatedList = 0;
+
+        for (size_t j = 0; j < sortedLists.size(); ++j) {
+            const auto& list = sortedLists[j];
+            int index = listToIndex[j];
+            if (index >= list.size()) {
+                continue;
+            }
+
+            if (allEmpty) {
+                el = list[index];
+                associatedList = j;
+                allEmpty = false;
+            } else if (comparator(list[index], el)) {
+                associatedList = j;
+                el = list[index];
+            }
+        }
+
+        if (allEmpty) {
+            break;
+        }
+
+        sortedList.push_back(el);
+        listToIndex[associatedList]++;
+    }
+
+    return sortedList;
+}
+}  // namespace
+
 
 QueryManager::QueryManager(const std::vector<std::string>& index_dirs)
     : stop_(false), query_available_(index_dirs.size(), 0), worker_completion_count_(0) {
@@ -60,18 +141,8 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     }
 
     // aggregate results
-    QueryResult_t aggregated;
-    for (const auto& marginal : marginal_results_)
-        aggregated.insert(aggregated.end(), marginal.begin(), marginal.end());
-    std::sort(aggregated.begin(), aggregated.end(), [](const auto& a, const auto& b) {
-        if (std::get<1>(a) != std::get<1>(b)) {
-            return std::get<1>(a) > std::get<1>(b);
-        }
-        return std::get<0>(a) > std::get<0>(b);
-    });
+    QueryResult_t filtered_results = TopKFromSortedLists(marginal_results_);
 
-    auto top50 = std::min<uint32_t>(aggregated.size(), 50);
-    QueryResult_t filtered_results(aggregated.begin(), aggregated.begin()+top50);
     spdlog::info("Returning results of size: {}", filtered_results.size());
     return filtered_results;
 }
@@ -175,6 +246,9 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         }
     }
 
+    bool shortCircuit = matches.size() > RESULTS_REQUIRED_TO_SHORTCIRCUIT;
+    uint32_t resultsCollectedAboveMin = 0;
+
     for (uint32_t match : matches) {
         const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
         if (!doc_opt.has_value()) {
@@ -188,12 +262,15 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         uint32_t score = ranking::GetFinalScore(
             query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
+        if (shortCircuit && score >= SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
+            resultsCollectedAboveMin += 1;
+            if (resultsCollectedAboveMin >= RESULTS_COLLECTED_AFTER_SHORTCIRCUIT) {
+                break;
+            }
+        }
     }
 
-    uint32_t top50 = std::min<uint32_t>(ranked_matches.size(), 50);
-    QueryResult_t best50(ranked_matches.begin(), ranked_matches.begin()+top50);
-
-    return best50;
+    return TopKElementsFast(ranked_matches);
 }
 
 }  // namespace mithril
