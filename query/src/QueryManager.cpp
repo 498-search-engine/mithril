@@ -16,7 +16,7 @@
 
 // If after MINIMUM_QUOTA_FOR_RESULTS_CHECK documents, there are <REQUIRED_RESULTS_QTY documents with score
 // >=REQUIRED_RESULTS_SCORE, we end ranking since there probably aren't great matches on this chunk.
-#define MINIMUM_QUOTA_FOR_RESULTS_CHECK 50000
+#define MINIMUM_QUOTA_FOR_RESULTS_CHECK 25000
 #define REQUIRED_RESULTS_SCORE 5000
 #define REQUIRED_RESULTS_QTY 10
 
