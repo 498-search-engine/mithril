@@ -81,7 +81,8 @@ struct Token {
 
 inline static std::vector<std::string> ExtractQuoteTerms(const Token& quote_token) {
     if (quote_token.type != TokenType::QUOTE && quote_token.type != TokenType::PHRASE) {
-        throw std::invalid_argument("Token is not a quote or phrase but you are calling extract_quote_terms");
+        printf("Token is not a quote or phrase but you are calling extract_quote_terms");
+        exit(1);
     }
 
     std::vector<std::string> terms;
