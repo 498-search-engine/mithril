@@ -119,6 +119,10 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         bool termInDescription = position_index.hasPositionsFromByte(
             mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id, termToData[term]);
 
+        // std::vector<uint16_t> bodyPositions = position_index.getPositions(term, doc.id);
+
+        // bool termInDescription =
+        //     position_index.hasPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id);
         bool termInBody = bodyPositions.size() > 0;
         bool termInUrl = doc.url.find(term) != std::string::npos;
 
