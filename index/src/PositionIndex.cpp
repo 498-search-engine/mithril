@@ -527,10 +527,13 @@ bool PositionIndex::loadPosDict() {
     }
 }
 
-bool PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data_ptr) const {
+std::pair<bool, const char*>
+PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data_ptr) const {
+    const char* init_ptr = data_ptr;
+
     auto it = posDict_.find(term);
     if (it == posDict_.end()) {
-        return false;
+        return {false, data_ptr};
     }
 
     const auto* const data_end = data_file_.data() + data_file_.size();
@@ -549,9 +552,9 @@ bool PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_i
             data_ptr += sizeof(pos_count);
 
             if (curr_doc_id > doc_id) {
-                return false;
+                return {false, data_ptr};
             } else if (curr_doc_id == doc_id) {
-                return true;
+                return {true, data_ptr};
             }
             // Otherwise, skip positions for this doc
             for (uint32_t j = 0; j < pos_count; j++) {
@@ -559,10 +562,10 @@ bool PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_i
             }
         }
 
-        return false;
+        return {false, init_ptr};
     } catch (const std::exception& e) {
         spdlog::error("Error checking positions: {}", e.what());
-        return false;
+        return {false, init_ptr};
     }
 }
 
@@ -576,7 +579,7 @@ bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const
     const PositionMetadata& metadata = it->second;
     data_ptr += metadata.data_offset;
 
-    return hasPositionsFromByte(term, doc_id, data_ptr);
+    return hasPositionsFromByte(term, doc_id, data_ptr).first;
 }
 
 std::pair<std::vector<uint16_t>, const char*>
