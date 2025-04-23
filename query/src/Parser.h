@@ -160,10 +160,12 @@ private:
         }
 
         // Handle keywords (simple terms)
+
+
         if (match(TokenType::WORD) || match(TokenType::TITLE) || match(TokenType::URL) || match(TokenType::ANCHOR) ||
             match(TokenType::DESC)) {
             return std::make_unique<TermQuery>(
-                Token(TokenType::WORD, tokens_[current_position_ - 1].value), index_file_, term_dict_, position_index_);
+                Token(tokens_[current_position_ - 1].type, tokens_[current_position_ - 1].value), index_file_, term_dict_, position_index_);
         }
 
         // Handle exact matches (quoted terms)
