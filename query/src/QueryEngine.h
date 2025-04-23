@@ -92,11 +92,12 @@ public:
     DocInfo GetDocumentInfo(uint32_t doc_id) const { return map_reader_.getDocInfo(doc_id); }
 
     mithril::PositionIndex position_index_;
+    mithril::TermDictionary term_dict_;
 
 private:
     mithril::DocumentMapReader map_reader_;
     core::MemMapFile index_file_;
-    mithril::TermDictionary term_dict_;
+    // mithril::TermDictionary term_dict_;
     std::vector<uint32_t> results_;
 };
 

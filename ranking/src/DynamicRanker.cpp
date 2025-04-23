@@ -16,17 +16,20 @@ void Log(const RankerFeatures& features, float total, uint32_t normalizedScore) 
     rankerLogger->info("Dynamic ranking components:");
     rankerLogger->info("- BM25: {:.4f} ({:.2f}*{:.2f})", Weights.bm25 * features.bm25, Weights.bm25, features.bm25);
 
-    rankerLogger->info(
-        "- Title: presence={} ({:.2f}*{}), coverage={:.4f} ({:.2f}*{:.2f}), density={:.4f} ({:.2f}*{:.2f})",
-        features.query_in_title,
-        Weights.query_in_title,
-        features.query_in_title,
-        Weights.coverage_percent_query_title * features.coverage_percent_query_title,
-        Weights.coverage_percent_query_title,
-        features.coverage_percent_query_title,
-        Weights.density_percent_query_title * features.density_percent_query_title,
-        Weights.density_percent_query_title,
-        features.density_percent_query_title);
+    rankerLogger->info("- Title: presence={} ({:.2f}*{}), coverage={:.4f} ({:.2f}*{:.2f}), density={:.4f}, "
+                       "({:.2f}*{:.2f}), order sensitive={:.4f} ({:.2f}*{:.2f})",
+                       features.query_in_title,
+                       Weights.query_in_title,
+                       features.query_in_title,
+                       Weights.coverage_percent_query_title * features.coverage_percent_query_title,
+                       Weights.coverage_percent_query_title,
+                       features.coverage_percent_query_title,
+                       Weights.density_percent_query_title * features.density_percent_query_title,
+                       Weights.density_percent_query_title,
+                       features.density_percent_query_title,
+                       Weights.order_sensitive_title * features.order_sensitive_title,
+                       Weights.order_sensitive_title,
+                       features.order_sensitive_title);
 
     rankerLogger->info(
         "- URL: presence={} ({:.2f}*{}), coverage={:.4f} ({:.2f}*{:.2f}), density={:.4f} ({:.2f}*{:.2f})",
@@ -67,6 +70,30 @@ void Log(const RankerFeatures& features, float total, uint32_t normalizedScore) 
 }
 };  // namespace
 
+
+float OrderedMatchScore(const std::vector<std::pair<std::string, int>>& qTokens,
+                        const std::vector<std::string>& tTokens) {
+    auto startsWith = [](const std::string& prefix, const std::string& word) -> bool {
+        return word.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), word.begin());
+    };
+
+    int qLen = (int)qTokens.size();
+    int qIdx = 0;
+
+    for (const auto& token : tTokens) {
+        std::string loweredToken;
+        for (char c : token) {
+            loweredToken += std::tolower(c);
+        }
+
+        if (qIdx < qLen && startsWith(loweredToken, qTokens[qIdx].first)) {
+            qIdx++;
+        }
+    }
+
+    return (qLen > 0) ? static_cast<float>(qIdx) / static_cast<float>(qLen) : 0.0F;
+}
+
 uint32_t GetUrlDynamicRank(const RankerFeatures& features) {
     float score = 0.0F;
 
@@ -80,6 +107,7 @@ uint32_t GetUrlDynamicRank(const RankerFeatures& features) {
     // Title signals
     score += Weights.coverage_percent_query_title * features.coverage_percent_query_title;
     score += Weights.density_percent_query_title * features.density_percent_query_title;
+    score += Weights.order_sensitive_title * features.order_sensitive_title;
 
     // URL signals
     score += Weights.coverage_percent_query_url * features.coverage_percent_query_url;

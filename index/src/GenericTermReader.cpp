@@ -1,13 +1,13 @@
 #include "GenericTermReader.h"
 
-#include "TermOR.h"
 #include "IndexStreamReader.h"
+#include "TermOR.h"
 #include "TermReader.h"
 
 #include <array>
+#include <memory>
 #include <string_view>
 #include <vector>
-#include <memory>
 
 static constexpr std::array<std::string_view, 5> kDecorators = {"", "#", "@", "$", "%"};
 
@@ -17,8 +17,7 @@ GenericTermReader::GenericTermReader(const std::string& term,
                                      const core::MemMapFile& index_file,
                                      TermDictionary& term_dict,
                                      PositionIndex& position_index)
-    : term_(term), index_file_(index_file), term_dict_(term_dict), position_index_(position_index)
-{
+    : term_(term), index_file_(index_file), term_dict_(term_dict), position_index_(position_index) {
     std::vector<std::unique_ptr<IndexStreamReader>> readers;
     for (const auto& decorator: kDecorators) {
         const auto decorated_term = std::string(decorator) + term; // TODO: don't use operator+
