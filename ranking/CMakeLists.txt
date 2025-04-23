@@ -15,6 +15,7 @@ add_library(ranking STATIC
     src/PageRank.cpp
     src/StaticRanker.cpp
     src/DynamicRanker.cpp
+    src/BM25.cpp
 )
 target_include_directories(ranking PUBLIC src)
 target_link_libraries(ranking PUBLIC

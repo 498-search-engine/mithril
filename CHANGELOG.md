@@ -74,6 +74,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add scripts that made us build idx1(/5)
 - query coverage, density + position based ranking (#159)
 - Link server to mithril managers
+- add order sensitive ranking & BM25 (#166)
 
 ### Fixed
 

@@ -1,5 +1,6 @@
 #include "Ranker.h"
 
+#include "BM25.h"
 #include "DynamicRanker.h"
 #include "StaticRanker.h"
 #include "TextPreprocessor.h"
@@ -29,10 +30,32 @@ int CountWordOccurrences(const std::string& text, const std::string& word) {
 }
 }  // namespace
 
+std::unordered_map<std::string, uint32_t>
+GetDocumentFrequencies(const TermDictionary& term_dict, const std::vector<std::pair<std::string, int>>& query) {
+    std::unordered_map<std::string, uint32_t> map;
+    for (const auto& [query, multiplicity] : query) {
+        auto it = map.find(query);
+        if (it != map.end()) {
+            continue;
+        }
+
+
+        std::optional<TermDictionary::TermEntry> termEntry = term_dict.lookup(query);
+        if (!termEntry.has_value()) {
+            map[query] = 0;
+        } else {
+            map[query] = termEntry->postings_count;
+        }
+    }
+
+    return map;
+}
+
 uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
                        const data::DocInfo& info,
-                       const PositionIndex& position_index) {
+                       const PositionIndex& position_index,
+                       const std::unordered_map<std::string, uint32_t>& termFreq) {
 
     auto logger = spdlog::get("ranker_logger");
     if (!logger) {
@@ -69,6 +92,8 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
     float densityTitle = 0.0F;
     float densityDescription = 0.0F;
 
+    float weightedBM25 = 0.0F;
+
     for (const auto& [term, multiplicity] : query) {
         std::vector<uint16_t> urlPositions =
             position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::URL), doc.id);
@@ -92,7 +117,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         } else {
             wordsInUrl++;
 
-            size_t urlOccurences = std::max(CountWordOccurrences(doc.url, term) * term.size(), doc.url.size());
+            size_t urlOccurences = std::min(CountWordOccurrences(doc.url, term) * term.size(), doc.url.size());
             densityUrl += (static_cast<float>(urlOccurences) / static_cast<float>(doc.url.size())) *
                           (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
@@ -104,7 +129,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             earliestPosTitle += (1 / static_cast<float>(pos + 1)) *
                                 (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
 
-            int titleOccurences = std::max(CountWordOccurrences(title, term), (int)doc.title.size());
+            int titleOccurences = std::min(CountWordOccurrences(title, term), (int)doc.title.size());
             densityTitle += (static_cast<float>(titleOccurences) / static_cast<float>(doc.title.size())) *
                             (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
@@ -122,7 +147,13 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             earliestPosBody += (1 / static_cast<float>(bodyPositions[0] + 1)) *
                                (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
+
+        weightedBM25 += static_cast<float>(BM25Lib.ScoreTermForDoc(info, termFreq.at(term), bodyPositions.size())) *
+                        (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+        ;
     }
+
+    float orderedTitleScore = std::sqrt(ranking::dynamic::OrderedMatchScore(query, doc.title));
 
     dynamic::RankerFeatures features{
         // Boolean presence flags
@@ -136,6 +167,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         .coverage_percent_query_title = (wordsInTitle / totalTermsSize),
         .coverage_percent_query_description = (wordsInDesc / totalTermsSize),
 
+        .order_sensitive_title = orderedTitleScore,
         // Query Density percentage features
         .density_percent_query_url = densityUrl,
         .density_percent_query_title = densityTitle,
@@ -146,6 +178,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         .earliest_pos_body = earliestPosBody,
 
         // Precomputed scores
+        .bm25 = weightedBM25,
         .static_rank = static_cast<float>(GetUrlStaticRank(doc.url)),
         .pagerank = info.pagerank_score,
     };
