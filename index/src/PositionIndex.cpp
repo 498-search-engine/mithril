@@ -20,7 +20,6 @@
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
-#include <queue>
 
 namespace fs = std::filesystem;
 
@@ -534,24 +533,8 @@ bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const
         return false;
     }
 
-    try {
-        // Get positions
-        std::vector<uint16_t> positions = getPositions(term, doc_id);
-        return !positions.empty();
-    } catch (const std::exception& e) {
-        spdlog::error("Error checking positions: {}", e.what());
-        return false;
-    }
-}
-
-std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint32_t doc_id) const {
-    auto it = posDict_.find(term);
-    if (it == posDict_.end()) {
-        return {};
-    }
-
-    auto data_ptr = data_file_.data();
-    const auto data_end = data_ptr + data_file_.size();
+    const auto* data_ptr = data_file_.data();
+    const auto* const data_end = data_ptr + data_file_.size();
 
     try {  // TODO: remove exceptions
         const PositionMetadata& metadata = it->second;
@@ -567,7 +550,50 @@ std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint3
             const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
             data_ptr += sizeof(pos_count);
 
-            if (curr_doc_id == doc_id) {
+            if (curr_doc_id > doc_id) {
+                return false;
+            } else if (curr_doc_id == doc_id) {
+                return true;
+            }
+            // Otherwise, skip positions for this doc
+            for (uint32_t j = 0; j < pos_count; j++) {
+                (void)decodeVByte(data_ptr);
+            }
+        }
+
+        return false;
+    } catch (const std::exception& e) {
+        spdlog::error("Error checking positions: {}", e.what());
+        return false;
+    }
+}
+
+std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint32_t doc_id) const {
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return {};
+    }
+
+    const auto* data_ptr = data_file_.data();
+    const auto* const data_end = data_ptr + data_file_.size();
+
+    try {  // TODO: remove exceptions
+        const PositionMetadata& metadata = it->second;
+        data_ptr += metadata.data_offset;
+
+        for (uint32_t i = 0; i < metadata.doc_count; i++) {
+            const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(curr_doc_id);
+
+            const uint8_t field_flags = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(field_flags);
+
+            const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(pos_count);
+
+            if (curr_doc_id > doc_id) {
+                return {};
+            } else if (curr_doc_id == doc_id) {
                 std::vector<uint16_t> positions;
                 positions.reserve(pos_count);
 
