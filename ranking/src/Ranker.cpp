@@ -1,5 +1,6 @@
 #include "Ranker.h"
 
+#include "BM25.h"
 #include "DynamicRanker.h"
 #include "StaticRanker.h"
 #include "TextPreprocessor.h"
@@ -29,10 +30,32 @@ int CountWordOccurrences(const std::string& text, const std::string& word) {
 }
 }  // namespace
 
+std::unordered_map<std::string, uint32_t>
+GetDocumentFrequencies(const TermDictionary& term_dict, const std::vector<std::pair<std::string, int>>& query) {
+    std::unordered_map<std::string, uint32_t> map;
+    for (const auto& [query, multiplicity] : query) {
+        auto it = map.find(query);
+        if (it != map.end()) {
+            continue;
+        }
+
+
+        std::optional<TermDictionary::TermEntry> termEntry = term_dict.lookup(query);
+        if (!termEntry.has_value()) {
+            map[query] = 0;
+        } else {
+            map[query] = termEntry->postings_count;
+        }
+    }
+
+    return map;
+}
+
 uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
                        const data::DocInfo& info,
-                       const PositionIndex& position_index) {
+                       const PositionIndex& position_index,
+                       const std::unordered_map<std::string, uint32_t>& termFreq) {
 
     auto logger = spdlog::get("ranker_logger");
     if (!logger) {
@@ -68,6 +91,8 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
     float densityUrl = 0.0F;
     float densityTitle = 0.0F;
     float densityDescription = 0.0F;
+
+    float weightedBM25 = 0.0F;
 
     for (const auto& [term, multiplicity] : query) {
         std::vector<uint16_t> urlPositions =
@@ -122,6 +147,10 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
             earliestPosBody += (1 / static_cast<float>(bodyPositions[0] + 1)) *
                                (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
+
+        weightedBM25 += static_cast<float>(BM25Lib.ScoreTermForDoc(info, termFreq.at(term), bodyPositions.size())) *
+                        (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+        ;
     }
 
     dynamic::RankerFeatures features{
@@ -146,6 +175,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         .earliest_pos_body = earliestPosBody,
 
         // Precomputed scores
+        .bm25 = weightedBM25,
         .static_rank = static_cast<float>(GetUrlStaticRank(doc.url)),
         .pagerank = info.pagerank_score,
     };
