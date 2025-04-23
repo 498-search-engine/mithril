@@ -5,21 +5,33 @@
 #include "data/Document.h"
 #include "data/Gzip.h"
 #include "data/Reader.h"
-#include "data/Writer.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
 #include <filesystem>
+#include <iomanip>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 #include <spdlog/spdlog.h>
+
+namespace mithril {
 
 class DocumentAccessor {
 public:
     DocumentAccessor(const std::string& docs_path, size_t docs_per_chunk = 10000, size_t cache_size = 500)
         : docs_path_(docs_path), docs_per_chunk_(docs_per_chunk), max_cache_size_(cache_size) {
+        if (docs_path.empty()) {
+            return;
+        }
         // Ensure path ends with slash
         if (!docs_path_.empty() && docs_path_.back() != '/') {
             docs_path_ += '/';
@@ -28,6 +40,10 @@ public:
     }
 
     std::optional<data::Document> getDocument(uint32_t doc_id) {
+        if (docs_path_.empty()) {
+            return std::nullopt;
+        }
+
         std::lock_guard<std::mutex> lock(cache_mutex_);
 
         // Check cache first
@@ -369,5 +385,6 @@ private:
     }
 };
 
+}  // namespace mithril
 
 #endif  // WEB_SNIPPETS_H
