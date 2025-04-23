@@ -55,7 +55,8 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
                        const data::DocInfo& info,
                        const PositionIndex& position_index,
-                       const std::unordered_map<std::string, uint32_t>& termFreq) {
+                       const std::unordered_map<std::string, uint32_t>& termFreq,
+                       const char*& data) {
 
     auto logger = spdlog::get("ranker_logger");
     if (!logger) {

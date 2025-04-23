@@ -146,6 +146,8 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
     std::unordered_map<std::string, uint32_t> map = ranking::GetDocumentFrequencies(query_engine->term_dict_, tokens);
 
+    const char* data = query_engine->position_index_.data_file_.data();
+
     for (uint32_t match : matches) {
         const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
         if (!doc_opt.has_value()) {
@@ -156,7 +158,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         const data::Document& doc = doc_opt.value();
         const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
 
-        uint32_t score = ranking::GetFinalScore(tokens, doc, docInfo, query_engine->position_index_, map);
+        uint32_t score = ranking::GetFinalScore(tokens, doc, docInfo, query_engine->position_index_, map, data);
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
     }
 
