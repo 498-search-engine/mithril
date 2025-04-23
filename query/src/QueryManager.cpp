@@ -270,7 +270,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         uint32_t score = ranking::GetFinalScore(
             query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
 
-        ranked_matches.emplace_back(match, score, doc.url, doc.title, {));
+        ranked_matches.push_back({match, score, doc.url, doc.title, {}});
 
         if (shortCircuit && score >= SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
             resultsCollectedAboveMin += 1;
