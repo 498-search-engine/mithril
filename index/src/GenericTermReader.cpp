@@ -21,7 +21,8 @@ GenericTermReader::GenericTermReader(const std::string& term,
 {
     std::vector<std::unique_ptr<IndexStreamReader>> readers;
     for (const auto& decorator: kDecorators) {
-        auto ptr = new TermReader(/*TODO: remove path*/"", term, index_file_, term_dict_, position_index_);
+        const auto decorated_term = std::string(decorator) + term; // TODO: don't use operator+
+        auto ptr = new TermReader(/*TODO: remove path*/"", decorated_term, index_file_, term_dict_, position_index_);
         readers.emplace_back(reinterpret_cast<IndexStreamReader*>(ptr));
     }
 
