@@ -721,19 +721,21 @@ bool PositionIndex::checkPhrase(const std::string& term1,
 }
 
 uint32_t PositionIndex::decodeVByte(const char*& ptr) const {
-    uint32_t result = 0, shift = 0;
-    uint8_t byte;
+    uint32_t result = 0;
+    uint32_t shift = 0;
 
-    const auto end = data_file_.data() + data_file_.size();
-    while (ptr < end) [[likely]] {
-        uint8_t byte = *reinterpret_cast<const uint8_t*>(ptr++);
-        result |= (uint32_t)(byte & 0x7f) << shift;
-        if (!(byte & 0x80))
+    const char* local_ptr = ptr;  // avoid repeated indirection on ptr
+    const char* const end = data_file_.data() + data_file_.size();
+
+    while (local_ptr < end) [[likely]] {
+        uint8_t byte = static_cast<uint8_t>(*local_ptr++);
+        result |= (byte & 0x7F) << shift;
+        if ((byte & 0x80) == 0)
             break;
         shift += 7;
     }
 
+    ptr = local_ptr;  // update caller’s pointer only once
     return result;
 }
-
 }  // namespace mithril
