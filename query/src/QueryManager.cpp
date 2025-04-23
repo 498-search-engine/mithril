@@ -105,6 +105,9 @@ void QueryManager::WorkerThread(size_t worker_id) {
     }
 }
 
+/**
+    Assumes matches is sorted by DOCID.
+*/
 QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worker_id, std::vector<uint32_t>& matches) {
     spdlog::info("Ranking results of size: {}", matches.size());
     if (matches.empty()) {
@@ -148,6 +151,19 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
     std::unordered_map<std::string, uint32_t> map = ranking::GetDocumentFrequencies(query_engine->term_dict_, tokens);
 
+    std::unordered_map<std::string, const char*> termToPointer;
+
+    for (const auto& token : tokens) {
+        const char* data = query_engine->position_index_.data_file_.data();
+
+        auto it = query_engine->position_index_.posDict_.find(token.first);
+        if (it == query_engine->position_index_.posDict_.end()) {
+            termToPointer[token.first] = nullptr;
+        } else {
+            termToPointer[token.first] = data + (it->second.data_offset);
+        }
+    }
+
     for (uint32_t match : matches) {
         const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
         if (!doc_opt.has_value()) {
@@ -158,7 +174,8 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         const data::Document& doc = doc_opt.value();
         const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
 
-        uint32_t score = ranking::GetFinalScore(tokens, doc, docInfo, query_engine->position_index_, map);
+        uint32_t score =
+            ranking::GetFinalScore(tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
     }
 
