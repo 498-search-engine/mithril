@@ -7,10 +7,9 @@
 
 #include <algorithm>
 #include <stdexcept>
+#include <utility>
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
-#include <stdexcept>
-#include <utility>
 
 using namespace core;
 using namespace mithril;
@@ -98,18 +97,27 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers
     }
 
     // Sort and remove duplicates (unneeded imo as diff shards)
-    // std::sort(all_results.begin(), all_results.end());
+    auto comparator = [](const auto& a, const auto& b) {
+        if (std::get<1>(a) != std::get<1>(b)) {
+            return std::get<1>(a) > std::get<1>(b);
+        }
+        return std::get<0>(a) > std::get<0>(b);
+    };
+
+    std::sort(all_results.begin(), all_results.end(), comparator);
     // auto last = std::unique(all_results.begin(), all_results.end());
     // all_results.erase(last, all_results.end());
 
-    spdlog::info("Aggregated {} results from {} workers which gave {} total results", all_results.size(), worker_results.size(), 
-        total_results);
+    spdlog::info("Aggregated {} results from {} workers which gave {} total results",
+                 all_results.size(),
+                 worker_results.size(),
+                 total_results);
 
     return {all_results, total_results};
 }
 
 std::pair<QueryResults, size_t> mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
-                                                                        const std::string& query) {
+                                                                                  const std::string& query) {
 
     QueryResults results;
     size_t total_results = 0;
@@ -145,7 +153,7 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::handle_worker_respons
         //     }
         // }
 
-        
+
         results = RPCHandler::ReadResults(client_fd, total_results);
 
         close(client_fd);
