@@ -38,7 +38,7 @@ struct MithrilManager {
             RPCHandler::SendResults(client.connectionfd, results);
             
             auto end = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<nanoseconds>(end - start);
+            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
             spdlog::info("took {} seconds to answer query", std::to_string(duration.count()));
         } catch (std::exception& e){
