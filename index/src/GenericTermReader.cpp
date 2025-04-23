@@ -9,7 +9,7 @@
 #include <vector>
 #include <memory>
 
-static constexpr std::array<std::string_view, 4> kDecorators = {"", "@", "$", "%"};
+static constexpr std::array<std::string_view, 5> kDecorators = {"", "#", "@", "$", "%"};
 
 namespace mithril {
 
