@@ -38,8 +38,8 @@ SearchPlugin::SearchPlugin(const std::string& server_config_path, const std::str
         docs_path_ = docs_env;
         spdlog::info("Using docs path from environment: {}", docs_path_);
     } else {
-        // docs_path_ = "/Users/sharmadhavs/Downloads/w25/498/mithril/bin/docs";
-        throw std::runtime_error("MITHRIL_DOCS_PATH environment variable not set");
+        spdlog::warn("MITHRIL_DOCS_PATH environment variable not set, no snippets will be served");
+        docs_path_ = "";
     }
 
     doc_accessor_ = std::make_unique<DocumentAccessor>(docs_path_, 10000);
