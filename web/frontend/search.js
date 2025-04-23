@@ -7,6 +7,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const queryTime = document.getElementById('query-time');
     const resultsContainer = document.getElementById('results');
     const exampleLinks = document.querySelectorAll('.example');
+    
+    // Track which snippets have been loaded
+    const loadedSnippets = new Set();
+    // Queue to track pending batches
+    let snippetQueue = [];
+    // Currently loading flag
+    let isLoadingSnippets = false;
+    // Batch size for snippet loading
+    const SNIPPET_BATCH_SIZE = 5;
 
     function strip(html) {
         let doc = new DOMParser().parseFromString(html, 'text/html');
@@ -129,6 +138,11 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingIndicator.style.display = 'block';
         resultsMeta.style.display = 'none';
         resultsContainer.innerHTML = '';
+        
+        // Reset loaded snippets tracking
+        loadedSnippets.clear();
+        snippetQueue = [];
+        isLoadingSnippets = false;
 
         // Check client-side cache first
         const urlParams = new URLSearchParams(window.location.search);
@@ -169,30 +183,63 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }, 300);
 
-    function loadSnippetsForVisibleResults() {
-        const results = document.querySelectorAll('.result');
-        if (results.length === 0) return;
+    // Process snippets queue
+    function processSnippetQueue() {
+        if (isLoadingSnippets || snippetQueue.length === 0) {
+            return;
+        }
         
-        const visibleDocIds = [];
-        results.forEach(result => {
-            const docId = result.getAttribute('data-doc-id');
-            if (docId) {
-                visibleDocIds.push(docId);
-            }
+        isLoadingSnippets = true;
+        const nextBatch = snippetQueue.shift();
+        loadSnippetsForDocIds(nextBatch, () => {
+            // Once current batch is done, process next batch after a short delay
+            setTimeout(() => {
+                isLoadingSnippets = false;
+                processSnippetQueue();
+            }, 50);
         });
+    }
+    
+    // Initialize batch loading of snippets for all results
+    function initializeSnippetLoading(allResults) {
+        // Clear previous queue
+        snippetQueue = [];
+        loadedSnippets.clear();
         
-        if (visibleDocIds.length === 0) return;
+        // Create batches of snippet requests
+        const allDocIds = Array.from(allResults).map(result => 
+            result.getAttribute('data-doc-id')
+        ).filter(id => id);
+        
+        // Split into batches of SNIPPET_BATCH_SIZE
+        for (let i = 0; i < allDocIds.length; i += SNIPPET_BATCH_SIZE) {
+            const batch = allDocIds.slice(i, i + SNIPPET_BATCH_SIZE);
+            snippetQueue.push(batch);
+        }
+        
+        // Start processing queue
+        processSnippetQueue();
+    }
+    
+    function loadSnippetsForDocIds(docIds, callback) {
+        if (docIds.length === 0) {
+            if (callback) callback();
+            return;
+        }
         
         const query = document.getElementById('search-input').value;
-        fetch(`/api/snippets?ids=${visibleDocIds.join(',')}&q=${encodeURIComponent(query)}`)
+        fetch(`/api/snippets?ids=${docIds.join(',')}&q=${encodeURIComponent(query)}`)
             .then(response => response.json())
             .then(snippets => {
                 for (const [docId, snippet] of Object.entries(snippets)) {
                     updateSnippetForDoc(docId, snippet);
                 }
+                
+                if (callback) callback();
             })
             .catch(error => {
                 console.error('Error loading snippets:', error);
+                if (callback) callback();
             });
     }
     
@@ -264,15 +311,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         <img src="${faviconUrl}" alt="favicon" class="favicon" style="width: 16px; height: 16px;">
                         <span class="result-url-text">${result.url}</span>
                     </div>
-                    <p class="result-snippet">${result.snippet}</p>
+                    <p class="result-snippet">Loading...</p>
                 `;
 
                 resultsContainer.appendChild(resultElement);
             });
-            setTimeout(loadSnippetsForVisibleResults, 50);
+            
+            // Initialize batch loading of snippets
+            initializeSnippetLoading(document.querySelectorAll('.result'));
         } else {
             resultsContainer.innerHTML = '<div class="no-results">No results found</div>';
         }
     }
-
 });
