@@ -1,6 +1,7 @@
 #include "QueryManager.h"
 
 #include "Ranker.h"
+#include "TextPreprocessor.h"
 
 #include <algorithm>
 #include <mutex>
@@ -227,20 +228,20 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
     std::unordered_map<std::string, const char*> termToPointer;
 
     for (const auto& token : tokens) {
+        if (StopwordFilter::isStopword(token.first)) {
+            continue;
+        }
+
         const char* data = query_engine->position_index_.data_file_.data();
 
         auto it = query_engine->position_index_.posDict_.find(token.first);
-        if (it == query_engine->position_index_.posDict_.end()) {
-            termToPointer[token.first] = nullptr;
-        } else {
+        if (it != query_engine->position_index_.posDict_.end()) {
             termToPointer[token.first] = data + (it->second.data_offset);
         }
 
         std::string descToken = mithril::TokenNormalizer::decorateToken(token.first, FieldType::DESC);
         it = query_engine->position_index_.posDict_.find(descToken);
-        if (it == query_engine->position_index_.posDict_.end()) {
-            termToPointer[descToken] = nullptr;
-        } else {
+        if (it != query_engine->position_index_.posDict_.end()) {
             termToPointer[descToken] = data + (it->second.data_offset);
         }
     }

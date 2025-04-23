@@ -112,27 +112,23 @@ uint32_t GetFinalScore(BM25* BM25Lib,
 
     for (const auto& [term, multiplicity] : query) {
         std::vector<uint16_t> bodyPositions;
-        if (termToData[term] != nullptr) {
-            auto bodyPositionsIndex = position_index.getPositionsFromByte(termToData[term], term, doc.id);
+        bool termInDescription = false;
 
+        // Get body positions
+        if (auto it = termToData.find(term); it != termToData.end()) {
+            auto bodyPositionsIndex = position_index.getPositionsFromByte(it->second, term, doc.id);
             newTermToData[term] = bodyPositionsIndex.second;
-
             bodyPositions = std::move(bodyPositionsIndex.first);
         }
 
+        // Check whether term in description
         std::string descToken = mithril::TokenNormalizer::decorateToken(term, FieldType::DESC);
-
-        bool termInDescription = false;
-        if (termToData[descToken] != nullptr) {
-            auto termInDescriptionIndex = position_index.hasPositionsFromByte(descToken, doc.id, termToData[descToken]);
+        if (auto it = termToData.find(descToken); it != termToData.end()) {
+            auto termInDescriptionIndex = position_index.hasPositionsFromByte(descToken, doc.id, it->second);
             termInDescription = termInDescriptionIndex.first;
-
             newTermToData[descToken] = termInDescriptionIndex.second;
         }
-        // std::vector<uint16_t> bodyPositions = position_index.getPositions(term, doc.id);
 
-        // bool termInDescription =
-        //     position_index.hasPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id);
         bool termInBody = bodyPositions.size() > 0;
         bool termInUrl = doc.url.find(term) != std::string::npos;
 
