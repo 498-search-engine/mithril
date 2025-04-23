@@ -92,7 +92,9 @@ double BM25::ScoreTermForDoc(const data::DocInfo& doc_info, uint32_t docFreq, si
 
     // BM25 saturation function
     double score = idf * (tfCombined * (k1_ + 1)) / (tfCombined + k1_);
-    return std::log(score);
+    score = std::min(score, 6.0);
+
+    return score / 6.0;
 }
 
 }}  // namespace mithril::ranking
