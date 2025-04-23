@@ -69,8 +69,10 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         return std::get<0>(a) > std::get<0>(b);
     });
 
-    spdlog::info("Returning results of size: {}", aggregated.size());
-    return aggregated;
+    auto top50 = std::min<uint32_t>(aggregated.size(), 50);
+    QueryResult_t filtered_results(aggregated.begin(), aggregated.begin()+top50);
+    spdlog::info("Returning results of size: {}", filtered_results.size());
+    return filtered_results;
 }
 
 void QueryManager::WorkerThread(size_t worker_id) {
@@ -87,7 +89,8 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
-
+        // auto front_1k = std::min<uint32_t>(result.size(), 1000);
+        // std::vector<uint32_t> one_thousand_results(result.begin(), result.begin()+front_1k);
         QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, result);
         // TODO: optimize this to not use mutex
         {
@@ -186,7 +189,10 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
     }
 
-    return ranked_matches;
+    uint32_t top50 = std::min<uint32_t>(ranked_matches.size(), 50);
+    QueryResult_t best50(ranked_matches.begin(), ranked_matches.begin()+top50);
+
+    return best50;
 }
 
 }  // namespace mithril
