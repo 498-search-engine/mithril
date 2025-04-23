@@ -44,7 +44,10 @@ public:
         return query;
     }
 
-    static void SendResults(int sockfd, const QueryResults& data) {
+    static void SendResults(int sockfd, const QueryResults& data, const size_t total_size){
+        std::string size_header = std::to_string(total_size) + "\r\n\r\n";
+        sendAll(sockfd, size_header.c_str(), size_header.size());
+    
         std::string header = std::to_string(data.size()) + "\r\n\r\n";
         sendAll(sockfd, header.c_str(), header.size());
 
@@ -93,8 +96,8 @@ public:
         }
     }
 
-    static QueryResults ReadResults(int sockfd) {
-        // blocking until read can happen
+    static QueryResults ReadResults(int sockfd, size_t& total_size){
+        //blocking until read can happen
         QueryResults result;
 
         auto recv_until_delim = [&](const std::string& delim, std::string what) {
@@ -111,6 +114,11 @@ public:
             }
             return buffer;
         };
+        
+        std::string size_header = recv_until_delim("\r\n\r\n", "header");
+        size_t size_pos = size_header.find("\r\n\r\n");
+        if (size_pos == std::string::npos) throw std::runtime_error("Invalid size header format");
+        total_size = std::stoi(size_header.substr(0, size_pos));
 
         std::string header = recv_until_delim("\r\n\r\n", "header");
         size_t pos = header.find("\r\n\r\n");

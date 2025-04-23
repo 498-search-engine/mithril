@@ -353,11 +353,11 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
         if (coordinator_initialized_) {
             spdlog::info("Executing distributed query: '{}'", query_text);
 
-            auto doc_ids = query_coordinator_->send_query_to_workers(query_text);
+            auto [doc_ids, num_results] = query_coordinator_->send_query_to_workers(query_text);
 
-            size_t num_results = std::min(doc_ids.size(), static_cast<size_t>(max_results));
+            // num_results = std::min(num_results, static_cast<size_t>(max_results));
 
-            spdlog::info("⭐ Received {} results from coordinator", doc_ids.size());
+            spdlog::info("⭐ Received {} results from coordinator", num_results);
 
             json = GenerateJsonResults(doc_ids, num_results, false, temp);
             return json;
@@ -454,11 +454,11 @@ std::string SearchPlugin::GenerateJsonResults(const QueryResults& results,
                                               bool demo_mode,
                                               const std::string& error) {
     std::string json;
-    json.reserve(1024 + num_results * 256);
+    json.reserve(1024 + results.size() * 256);
 
     json = "{\"results\":[";
 
-    for (size_t i = 0; i < num_results; i++) {
+    for (size_t i = 0; i < results.size(); i++) {
         const auto& result = results[i];
         uint32_t doc_id = std::get<0>(result);
         uint32_t score = std::get<1>(result);
@@ -484,7 +484,7 @@ std::string SearchPlugin::GenerateJsonResults(const QueryResults& results,
         json += "}";
     }
 
-    json += "],\"total\":" + std::to_string(results.size());
+    json += "],\"total\":" + std::to_string(num_results);
     json += ",\"time_ms\":0";
 
     if (demo_mode)
