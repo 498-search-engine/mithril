@@ -64,8 +64,11 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
 
     // aggregate results
     QueryResult_t aggregated;
-    for (const auto& marginal : marginal_results_)
+
+    for (const auto& marginal : marginal_results_) {
         aggregated.insert(aggregated.end(), marginal.begin(), marginal.end());
+    }
+
     std::sort(aggregated.begin(), aggregated.end(), [](const auto& a, const auto& b) {
         if (std::get<1>(a) != std::get<1>(b)) {
             return std::get<1>(a) > std::get<1>(b);
@@ -178,7 +181,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         }
     }
 
-    bool shortCircuit = tokens.size() > RESULTS_REQUIRED_TO_SHORTCIRCUIT;
+    bool shortCircuit = matches.size() > RESULTS_REQUIRED_TO_SHORTCIRCUIT;
     uint32_t resultsCollectedAboveMin = 0;
 
     for (uint32_t match : matches) {
@@ -194,18 +197,25 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         uint32_t score = ranking::GetFinalScore(
             query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
-        if (shortCircuit && score > SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
-            resultsCollectedAboveMin += 1;
-            if (resultsCollectedAboveMin > RESULTS_COLLECTED_AFTER_SHORTCIRCUIT) {
-                break;
-            }
-        }
+        // if (shortCircuit && score >= SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
+        //     resultsCollectedAboveMin += 1;
+        //     if (resultsCollectedAboveMin > RESULTS_COLLECTED_AFTER_SHORTCIRCUIT) {
+        //         break;
+        //     }
+        // }
     }
 
-    uint32_t top50 = std::min<uint32_t>(ranked_matches.size(), 50);
-    QueryResult_t best50(ranked_matches.begin(), ranked_matches.begin() + top50);
 
-    return best50;
+    std::sort(ranked_matches.begin(), ranked_matches.end(), [](const auto& a, const auto& b) {
+        if (std::get<1>(a) != std::get<1>(b)) {
+            return std::get<1>(a) > std::get<1>(b);
+        }
+        return std::get<0>(a) > std::get<0>(b);
+    });
+
+    int top50 = std::min((int)ranked_matches.size(), 50);
+
+    return QueryResult_t(ranked_matches.begin(), ranked_matches.begin() + top50);
 }
 
 }  // namespace mithril
