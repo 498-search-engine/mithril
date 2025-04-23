@@ -17,6 +17,9 @@
 #include "intersect.h"
 #include "PositionIndex.h"
 #include "core/mem_map_file.h"
+#include "ISRFactory.h"
+#include "IdentityISR.h"
+#include "TextPreprocessor.h"
 
 #include <memory>
 #include <string>
@@ -24,8 +27,7 @@
 #include <utility>
 #include <vector>
 
-
-using namespace mithril;
+using namespace mithril; // TODO: bad, put everything in a namespace{} instead
 
 // TODO: Determine if we should limit the number of documents we read
 using DocIDArray = std::vector<int32_t>;
@@ -34,6 +36,30 @@ const int MAX_DOCUMENTS = 1e5;
 
 // namespace mithril {
 
+namespace mithril {
+namespace detail {
+
+inline mithril::FieldType TokenTypeToField(TokenType token_type) {
+    switch (token_type) {
+        case TokenType::WORD:
+            return mithril::FieldType::ALL;
+        case TokenType::TITLE:
+            return mithril::FieldType::TITLE;
+        case TokenType::URL:
+            return mithril::FieldType::URL;
+        case TokenType::ANCHOR:
+            return mithril::FieldType::ANCHOR;
+        case TokenType::DESC:
+            return mithril::FieldType::DESC;
+        case TokenType::BODY:
+            return mithril::FieldType::BODY;
+        default: // WARNING: this should not happen
+            return mithril::FieldType::ALL;
+    }
+}
+
+}  // detail
+}  // mithril
 
 class Query {
 public:
@@ -66,22 +92,26 @@ public:
     Token get_token() { return token_; }
 
     std::vector<uint32_t> evaluate() const override {
-        mithril::TermReader term(query::QueryConfig::GetIndexPath(), token_.value, index_file_, term_dict_, position_index_);
+        TermReaderFactory term_reader_factory(index_file_, term_dict_, position_index_);
+        const auto field = mithril::detail::TokenTypeToField(token_.type);
+        auto term = term_reader_factory.CreateISR(token_.value, field);
 
         std::vector<uint32_t> results;
         results.reserve(MAX_DOCUMENTS);
 
-        while (term.hasNext()) {
-            const uint32_t docId = term.currentDocID();
+        while (term->hasNext()) {
+            const uint32_t docId = term->currentDocID();
             results.emplace_back(docId);
-            term.moveNext();
+            term->moveNext();
         }
 
         return results;
     }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        return std::make_unique<mithril::TermReader>(query::QueryConfig::GetIndexPath(), token_.value, index_file_, term_dict_, position_index_);
+        TermReaderFactory term_reader_factory(index_file_, term_dict_, position_index_);
+        const auto field = mithril::detail::TokenTypeToField(token_.type);
+        return term_reader_factory.CreateISR(token_.value, field);
     }
 
     [[nodiscard]] std::string to_string() const override { return "TERM(" + token_.value + ")"; }
@@ -95,7 +125,6 @@ private:
     mithril::TermDictionary& term_dict_;
     mithril::PositionIndex& position_index_;
 };
-
 
 class AndQuery : public Query {
     Query* left_;
@@ -118,10 +147,22 @@ public:
     }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
-        readers.push_back(std::move(left_->generate_isr()));
-        readers.push_back(std::move(right_->generate_isr()));
-        return std::make_unique<mithril::TermAND>(std::move(readers));
+        auto left_isr = left_->generate_isr();
+        auto right_isr = right_->generate_isr();
+
+        // TODO: decide if this is the right behaviour
+        if (left_isr->isIdentity() && right_isr->isIdentity()) {
+            return std::make_unique<mithril::IdentityISR>();
+        } else if (left_isr->isIdentity()) {
+            return std::move(right_isr);
+        } else if (right_isr->isIdentity()) {
+            return std::move(left_isr);
+        } else {
+            std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
+            readers.push_back(std::move(left_isr));
+            readers.push_back(std::move(right_isr));
+            return std::make_unique<mithril::TermAND>(std::move(readers));
+        }
     }
 
     [[nodiscard]] std::string to_string() const override {
@@ -152,10 +193,22 @@ public:
     }
 
     [[nodiscard]] virtual std::unique_ptr<mithril::IndexStreamReader> generate_isr() const override {
-        std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
-        readers.push_back(std::move(left_->generate_isr()));
-        readers.push_back(std::move(right_->generate_isr()));
-        return std::make_unique<mithril::TermOR>(std::move(readers));
+        auto left_isr = left_->generate_isr();
+        auto right_isr = right_->generate_isr();
+
+        // TODO: decide if this is the right behaviour
+        if (left_isr->isIdentity() && right_isr->isIdentity()) {
+            return std::make_unique<mithril::IdentityISR>();
+        } else if (left_isr->isIdentity()) {
+            return std::move(right_isr);
+        } else if (right_isr->isIdentity()) {
+            return std::move(left_isr);
+        } else {
+            std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
+            readers.push_back(std::move(left_isr));
+            readers.push_back(std::move(right_isr));
+            return std::make_unique<mithril::TermAND>(std::move(readers));
+        }
     }
 
     [[nodiscard]] std::string to_string() const override {

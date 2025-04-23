@@ -31,7 +31,7 @@ auto Lexer::NextToken() -> Token {
         return LexQuotedPhrase();
     } else if (c == '\'') {
         return LexSingleQuotedPhrase();
-    } else if (c == ':' || c == '(' || c == ')') {
+    } else if (c == '(' || c == ')') {
         return LexSymbol();
     } else {
         // Allow any other character to be part of a word
@@ -122,8 +122,7 @@ auto Lexer::LexWordOrKeyword() -> Token {
     size_t start = position_;
     // Allow any characters except whitespace and special symbols
     while (position_ < input_.length() && 
-           !std::isspace(input_[position_]) && 
-           input_[position_] != ':' && 
+           !std::isspace(input_[position_]) &&  
            input_[position_] != '(' && 
            input_[position_] != ')' && 
            input_[position_] != '"' && 
@@ -133,13 +132,23 @@ auto Lexer::LexWordOrKeyword() -> Token {
 
     std::string word = input_.substr(start, position_ - start);
 
+    // Check for special prefixes
+    if (word.size() > 6 && word.substr(0, 6) == "title:") {
+        return Token(TokenType::TITLE, word.substr(6));
+    } else if (word.size() > 4 && word.substr(0, 4) == "url:") {
+        return Token(TokenType::URL, word.substr(4));
+    } else if (word.size() > 7 && word.substr(0, 7) == "anchor:") {
+        return Token(TokenType::ANCHOR, word.substr(7));
+    } else if (word.size() > 5 && word.substr(0, 5) == "desc:") {
+        return Token(TokenType::DESC, word.substr(5));
+    }
+
     if (IsOperatorKeyword(word)) {
         return Token(TokenType::OPERATOR, word);
-    } else if (IsFieldKeyword(word)) {
-        return Token(TokenType::FIELD, word);
-    } else {
-        return Token(TokenType::WORD, word);
     }
+
+    return Token(TokenType::WORD, word);
+
 }
 
 auto Lexer::LexQuotedPhrase() -> Token {
@@ -176,8 +185,8 @@ auto Lexer::LexSymbol() -> Token {
     char const c = GetChar();
 
     switch (c) {
-    case ':':
-        return {TokenType::COLON, ":"};
+    // case ':':
+    //     return {TokenType::COLON, ":"};
     case '(':
         return {TokenType::LPAREN, "("};
     case ')':

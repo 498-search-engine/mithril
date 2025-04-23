@@ -8,6 +8,7 @@
 #include "QueryConfig.h"
 #include "TermDictionary.h"
 #include "core/mem_map_file.h"
+#include "spdlog/spdlog.h"
 
 #include <iostream>
 #include <memory>
@@ -24,6 +25,7 @@ public:
           position_index_(index_dir) {
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
+        results_.reserve(1000);
     }
 
     auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
@@ -37,13 +39,32 @@ public:
     }
 
     std::vector<uint32_t> EvaluateQuery(std::string input) {
-        Parser parser(input, index_file_, term_dict_, position_index_);
-        auto queryTree = parser.parse();
-        if (!queryTree) {
-            std::cerr << "Failed to parse query: " << input << std::endl;
+
+        try {
+            spdlog::info("🚀 Evaluating query: {}", input);
+            Parser parser(input, index_file_, term_dict_, position_index_);
+
+            auto queryTree = parser.parse();
+            if (!queryTree) {
+                std::cerr << "Failed to parse query: " << input << std::endl;
+                return {};
+            }
+            spdlog::info("⭐ Parsing query: {}", input);
+            spdlog::info("⭐ Query structure: {}", queryTree->to_string());
+
+            results_.clear();
+            auto isr = queryTree->generate_isr();
+
+            while (isr->hasNext()) {
+                results_.emplace_back(isr->currentDocID());
+                isr->moveNext();
+            }
+            return std::move(results_);
+        } catch (const std::exception& e) {
+            spdlog::warn("Error evaluating query: {}", e.what());
             return {};
         }
-        return queryTree->evaluate();
+        // return queryTree->evaluate();
     }
 
     void DisplayTokens(const std::vector<Token>& tokens) const {
@@ -76,6 +97,7 @@ private:
     mithril::DocumentMapReader map_reader_;
     core::MemMapFile index_file_;
     mithril::TermDictionary term_dict_;
+    std::vector<uint32_t> results_;
 };
 
 #endif /* QUERYENGINE_H */

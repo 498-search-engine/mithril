@@ -29,7 +29,7 @@ public:
      * @param term : std::string
      * @return std::unique_ptr<IndexStreamReader> 
      */
-    std::unique_ptr<IndexStreamReader> CreateISR(const std::string& term, FieldType field);
+    std::unique_ptr<IndexStreamReader> CreateISR(const std::string& term, FieldType field = FieldType::ALL);
 
 private:
     const core::MemMapFile& index_file_;

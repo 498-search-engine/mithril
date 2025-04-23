@@ -1,20 +1,20 @@
 #ifndef GRAMMAR_H_
 #define GRAMMAR_H_
 
+#include "../../index/src/TextPreprocessor.h"
 #include "Lexer.h"
+#include "PositionIndex.h"
 #include "Query.h"
 #include "QueryConfig.h"
 #include "TermDictionary.h"
 #include "Token.h"
-#include "PositionIndex.h"
 #include "core/mem_map_file.h"
 
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
-#include "../../index/src/TextPreprocessor.h"
 #include <unordered_map>
+#include <vector>
 
 namespace mithril {
 
@@ -25,11 +25,15 @@ public:
 
 class Parser {
 public:
-    explicit Parser(const std::string& input, const core::MemMapFile& index_file,
-                    TermDictionary& term_dict, PositionIndex& position_index)
-        : input_(input), index_file_(index_file), term_dict_(term_dict),
-          position_index_(position_index), current_position_(0)
-    {
+    explicit Parser(const std::string& input,
+                    const core::MemMapFile& index_file,
+                    TermDictionary& term_dict,
+                    PositionIndex& position_index)
+        : input_(input),
+          index_file_(index_file),
+          term_dict_(term_dict),
+          position_index_(position_index),
+          current_position_(0) {
         Lexer lexer(input);
         while (!lexer.EndOfInput()) {
             auto token = lexer.NextToken();
@@ -156,9 +160,12 @@ private:
         }
 
         // Handle keywords (simple terms)
-        if (match(TokenType::WORD)) {
-            return std::make_unique<TermQuery>(Token(TokenType::WORD, tokens_[current_position_ - 1].value),
-                                               index_file_, term_dict_, position_index_);
+
+
+        if (match(TokenType::WORD) || match(TokenType::TITLE) || match(TokenType::URL) || match(TokenType::ANCHOR) ||
+            match(TokenType::DESC)) {
+            return std::make_unique<TermQuery>(
+                Token(tokens_[current_position_ - 1].type, tokens_[current_position_ - 1].value), index_file_, term_dict_, position_index_);
         }
 
         // Handle exact matches (quoted terms)
@@ -166,15 +173,18 @@ private:
             // When you implement PhraseQuery, uncomment this:
             // return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1].value);
             // For now, create a term query with the phrase content
-            return std::make_unique<QuoteQuery>(tokens_[current_position_ - 1], index_file_, term_dict_, position_index_);
+            return std::make_unique<QuoteQuery>(
+                tokens_[current_position_ - 1], index_file_, term_dict_, position_index_);
             // return std::make_unique<QuoteQuery>(Token(TokenType::QUOTE, tokens_[current_position_ - 1]),
             //                                    index_file_, term_dict_, position_index_);
         }
 
         // Handle fuzzy phrase matching
         if (match(TokenType::PHRASE)) {
-            // return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1], index_file_, term_dict_, position_index_);
-            return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1], index_file_, term_dict_, position_index_);
+            // return std::make_unique<PhraseQuery>(tokens_[current_position_ - 1], index_file_, term_dict_,
+            // position_index_);
+            return std::make_unique<PhraseQuery>(
+                tokens_[current_position_ - 1], index_file_, term_dict_, position_index_);
         }
 
         // Handle grouped expressions
@@ -203,8 +213,8 @@ private:
         throw ParseException("Expected ':' after field name");
     }
 
-    void makeTokenMap(){
-        for (auto& token : tokens_){
+    void makeTokenMap() {
+        for (auto& token : tokens_) {
             if (token.type == TokenType::WORD or token.type == TokenType::QUOTE) {
                 ++token_mult[token.value];
             }
