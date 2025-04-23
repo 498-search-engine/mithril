@@ -93,6 +93,7 @@ struct RPCHandler {
         std::string header = recv_until_delim("\r\n\r\n", "header");
         size_t pos = header.find("\r\n\r\n");
         if (pos == std::string::npos) throw std::runtime_error("Invalid header format");
+        spdlog::warn("STOI PROBLEM Header: {}", header);
         uint32_t num_entries = std::stoi(header.substr(0, pos));
         //std::cout << num_entries <<  " entries" << std::endl;
         
@@ -110,7 +111,8 @@ struct RPCHandler {
             std::string title_len = recv_until_delim("\r\n\r\n", "title_length");
             size_t pos_entry = title_len.find("\r\n\r\n");
             if (pos_entry == std::string::npos) throw std::runtime_error("Invalid title format");
-            uint32_t title_entries = std::stoi(title_len.substr(0, pos));
+            spdlog::warn("TRYING STOI Title length: {}", title_len);
+            uint32_t title_entries = std::stoi(title_len.substr(0, pos_entry));
             //std::cout << title_entries << " title entries" << std::endl;
             std::vector<std::string> title;
             for (size_t i = 0; i < title_entries; ++i){
