@@ -7,6 +7,10 @@
 #include <string>
 #include <spdlog/spdlog.h>
 
+#define RESULTS_REQUIRED_TO_SHORTCIRCUIT 20000
+#define SCORE_FOR_SHORTCIRCUIT_REQUIRED 5000
+#define RESULTS_COLLECTED_AFTER_SHORTCIRCUIT 100
+
 namespace mithril {
 
 using QueryResult_t = QueryManager::QueryResult;
@@ -70,7 +74,7 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     });
 
     auto top50 = std::min<uint32_t>(aggregated.size(), 50);
-    QueryResult_t filtered_results(aggregated.begin(), aggregated.begin()+top50);
+    QueryResult_t filtered_results(aggregated.begin(), aggregated.begin() + top50);
     spdlog::info("Returning results of size: {}", filtered_results.size());
     return filtered_results;
 }
@@ -174,6 +178,9 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         }
     }
 
+    bool shortCircuit = tokens.size() > RESULTS_REQUIRED_TO_SHORTCIRCUIT;
+    uint32_t resultsCollectedAboveMin = 0;
+
     for (uint32_t match : matches) {
         const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
         if (!doc_opt.has_value()) {
@@ -187,10 +194,16 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         uint32_t score = ranking::GetFinalScore(
             query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
+        if (shortCircuit && score > SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
+            resultsCollectedAboveMin += 1;
+            if (resultsCollectedAboveMin > RESULTS_COLLECTED_AFTER_SHORTCIRCUIT) {
+                break;
+            }
+        }
     }
 
     uint32_t top50 = std::min<uint32_t>(ranked_matches.size(), 50);
-    QueryResult_t best50(ranked_matches.begin(), ranked_matches.begin()+top50);
+    QueryResult_t best50(ranked_matches.begin(), ranked_matches.begin() + top50);
 
     return best50;
 }
