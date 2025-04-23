@@ -29,7 +29,7 @@ void BM25::LoadIndexStats(const std::string& index_dir) {
 
     average_body_length_ = doc_count_ > 0 ? static_cast<double>(bodyFieldTotal) / doc_count_ : 0.0;
 
-    spdlog::info("Loaded index stats: {} documents, avg body lengths: [{:.2f}", doc_count_, average_body_length_);
+    spdlog::info("Loaded index stats: {} documents, avg body lengths: {:.2f}", doc_count_, average_body_length_);
 }
 
 double BM25::CalculateIDF(uint32_t doc_freq) const {

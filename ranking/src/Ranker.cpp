@@ -153,6 +153,8 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         ;
     }
 
+    float orderedTitleScore = std::sqrt(ranking::dynamic::OrderedMatchScore(query, doc.title));
+
     dynamic::RankerFeatures features{
         // Boolean presence flags
         .query_in_url = isInURL,
@@ -165,6 +167,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         .coverage_percent_query_title = (wordsInTitle / totalTermsSize),
         .coverage_percent_query_description = (wordsInDesc / totalTermsSize),
 
+        .order_sensitive_title = orderedTitleScore,
         // Query Density percentage features
         .density_percent_query_url = densityUrl,
         .density_percent_query_title = densityTitle,

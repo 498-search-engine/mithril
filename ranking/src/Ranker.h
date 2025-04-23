@@ -20,5 +20,5 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const PositionIndex& position_index,
                        const std::unordered_map<std::string, uint32_t>& termFreq);
 
-static inline BM25 BM25Lib{"index_output"};
+inline BM25 BM25Lib{"index_output"};
 }  // namespace mithril::ranking
