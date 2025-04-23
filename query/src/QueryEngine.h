@@ -24,6 +24,7 @@ public:
           index_file_(index_dir + "/final_index.data"),
           term_dict_(index_dir),
           position_index_(index_dir) {
+        spdlog::info("about to make query engine for {}", index_dir);
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
         spdlog::info("about to make bm25 for {}", index_dir);
