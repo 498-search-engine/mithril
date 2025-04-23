@@ -1,6 +1,7 @@
 #ifndef QUERYENGINE_H
 #define QUERYENGINE_H
 
+#include "BM25.h"
 #include "DocumentMapReader.h"
 #include "Parser.h"
 #include "PositionIndex.h"
@@ -24,6 +25,7 @@ public:
           position_index_(index_dir) {
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
+        BM25Lib_ = new ranking::BM25(index_dir);
     }
 
     auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
@@ -72,6 +74,7 @@ public:
 
     mithril::PositionIndex position_index_;
     mithril::TermDictionary term_dict_;
+    ranking::BM25* BM25Lib_;
 
 private:
     mithril::DocumentMapReader map_reader_;
