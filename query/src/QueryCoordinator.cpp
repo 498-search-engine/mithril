@@ -6,9 +6,9 @@
 #include "rpc_handler.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
-#include <stdexcept>
 
 using namespace core;
 using namespace mithril;
@@ -105,7 +105,7 @@ QueryResults mithril::QueryCoordinator::send_query_to_workers(const std::string&
 }
 
 QueryResults mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
-                                                                        const std::string& query) {
+                                                               const std::string& query) {
 
     QueryResults results;
 

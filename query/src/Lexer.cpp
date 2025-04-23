@@ -57,7 +57,7 @@ auto Lexer::EndOfInput() -> bool {
 std::unordered_map<std::string, int> Lexer::GetTokenFrequencies() const {
     auto tokens = PeekWithoutConsuming();
     std::unordered_map<std::string, int> token_ct;
-    for (auto& token : tokens){
+    for (auto& token : tokens) {
         if (token.type == TokenType::WORD or token.type == TokenType::QUOTE) {
             ++token_ct[token.value];
         }

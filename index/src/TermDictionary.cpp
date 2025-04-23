@@ -106,7 +106,7 @@ TermDictionary::TermDictionary(const std::string& index_dir) {
         offset += sizeof(uint32_t) + term_len + sizeof(uint64_t) + sizeof(uint32_t);
     }
 
-    std::cout << "Memory mapped term dictionary with " << term_count_ << " terms" << std::endl;
+    spdlog::info("Memory mapped term dictionary with {} terms", term_count_);
     loaded_ = true;
 }
 
