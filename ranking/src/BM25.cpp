@@ -8,6 +8,7 @@
 namespace mithril { namespace ranking {
 
 BM25::BM25(const std::string& index_dir) {
+    spdlog::info("about to load index stats for {}", index_dir);
     LoadIndexStats(index_dir);
 }
 

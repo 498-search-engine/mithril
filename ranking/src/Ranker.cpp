@@ -63,7 +63,8 @@ GetDocumentFrequencies(const TermDictionary& term_dict, const std::vector<std::p
     return map;
 }
 
-uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
+uint32_t GetFinalScore(BM25* BM25Lib,
+                       const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
                        const data::DocInfo& info,
                        const PositionIndex& position_index,

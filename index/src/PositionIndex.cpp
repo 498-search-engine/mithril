@@ -490,6 +490,7 @@ void PositionIndex::finalizeIndex(const std::string& output_dir) {
 
 bool PositionIndex::loadPosDict() {
     std::string posDict_file = index_dir_ + "/positions.dict";
+    spdlog::info("loading posDict {}", index_dir_);
 
     try {
         std::ifstream in(posDict_file, std::ios::binary);
@@ -519,7 +520,6 @@ bool PositionIndex::loadPosDict() {
             // Add to dict
             posDict_[term] = metadata;
         }
-
         return true;
     } catch (const std::exception& e) {
         spdlog::error("Error loading position dict: {}", e.what());
