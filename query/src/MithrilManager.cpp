@@ -7,6 +7,7 @@
 #include <memory>
 #include "Util.h"
 #include <chrono>
+#include <string>
 #include <spdlog/spdlog.h>
 
 void printUsage(const char* programName) {
@@ -23,7 +24,7 @@ struct MithrilManager {
     int server_fd;
 
     void Handle(int client_fd){
-        auto start = high_resolution_clock::now();
+        auto start = std::chrono::high_resolution_clock::now();
         connection_cleaner client(client_fd);
         //get query from socket
         try{
@@ -36,8 +37,8 @@ struct MithrilManager {
             //send the results back
             RPCHandler::SendResults(client.connectionfd, results);
             
-            auto end = high_resolution_clock::now();
-            auto duration = duration_cast<seconds>(end - start);
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<seconds>(end - start);
 
             spdlog::info("took {} seconds to answer query", to_string(duration.count()));
         } catch (std::exception& e){
