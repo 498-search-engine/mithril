@@ -16,6 +16,8 @@ QueryManager::QueryManager(const std::vector<std::string>& index_dirs)
     const auto num_workers = index_dirs.size();
     marginal_results_.resize(num_workers);
     for (size_t i = 0; i < num_workers; ++i) {
+        // Init ranker
+        mithril::ranking::InitRanker(index_dirs[i]);
         query_engines_.emplace_back(std::make_unique<QueryEngine>(index_dirs[i]));
         threads_.emplace_back(&QueryManager::WorkerThread, this, i);
     }
