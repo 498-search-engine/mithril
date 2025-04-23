@@ -68,11 +68,12 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         return std::get<0>(a) > std::get<0>(b);
     });
 
-    size_t top_1k = std::min<size_t>(1000, aggregated.size());
-    QueryResult_t first1k(aggregated.begin(), aggregated.begin() + top_1k);
+    // size_t top_1k = std::min<size_t>(1000, aggregated.size());
+    // QueryResult_t first1k(aggregated.begin(), aggregated.begin() + top_1k);
 
-    spdlog::info("Returning results of size: {}", first1k.size());
-    return first1k;
+    spdlog::info("Returning results of size: {}", aggregated.size());
+    // return first1k;
+    return aggregated;
 }
 
 void QueryManager::WorkerThread(size_t worker_id) {
@@ -90,10 +91,10 @@ void QueryManager::WorkerThread(size_t worker_id) {
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
 
-        size_t top_1k = std::min<size_t>(1000, result.size());
-        vector<uint32_t> first1k(result.begin(), result.begin() + top_1k);
+        // size_t top_1k = std::min<size_t>(1000, result.size());
+        // vector<uint32_t> first1k(result.begin(), result.begin() + top_1k);
 
-        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, first1k);
+        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, result);
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
@@ -159,9 +160,10 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
     }
 
-    size_t top_50 = std::min<size_t>(50, ranked_matches.size());
-    QueryResult_t top50(ranked_matches.begin(), ranked_matches.begin() + top_50);
-    return top50;
+    // size_t top_50 = std::min<size_t>(50, ranked_matches.size());
+    // QueryResult_t top50(ranked_matches.begin(), ranked_matches.begin() + top_50);
+    // return top50;
+    return ranked_matches;
 }
 
 }  // namespace mithril
