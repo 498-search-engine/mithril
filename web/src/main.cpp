@@ -1,3 +1,4 @@
+#include "Ranker.h"
 #include "SearchPlugin.h"
 #include "Server.h"
 
@@ -44,6 +45,9 @@ int main(int argc, char** argv) {
             spdlog::error("Web root directory doesn't exist: {}", web_root);
             return 1;
         }
+
+        // Init ranker
+        mithril::ranking::InitRanker(index_path);
 
         // Create and init search plugin with both paths
         auto search_plugin = new SearchPlugin(server_config_path, index_path);

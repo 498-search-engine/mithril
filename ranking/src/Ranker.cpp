@@ -154,7 +154,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                                (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
 
-        weightedBM25 += static_cast<float>(BM25Lib.ScoreTermForDoc(info, termFreq.at(term), bodyPositions.size())) *
+        weightedBM25 += static_cast<float>(BM25Lib->ScoreTermForDoc(info, termFreq.at(term), bodyPositions.size())) *
                         (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
     }
 
