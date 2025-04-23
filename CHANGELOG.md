@@ -79,6 +79,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Link server to mithril managers
 - add order sensitive ranking & BM25 (#166)
 - performance improvements to position index (#172)
+- Query Engine V2, add in decorator to quries, AND/OR/NOT, FIELD, QUOTE queries working (#149)
 
 ### Fixed
 
