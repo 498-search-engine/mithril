@@ -2,12 +2,18 @@
 #define TOKEN_H_
 
 #include <string>
+#include <vector> 
 
 enum class TokenType {
     WORD,   // simple_term: alphanumeric word
     QUOTE,  // quoted_term: quoted phrase
-    // PHRASE,     // Fuzzy phrase matching, looser than QUOTE
+    PHRASE, // fuzzy phrase matching, looser than QUOTE
     FIELD,     // TITLE or TEXT
+    TITLE,
+    URL,
+    ANCHOR,
+    DESC,
+    BODY,
     COLON,     // ':'
     OPERATOR,  // AND, OR, NOT, or implicit SPACE
     LPAREN,    // '('
@@ -31,6 +37,9 @@ struct Token {
         case TokenType::QUOTE:
             typeStr = "QUOTE";
             break;
+        case TokenType::PHRASE:
+            typeStr = "PHRASE";
+            break;
         case TokenType::FIELD:
             typeStr = "FIELD";
             break;
@@ -49,12 +58,50 @@ struct Token {
         case TokenType::EOFTOKEN:
             typeStr = "EOF";
             break;
+        case TokenType::TITLE:
+            typeStr = "TITLE";
+            break;
+        case TokenType::URL:
+            typeStr = "URL";
+            break;
+        case TokenType::ANCHOR:
+            typeStr = "ANCHOR";
+            break;
+        case TokenType::DESC:
+            typeStr = "DESC";
+            break; 
         default:
             typeStr = "UNKNOWN";
         }
 
-        return "[" + typeStr + ": \"" + value + "\"]";
+        return "[" + typeStr + ": " + value + "]";
     }
 };
+
+
+inline static std::vector<std::string> ExtractQuoteTerms(const Token& quote_token) {
+    if (quote_token.type != TokenType::QUOTE && quote_token.type != TokenType::PHRASE) {
+        printf("Token is not a quote or phrase but you are calling extract_quote_terms");
+        exit(1);
+    }
+
+    std::vector<std::string> terms;
+    std::string currentTerm;
+    
+    for (char c : quote_token.value) {
+        if (c == ' ') {
+            if (!currentTerm.empty()) {
+                terms.push_back(currentTerm);
+                currentTerm.clear();
+            }
+        } else {
+            currentTerm += c;
+        }
+    }
+    if (!currentTerm.empty()) {
+        terms.push_back(currentTerm);
+    }
+    return terms;
+}
 
 #endif  // TOKEN_H_

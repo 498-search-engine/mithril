@@ -18,8 +18,7 @@ namespace mithril {
 
 class TermQuote : public IndexStreamReader {
 public:
-    explicit TermQuote(DocumentMapReader& doc_reader,
-                       const std::string& index_path,
+    explicit TermQuote(const std::string& index_path,
                        const std::vector<std::string>& quote,
                        const core::MemMapFile& index_file,
                        TermDictionary& term_dict,
@@ -40,7 +39,6 @@ private:
     bool findNextMatch();
 
 private:
-    DocumentMapReader& doc_reader_;
     const std::string& index_path_;
     const std::vector<std::string>& quote_;
     const core::MemMapFile& index_file_;

@@ -362,7 +362,6 @@ std::string SearchPlugin::GenerateJsonResults(const QueryResults& doc_ids,
         if ((not url.empty()) and (not title.empty())) {
             json += ",\"url\":\"" + EscapeJsonString(url) + "\"";
 
-
             json += ",\"title\":\"" + EscapeJsonString(title) + "\"";
 
             json += ",\"snippet\":\"Document #" + std::to_string(doc_id) + ", Score: " + std::to_string(score) + "\"";

@@ -10,7 +10,7 @@ Lexer::Lexer(const std::string& input) : input_(input), position_(0), hasPeeked_
 
 // * ------- Public API -------
 
-Token Lexer::NextToken() {
+auto Lexer::NextToken() -> Token {
 
     if (hasPeeked_) {
         hasPeeked_ = false;
@@ -29,14 +29,20 @@ Token Lexer::NextToken() {
         return LexWordOrKeyword();
     } else if (c == '"') {
         return LexQuotedPhrase();
-    } else if (c == ':' || c == '(' || c == ')') {
+    } else if (c == '\'') {
+        return LexSingleQuotedPhrase();
+    } else if (c == '(' || c == ')') {
         return LexSymbol();
+    } else {
+        // Allow any other character to be part of a word
+        return LexWordOrKeyword();
     }
 
-    throw std::runtime_error(std::string("Unexpected character: ") + c);
+    // This line will never be reached as all cases are handled above
+    // throw std::runtime_error(std::string("Unexpected character: ") + c);
 }
 
-Token Lexer::PeekToken() {
+auto Lexer::PeekToken() -> Token {
     if (!hasPeeked_) {
         peekedToken_ = NextToken();
         hasPeeked_ = true;
@@ -44,7 +50,7 @@ Token Lexer::PeekToken() {
     return peekedToken_;
 }
 
-bool Lexer::EndOfInput() {
+auto Lexer::EndOfInput() -> bool {
     return PeekToken().type == TokenType::EOFTOKEN;
 }
 
@@ -78,15 +84,15 @@ void Lexer::SkipWhitespace() {
     }
 }
 
-char Lexer::PeekChar() const {
+auto Lexer::PeekChar() const -> char {
     return input_[position_];
 }
 
-char Lexer::GetChar() {
+auto Lexer::GetChar() -> char {
     return input_[position_++];
 }
 
-bool Lexer::MatchChar(char expected) {
+auto Lexer::MatchChar(char expected) -> bool {
     if (position_ < input_.length() && input_[position_] == expected) {
         ++position_;
         return true;
@@ -94,42 +100,58 @@ bool Lexer::MatchChar(char expected) {
     return false;
 }
 
-bool Lexer::IsAlpha(char c) const {
+auto Lexer::IsAlpha(char c) const -> bool {
     return std::isalpha(static_cast<unsigned char>(c));
 }
 
-bool Lexer::IsAlnum(char c) const {
+auto Lexer::IsAlnum(char c) const -> bool {
     return std::isalnum(static_cast<unsigned char>(c));
 }
 
-bool Lexer::IsOperatorKeyword(const std::string& word) const {
+auto Lexer::IsOperatorKeyword(const std::string& word) const -> bool {
     return query::QueryConfig::GetValidOperators().contains(word);
 }
 
-bool Lexer::IsFieldKeyword(const std::string& word) const {
+auto Lexer::IsFieldKeyword(const std::string& word) const -> bool {
     return query::QueryConfig::GetValidFields().contains(word);
 }
 
 // Lex individual token types
 
-Token Lexer::LexWordOrKeyword() {
+auto Lexer::LexWordOrKeyword() -> Token {
     size_t start = position_;
-    while (position_ < input_.length() && IsAlnum(input_[position_])) {
+    // Allow any characters except whitespace and special symbols
+    while (position_ < input_.length() && 
+           !std::isspace(input_[position_]) &&  
+           input_[position_] != '(' && 
+           input_[position_] != ')' && 
+           input_[position_] != '"' && 
+           input_[position_] != '\'') {
         ++position_;
     }
 
     std::string word = input_.substr(start, position_ - start);
 
+    // Check for special prefixes
+    if (word.size() > 6 && word.substr(0, 6) == "title:") {
+        return Token(TokenType::TITLE, word.substr(6));
+    } else if (word.size() > 4 && word.substr(0, 4) == "url:") {
+        return Token(TokenType::URL, word.substr(4));
+    } else if (word.size() > 7 && word.substr(0, 7) == "anchor:") {
+        return Token(TokenType::ANCHOR, word.substr(7));
+    } else if (word.size() > 5 && word.substr(0, 5) == "desc:") {
+        return Token(TokenType::DESC, word.substr(5));
+    }
+
     if (IsOperatorKeyword(word)) {
         return Token(TokenType::OPERATOR, word);
-    } else if (IsFieldKeyword(word)) {
-        return Token(TokenType::FIELD, word);
-    } else {
-        return Token(TokenType::WORD, word);
     }
+
+    return Token(TokenType::WORD, word);
+
 }
 
-Token Lexer::LexQuotedPhrase() {
+auto Lexer::LexQuotedPhrase() -> Token {
     GetChar();  // Consume the opening quote
 
     std::string phrase;
@@ -144,12 +166,27 @@ Token Lexer::LexQuotedPhrase() {
     throw std::runtime_error("Unterminated quoted phrase");
 }
 
-Token Lexer::LexSymbol() {
+auto Lexer::LexSingleQuotedPhrase() -> Token {
+    GetChar();  // Consume the opening single quote
+
+    std::string phrase;
+    while (position_ < input_.length()) {
+        char const c = GetChar();
+        if (c == '\'') {
+            return Token{TokenType::PHRASE, phrase};
+        }
+        phrase += c;
+    }
+
+    throw std::runtime_error("Unterminated single quoted phrase");
+}
+
+auto Lexer::LexSymbol() -> Token {
     char const c = GetChar();
 
     switch (c) {
-    case ':':
-        return {TokenType::COLON, ":"};
+    // case ':':
+    //     return {TokenType::COLON, ":"};
     case '(':
         return {TokenType::LPAREN, "("};
     case ')':
