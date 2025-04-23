@@ -89,6 +89,16 @@ bool TermQuote::findNextMatch() {
         return false;
     }
     
+    // Skip the current document if it's equal to the current_doc_id_ (to avoid duplicates)
+    if (stream_reader_->currentDocID() == current_doc_id_ && current_doc_id_ != 0) {
+        if (stream_reader_->hasNext()) {
+            stream_reader_->moveNext();
+        } else {
+            at_end_ = true;
+            return false;
+        }
+    }
+    
     // Current document should already be positioned by the stream reader
     const auto current_stream_doc = stream_reader_->currentDocID();
     
