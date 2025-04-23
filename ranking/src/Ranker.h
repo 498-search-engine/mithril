@@ -7,6 +7,11 @@
 
 namespace mithril::ranking {
 
+namespace {
+bool StartsWithStrict(const std::string& token, const std::string& word) {
+    return token.starts_with(word) && token != word;
+}
+}  // namespace
 inline bool IsValidToken(const std::string& token) {
     if (token.empty()) {
         return false;
@@ -16,8 +21,8 @@ inline bool IsValidToken(const std::string& token) {
         return false;
     }
 
-    if (token.starts_with("title") || token.starts_with("url") || token.starts_with("anchor") ||
-        token.starts_with("desc")) {
+    if (StartsWithStrict(token, "title") || StartsWithStrict(token, "url") || StartsWithStrict(token, "anchor") ||
+        StartsWithStrict(token, "desc")) {
         return false;
     }
 
