@@ -17,15 +17,6 @@ struct PositionInfo {
     std::unordered_map<std::string, std::vector<uint16_t>> term_positions;
 };
 
-struct SearchResult {
-    uint32_t doc_id;
-    uint32_t score;
-    std::string url;
-    std::string title;
-    PositionInfo positions;
-    std::string snippet;  // lazyfilled
-};
-
 class SearchPlugin : public mithril::PluginObject {
 public:
     SearchPlugin(const std::string& server_config_path, const std::string& index_path);
