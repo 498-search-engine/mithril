@@ -21,7 +21,7 @@ target_link_libraries(query PUBLIC
 add_executable_with_copy(mithril_lexer src/main.cpp)
 add_executable_with_copy(mithril_coordinator src/mithril_coordinator.cpp)
 add_executable_with_copy(mithril_worker src/mithril_worker.cpp)
-add_executable_with_copy(mithril_manager src/MithrilManager.cpp)
+add_executable_with_copy(mithril_manager src/mithril_manager.cpp)
 
 target_link_libraries(mithril_lexer PRIVATE query)
 target_link_libraries(mithril_coordinator PRIVATE query)
@@ -60,6 +60,6 @@ target_link_libraries(test_freq_ct PRIVATE query)
 # Tests registration
 add_test(NAME LexerTest COMMAND test_lexer)
 
-file(COPY server.conf DESTINATION ${CMAKE_SOURCE_DIR}/bin)
+file(COPY servers.conf DESTINATION ${CMAKE_SOURCE_DIR}/bin)
 file(COPY mithril_manager.conf DESTINATION ${CMAKE_SOURCE_DIR}/bin)
 file(COPY mithril_manager.conf DESTINATION ${DESTINATION_DIR})

@@ -172,16 +172,16 @@ There are many scripts here, you can find them all in `build/query`, however I w
 
 `/query/parser-driver`: super helpful for testing single queries
 
-Go to `query/src/server.conf` where we define the mithril worker server ip and ports
+Go to `query/src/servers.conf` where we define the mithril worker server ip and ports
 
 Run: 
 
 `./query/mithril_worker --index index_output --port <some_port>`
 
-make sure the port lines up with what is in `server.conf`
+make sure the port lines up with what is in `servers.conf`
 In another terminal, do: 
 
-`./query/mithril_coordinator --conf ../query/server.conf`
+`./query/mithril_coordinator --conf ../query/servers.conf`
 
 Then you can send queries from the coordinator to the worker! 
 
@@ -192,7 +192,7 @@ Then you can send queries from the coordinator to the worker!
 
 
 
-./query/mithril_coordinator --conf ../query/server.conf 
+./query/mithril_coordinator --conf ../query/servers.conf 
 
 <!-- Second Pass -->
 
