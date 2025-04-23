@@ -20,6 +20,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace mithril {
@@ -30,7 +31,9 @@ namespace mithril {
  */
 class QueryManager {
 public:
-    using QueryResult = std::vector<std::tuple<uint32_t, uint32_t, std::string, std::vector<std::string>>>;
+    using TermPositionMap = std::unordered_map<std::string, std::vector<uint16_t>>;
+    using QueryResult =
+        std::vector<std::tuple<uint32_t, uint32_t, std::string, std::vector<std::string>, TermPositionMap>>;
 
     /**
      * @brief Construct a new Query Manager object

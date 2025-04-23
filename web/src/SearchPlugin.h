@@ -5,12 +5,17 @@
 #include "QueryCoordinator.h"
 #include "QueryEngine.h"
 #include "QueryManager.h"
+#include "Snippets.h"
 
 #include <chrono>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
+
+struct PositionInfo {
+    std::unordered_map<std::string, std::vector<uint16_t>> term_positions;
+};
 
 class SearchPlugin : public mithril::PluginObject {
 public:
@@ -19,6 +24,7 @@ public:
 
     bool MagicPath(const std::string path) override;
     std::string ProcessRequest(std::string request) override;
+    std::string ProcessSnippetRequest(const std::string& request);
 
     struct CacheEntry {
         std::string result;
@@ -34,7 +40,7 @@ public:
     static constexpr std::chrono::seconds CACHE_TTL{300};  // 5min
 
 private:
-    using QueryResults = std::vector<std::tuple<uint32_t, uint32_t, std::string, std::vector<std::string>>>;
+    using QueryResults = QueryManager::QueryResult;
     std::unique_ptr<mithril::QueryCoordinator> query_coordinator_;
     std::unique_ptr<QueryManager> query_manager_;
     bool coordinator_initialized_ = false;
@@ -58,14 +64,18 @@ private:
                                     bool demo_mode,
                                     const std::string& error = "");
 
-    std::string GenerateJsonResults(const QueryResults& doc_ids,
-                                                  size_t num_results,
-                                                  bool demo_mode,
-                                                  const std::string& error);
+    std::string
+    GenerateJsonResults(const QueryResults& doc_ids, size_t num_results, bool demo_mode, const std::string& error);
     bool TryInitializeCoordinator();
     void CleanExpiredCache();
 
     static const std::vector<std::pair<std::string, std::string>> MOCK_RESULTS;
+
+    // snippets
+    std::string docs_path_;
+    std::unique_ptr<DocumentAccessor> doc_accessor_;
+    std::unique_ptr<SnippetGenerator> snippet_generator_;
+    std::string current_query_;
 };
 
 #endif  // WEB_SEARCHPLUGIN_H

@@ -167,7 +167,7 @@ void QueryManager::WorkerThread(size_t worker_id) {
         if (!result.empty()) {
             result_ranked = HandleRanking(query_to_run, worker_id, result);
         }
-        
+
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
@@ -260,7 +260,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
     for (uint32_t match : matches) {
         const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
         if (!doc_opt.has_value()) {
-            ranked_matches.push_back({match, 0, "", {}});
+            ranked_matches.push_back({match, 0, "", {}, {}});
             continue;
         }
 
@@ -269,7 +269,9 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
         uint32_t score = ranking::GetFinalScore(
             query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
-        ranked_matches.emplace_back(match, score, doc.url, doc.title);
+
+        ranked_matches.emplace_back(match, score, doc.url, doc.title, {));
+
         if (shortCircuit && score >= SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
             resultsCollectedAboveMin += 1;
             if (resultsCollectedAboveMin >= RESULTS_COLLECTED_AFTER_SHORTCIRCUIT) {

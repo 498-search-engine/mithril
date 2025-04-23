@@ -32,6 +32,19 @@ SearchPlugin::SearchPlugin(const std::string& server_config_path, const std::str
 
     spdlog::info("Initializing search plugin with config: {}", server_config_path);
 
+    // Determine docs path
+    char* docs_env = std::getenv("MITHRIL_DOCS_PATH");
+    if (docs_env != nullptr) {
+        docs_path_ = docs_env;
+        spdlog::info("Using docs path from environment: {}", docs_path_);
+    } else {
+        // docs_path_ = "/Users/sharmadhavs/Downloads/w25/498/mithril/bin/docs";
+        throw std::runtime_error("MITHRIL_DOCS_PATH environment variable not set");
+    }
+
+    doc_accessor_ = std::make_unique<DocumentAccessor>(docs_path_, 10000);
+    snippet_generator_ = std::make_unique<SnippetGenerator>(*doc_accessor_);
+
     // Initialize local query engine
     if (!index_path.empty()) {
         try {
@@ -79,7 +92,7 @@ bool SearchPlugin::TryInitializeCoordinator() {
 }
 
 bool SearchPlugin::MagicPath(const std::string path) {
-    return path.rfind("/api/search", 0) == 0;
+    return path.rfind("/api/search", 0) == 0 || path.rfind("/api/snippets", 0) == 0;
 }
 
 std::string SearchPlugin::DecodeUrlString(const std::string& encoded) {
@@ -118,6 +131,10 @@ std::string SearchPlugin::DecodeUrlString(const std::string& encoded) {
 }
 
 std::string SearchPlugin::ProcessRequest(std::string request) {
+    if (request.find("GET /api/snippets") != std::string::npos) {
+        return ProcessSnippetRequest(request);
+    }
+
     std::string query_text;
     int max_results = 50;
 
@@ -132,6 +149,7 @@ std::string SearchPlugin::ProcessRequest(std::string request) {
 
         std::string encoded_query = request.substr(query_pos + 2, query_end - query_pos - 2);
         query_text = DecodeUrlString(encoded_query);
+        current_query_ = query_text;  // for snippet generation
     }
 
     // Parse max_results parameter if present
@@ -213,6 +231,100 @@ std::string SearchPlugin::ProcessRequest(std::string request) {
     }
 
     return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + json_result;
+}
+
+std::string SearchPlugin::ProcessSnippetRequest(const std::string& request) {
+    // Parse doc IDs from request
+    std::vector<uint32_t> doc_ids;
+    std::string query;
+
+    // Parse the doc IDs parameter
+    size_t ids_pos = request.find("ids=");
+    if (ids_pos != std::string::npos) {
+        size_t ids_end = request.find('&', ids_pos);
+        if (ids_end == std::string::npos)
+            ids_end = request.find(' ', ids_pos);
+        if (ids_end == std::string::npos)
+            ids_end = request.length();
+
+        std::string ids_str = request.substr(ids_pos + 4, ids_end - ids_pos - 4);
+
+        // Split by comma
+        size_t pos = 0;
+        std::string delimiter = ",";
+        std::string token;
+        while ((pos = ids_str.find(delimiter)) != std::string::npos) {
+            token = ids_str.substr(0, pos);
+            try {
+                doc_ids.push_back(std::stoul(token));
+            } catch (...) {
+            }
+            ids_str.erase(0, pos + delimiter.length());
+        }
+        if (!ids_str.empty()) {
+            try {
+                doc_ids.push_back(std::stoul(ids_str));
+            } catch (...) {
+            }
+        }
+    }
+
+    if (doc_ids.size() > 50) {
+        doc_ids.resize(50);
+    }
+
+    // Parse query parameter
+    size_t q_pos = request.find("q=");
+    if (q_pos != std::string::npos) {
+        size_t q_end = request.find('&', q_pos);
+        if (q_end == std::string::npos)
+            q_end = request.find(' ', q_pos);
+        if (q_end == std::string::npos)
+            q_end = request.length();
+
+        std::string encoded_query = request.substr(q_pos + 2, q_end - q_pos - 2);
+        query = DecodeUrlString(encoded_query);
+    } else {
+        // Use stored query if available
+        query = current_query_;
+    }
+
+    // If no query or doc IDs, return error
+    if (query.empty() || doc_ids.empty()) {
+        return "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n\r\n"
+               "{\"error\":\"Missing required parameters\"}";
+    }
+
+    // Parse query into terms
+    std::vector<std::string> query_terms;
+    std::stringstream ss(query);
+    std::string term;
+    while (ss >> term) {
+        if (term != "AND" && term != "OR" && term != "NOT") {
+            query_terms.push_back(term);
+        }
+    }
+
+    // Generate snippets for each doc ID -andbuild JSON manually
+    std::string json_response = "{";
+    bool first = true;
+
+    for (uint32_t doc_id : doc_ids) {
+        // Look up position data for this doc (currently empty)
+        std::unordered_map<std::string, std::vector<uint16_t>> positions;
+
+        std::string snippet = snippet_generator_->generateSnippet(doc_id, query_terms, positions);
+
+        if (!first) {
+            json_response += ",";
+        }
+        first = false;
+
+        json_response += "\"" + std::to_string(doc_id) + "\":\"" + EscapeJsonString(snippet) + "\"";
+    }
+
+    json_response += "}";
+    return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + json_response;
 }
 
 std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_results) {
@@ -337,45 +449,43 @@ std::string SearchPlugin::GenerateJsonResults(const std::vector<std::pair<uint32
     return json;
 }
 
-std::string SearchPlugin::GenerateJsonResults(const QueryResults& doc_ids,
+std::string SearchPlugin::GenerateJsonResults(const QueryResults& results,
                                               size_t num_results,
                                               bool demo_mode,
                                               const std::string& error) {
     std::string json;
-    json.reserve(1024 + num_results * 256);  // Pre-allocate based on result count
+    json.reserve(1024 + num_results * 256);
 
     json = "{\"results\":[";
 
     for (size_t i = 0; i < num_results; i++) {
-        uint32_t doc_id = std::get<0>(doc_ids[i]);
-        uint32_t score = std::get<1>(doc_ids[i]);
+        const auto& result = results[i];
+        uint32_t doc_id = std::get<0>(result);
+        uint32_t score = std::get<1>(result);
+        const std::string& url = std::get<2>(result);
+        const auto& title_words = std::get<3>(result);
+        const auto& positions = std::get<4>(result);
 
         if (i > 0)
             json += ",";
 
         json += "{\"id\":" + std::to_string(doc_id);
+        json += ",\"url\":\"" + EscapeJsonString(url) + "\"";
 
-        // Handle document metadata based on mode
-        std::string url = std::get<2>(doc_ids[i]);
-        std::string title = FormatDocumentTitle(std::get<3>(doc_ids[i]));
+        std::string title = FormatDocumentTitle(title_words);
+        json += ",\"title\":\"" + EscapeJsonString(title) + "\"";
 
-        if ((not url.empty()) and (not title.empty())) {
-            json += ",\"url\":\"" + EscapeJsonString(url) + "\"";
+        // For now, use a placeholder snippet - we'll update this later
+        json += ",\"snippet\":\"Score: " + std::to_string(score) + "\"";
 
-            json += ",\"title\":\"" + EscapeJsonString(title) + "\"";
-
-            json += ",\"snippet\":\"Document #" + std::to_string(doc_id) + ", Score: " + std::to_string(score) + "\"";
-        } else {
-            json += ",\"url\":\"http://example.com/doc/" + std::to_string(doc_id) + "\"";
-            json += ",\"title\":\"Document " + std::to_string(doc_id) + "\"";
-            json += ",\"snippet\":\"Document metadata not available\"";
-        }
+        // We don't send positions to frontend yet - we'll use them server-side later
+        // This avoids bloating the response with data the frontend doesn't need yet
 
         json += "}";
     }
 
-    json += "],\"total\":" + std::to_string(doc_ids.size());
-    json += ",\"time_ms\":0";  // Placeholder to be replaced with actual timing
+    json += "],\"total\":" + std::to_string(results.size());
+    json += ",\"time_ms\":0";
 
     if (demo_mode)
         json += ",\"demo_mode\":true";
