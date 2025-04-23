@@ -152,7 +152,14 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
     std::unordered_map<std::string, const char*> termToPointer;
 
     for (const auto& token : tokens) {
-        termToPointer[token.first] = query_engine->position_index_.data_file_.data();
+        const char* data = query_engine->position_index_.data_file_.data();
+
+        auto it = query_engine->position_index_.posDict_.find(token.first);
+        if (it == query_engine->position_index_.posDict_.end()) {
+            termToPointer[token.first] = nullptr;
+        } else {
+            termToPointer[token.first] = data + (it->second.data_offset);
+        }
     }
 
     for (uint32_t match : matches) {

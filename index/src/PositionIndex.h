@@ -66,10 +66,10 @@ public:
     static bool shouldStorePositions(const std::string& term, uint32_t freq, size_t total_terms);
 
     mutable core::MemMapFile data_file_;
+    std::unordered_map<std::string, PositionMetadata> posDict_;
 
 private:
     std::string index_dir_;
-    std::unordered_map<std::string, PositionMetadata> posDict_;
 
     bool loadPosDict();
     uint32_t decodeVByte(const char*& ptr) const;

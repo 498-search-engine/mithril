@@ -537,7 +537,6 @@ bool PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_i
 
     try {  // TODO: remove exceptions
         const PositionMetadata& metadata = it->second;
-        data_ptr += metadata.data_offset;
 
         for (uint32_t i = 0; i < metadata.doc_count; i++) {
             const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
@@ -568,11 +567,22 @@ bool PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_i
 }
 
 bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const {
-    return hasPositionsFromByte(term, doc_id, data_file_.data());
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return {};
+    }
+
+    const char* data_ptr = data_file_.data();
+    const PositionMetadata& metadata = it->second;
+    data_ptr += metadata.data_offset;
+
+    return hasPositionsFromByte(term, doc_id, data_ptr);
 }
 
 std::pair<std::vector<uint16_t>, const char*>
 PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& term, uint32_t doc_id) const {
+    const char* input_data_ptr = data_ptr;
+
     auto it = posDict_.find(term);
     if (it == posDict_.end()) {
         return {{}, data_ptr};
@@ -594,7 +604,7 @@ PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& ter
             data_ptr += sizeof(pos_count);
 
             if (curr_doc_id > doc_id) {
-                return {{}, data_ptr};
+                return {{}, input_data_ptr};
             } else if (curr_doc_id == doc_id) {
                 std::vector<uint16_t> positions;
                 positions.reserve(pos_count);
@@ -615,10 +625,10 @@ PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& ter
             }
         }
 
-        return {{}, data_ptr};
+        return {{}, input_data_ptr};
     } catch (const std::exception& e) {
         spdlog::error("Error getting positions: {}", e.what());
-        return {{}, data_ptr};
+        return {{}, input_data_ptr};
     }
 }
 
