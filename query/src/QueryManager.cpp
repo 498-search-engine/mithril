@@ -68,8 +68,11 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         return std::get<0>(a) > std::get<0>(b);
     });
 
-    spdlog::info("Returning results of size: {}", aggregated.size());
-    return aggregated;
+    size_t top_1k = std::min<size_t>(1000, aggregated.size());
+    QueryResult_t first1k(aggregated.begin(), aggregated.begin() + top_1k);
+
+    spdlog::info("Returning results of size: {}", first1k.size());
+    return first1k;
 }
 
 void QueryManager::WorkerThread(size_t worker_id) {
