@@ -255,7 +255,9 @@ void IndexBuilder::process_document(Document doc) {
                                           static_cast<uint32_t>(doc.title.size()),
                                           static_cast<uint32_t>(url_tokens.size()),
                                           static_cast<uint32_t>(doc.description.size()),
-                                          pagerank_reader_.GetDocumentPageRank(doc.id)});
+					  0.0,
+                                        // pagerank_reader_.GetDocumentPageRank(doc.id)
+					});
         }
 
         // position indexing batching

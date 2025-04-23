@@ -24,7 +24,7 @@ using Document = data::Document;
 using docid_t = data::docid_t;
 
 // Constants
-constexpr size_t DEFAULT_MAX_TERMS_PER_BLOCK = 750000;
+constexpr size_t DEFAULT_MAX_TERMS_PER_BLOCK = 500000;
 constexpr size_t DEFAULT_MERGE_FACTOR = 32;
 
 struct DocumentMetadata {
@@ -81,7 +81,7 @@ public:
 
 private:
     // Page rank reader
-    pagerank::PageRankReader pagerank_reader_;
+    // pagerank::PageRankReader pagerank_reader_;
 
     // Doc Metadata Storage
     std::vector<DocumentMetadata> document_metadata_;
