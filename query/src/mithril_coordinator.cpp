@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
         }
 
         try {
-            auto results = queryCoordinator.send_query_to_workers(query);
+            auto [results, num] = queryCoordinator.send_query_to_workers(query);
             for (auto& result : results) {
                 std::cout << std::get<2>(result) << std::endl;
                 auto title = std::get<3>(result);

@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
+#include <stdexcept>
+#include <utility>
 
 using namespace core;
 using namespace mithril;
@@ -57,18 +59,18 @@ void mithril::QueryCoordinator::print_server_configs() const {
     }
 }
 
-QueryResults mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
+std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
     mithril::TokenNormalizer token_normalizer;
     // std::string normalized_query = token_normalizer.normalize(query);
     auto normalized_query = query;
-
+    auto total_results = 0;
     if (normalized_query.empty()) {
         spdlog::warn("Normalized query is empty");
         return {};
     }
 
     std::vector<QueryResults> worker_results;
-    std::vector<std::future<QueryResults>> futures;
+    std::vector<std::future<std::pair<QueryResults, size_t>>> futures;
 
     // Create futures for each worker
     for (const auto& config : server_configs_) {
@@ -82,7 +84,8 @@ QueryResults mithril::QueryCoordinator::send_query_to_workers(const std::string&
     for (auto& future : futures) {
         try {
             auto results = future.get();
-            worker_results.push_back(std::move(results));
+            worker_results.push_back(std::move(results.first));
+            total_results += results.second;
         } catch (const std::exception& e) {
             spdlog::error("Worker error: {}", e.what());
         }
@@ -99,16 +102,17 @@ QueryResults mithril::QueryCoordinator::send_query_to_workers(const std::string&
     // auto last = std::unique(all_results.begin(), all_results.end());
     // all_results.erase(last, all_results.end());
 
-    spdlog::info("Aggregated {} results from {} workers", all_results.size(), worker_results.size());
+    spdlog::info("Aggregated {} results from {} workers which gave {} total results", all_results.size(), worker_results.size(), 
+        total_results);
 
-    return all_results;
+    return {all_results, total_results};
 }
 
-QueryResults mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
-                                                               const std::string& query) {
+std::pair<QueryResults, size_t> mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
+                                                                        const std::string& query) {
 
     QueryResults results;
-
+    size_t total_results = 0;
     try {
         int client_fd = create_client_sockfd(server_config.ip.c_str(), server_config.port);
         if (client_fd == -1) {
@@ -141,7 +145,8 @@ QueryResults mithril::QueryCoordinator::handle_worker_response(const ServerConfi
         //     }
         // }
 
-        results = RPCHandler::ReadResults(client_fd);
+        
+        results = RPCHandler::ReadResults(client_fd, total_results);
 
         close(client_fd);
 
@@ -150,5 +155,5 @@ QueryResults mithril::QueryCoordinator::handle_worker_response(const ServerConfi
         spdlog::error("Error communicating with worker at {}:{}: {}", server_config.ip, server_config.port, e.what());
     }
 
-    return results;
+    return {results, total_results};
 }

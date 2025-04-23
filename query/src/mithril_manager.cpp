@@ -33,9 +33,9 @@ private:
             // answer the query and get back vector<pair<uint32_t, uint32_t>> of results
             auto results = manager->AnswerQuery(query);
             manager_mutex.unlock();
-
-            // send the results back
-            RPCHandler::SendResults(client.connectionfd, results);
+    
+            //send the results back
+            RPCHandler::SendResults(client.connectionfd, results, manager->curr_result_ct_);
             
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);

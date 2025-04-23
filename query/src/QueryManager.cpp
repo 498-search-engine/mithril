@@ -16,7 +16,7 @@
 
 // If after MINIMUM_QUOTA_FOR_RESULTS_CHECK documents, there are <REQUIRED_RESULTS_QTY documents with score
 // >=REQUIRED_RESULTS_SCORE, we end ranking since there probably aren't great matches on this chunk.
-#define MINIMUM_QUOTA_FOR_RESULTS_CHECK 50000
+#define MINIMUM_QUOTA_FOR_RESULTS_CHECK 25000
 #define REQUIRED_RESULTS_SCORE 5000
 #define REQUIRED_RESULTS_QTY 10
 
@@ -133,6 +133,7 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     // prepare new query
     {
         std::scoped_lock lock{mtx_};
+        curr_result_ct_ = 0;
         current_query_ = query;
         worker_completion_count_ = 0;
         for (auto& result : marginal_results_)
@@ -171,7 +172,7 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
-
+        auto total_sz = result.size();
         QueryResult_t result_ranked = {};
         if (!result.empty()) {
             result_ranked = HandleRanking(query_to_run, worker_id, result);
@@ -180,6 +181,7 @@ void QueryManager::WorkerThread(size_t worker_id) {
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
+            curr_result_ct_ += total_sz;
             marginal_results_[worker_id] = std::move(result_ranked);
             ++worker_completion_count_;  // TODO: change this to std::atomic increment?
             // if finished, tell main thread
@@ -229,6 +231,8 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
         if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
             current += std::tolower(c);
+        } else if (c >= '1' && c <= '9') {
+            current += c;
         }
     }
 
@@ -263,8 +267,6 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         }
     }
 
-
-    //
     bool shortCircuit = matches.size() > RESULTS_REQUIRED_TO_SHORTCIRCUIT;
     uint32_t resultsCollectedAboveMin = 0;
 

@@ -80,6 +80,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add order sensitive ranking & BM25 (#166)
 - performance improvements to position index (#172)
 - Query Engine V2, add in decorator to quries, AND/OR/NOT, FIELD, QUOTE queries working (#149)
+- truncate url link text (#188)
 
 ### Fixed
 
@@ -143,10 +144,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Skip position lookup for stopwords in ranking (#181)
 - Ensure that parser properly handles whitespace separated title, url, and desc tokens
 - get query results' snippets from corpus + format (#178)
+- query results total count displays instead of only 50 (#179)
 - fix ranking tokenization (#182)
 - add circuitbreakers (#185)
 - allow for missing mithril docs (#184)
->>>>>>> origin/main
+- add numbers to ranking (#187)
 
 ## [0.1.0] - 2025-02-07
 
