@@ -1,9 +1,17 @@
 #include "TermDictionary.h"
 
+#include "spdlog/spdlog.h"
+
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <fcntl.h>
 #include <iostream>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <unistd.h>
+#include <sys/fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
@@ -92,6 +100,15 @@ TermDictionary::TermDictionary(const std::string& index_dir) {
         entry_ptr += term_len + sizeof(uint64_t) + sizeof(uint32_t);
     }
 
+    entry_offsets_.reserve(term_count_);
+    const auto* const base_data_ptr = dict_data_ + (3 * sizeof(uint32_t));  // Skip header
+    uint32_t offset = 0;
+    for (uint32_t i = 0; i < term_count_; i++) {
+        entry_offsets_.push_back(offset);
+        uint32_t term_len = *reinterpret_cast<const uint32_t*>(base_data_ptr + offset);
+        offset += sizeof(uint32_t) + term_len + sizeof(uint64_t) + sizeof(uint32_t);
+    }
+
     std::cout << "Memory mapped term dictionary with " << term_count_ << " terms" << std::endl;
     loaded_ = true;
 }
@@ -142,18 +159,12 @@ std::optional<TermDictionary::TermEntry> TermDictionary::search(const std::strin
     while (left <= right) {
         uint32_t mid = left + (right - left) / 2;
 
-        // Navigate to mid entry (could be optimized with direct offsets)
-        const char* entry_ptr = entries_start;
-        for (uint32_t i = 0; i < mid; i++) {
-            uint32_t skip_term_len = *reinterpret_cast<const uint32_t*>(entry_ptr);
-            entry_ptr += sizeof(uint32_t) + skip_term_len + sizeof(uint64_t) + sizeof(uint32_t);
-        }
-
         // Read term at mid
+        const char* entry_ptr = entries_start + entry_offsets_[mid];
         uint32_t term_len = *reinterpret_cast<const uint32_t*>(entry_ptr);
         entry_ptr += sizeof(uint32_t);
 
-        std::string mid_term(entry_ptr, term_len);
+        auto mid_term = std::string_view{entry_ptr, term_len};
         int comparison = term.compare(mid_term);
 
         if (comparison == 0) {
