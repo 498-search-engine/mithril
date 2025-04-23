@@ -28,8 +28,7 @@ const std::vector<std::pair<std::string, std::string>> SearchPlugin::MOCK_RESULT
 };
 
 SearchPlugin::SearchPlugin(const std::string& server_config_path, const std::string& index_path)
-    : config_path_(server_config_path),
-      index_path_(index_path) {
+    : config_path_(server_config_path), index_path_(index_path) {
 
     spdlog::info("Initializing search plugin with config: {}", server_config_path);
 
@@ -268,6 +267,10 @@ std::string SearchPlugin::ProcessSnippetRequest(const std::string& request) {
             } catch (...) {
             }
         }
+    }
+
+    if (doc_ids.size() > 50) {
+        doc_ids.resize(50);
     }
 
     // Parse query parameter

@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 resultElement.className = 'result';
                 resultElement.setAttribute('data-doc-id', result.id);
                 const domain = new URL(result.url).origin;
-                const faviconUrl = `https://www.google.com/s2/favicons?sz=16&domain_url=${domain}`;
+                const faviconUrl = `https://www.google.com/s2/favicons?sz=64&domain_url=${domain}`;
 
                 resultElement.innerHTML = `
                     <h2><a href="${result.url}" target="_blank">${strip(result.title)}</a></h2>
@@ -269,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 resultsContainer.appendChild(resultElement);
             });
-            setTimeout(loadSnippetsForVisibleResults, 100);
+            setTimeout(loadSnippetsForVisibleResults, 50);
         } else {
             resultsContainer.innerHTML = '<div class="no-results">No results found</div>';
         }

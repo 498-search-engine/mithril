@@ -26,7 +26,7 @@ public:
         }
         spdlog::info("DocumentAccessor initialized with path: {}", docs_path_);
     }
-    
+
     std::optional<data::Document> getDocument(uint32_t doc_id) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
 
@@ -92,24 +92,24 @@ private:
     std::optional<data::Document> loadDocumentFromDisk(uint32_t doc_id) const {
         // Calculate chunk number
         uint32_t chunk_id = doc_id / docs_per_chunk_;
-        
+
         // Format chunk ID with leading zeros (10 digits)
         std::ostringstream chunk_oss;
         chunk_oss << "chunk_" << std::setw(10) << std::setfill('0') << chunk_id;
-        
+
         // Format document ID with leading zeros (10 digits)
         std::ostringstream doc_oss;
         doc_oss << "doc_" << std::setw(10) << std::setfill('0') << doc_id;
-        
+
         // Build full document path
         std::string doc_path = docs_path_ + chunk_oss.str() + "/" + doc_oss.str();
-        
+
         // Check if file exists
         if (!std::filesystem::exists(doc_path)) {
             spdlog::warn("Document file not found: {}", doc_path);
             return std::nullopt;
         }
-        
+
         // Load document (always gzipped)
         data::Document doc;
         try {
@@ -183,7 +183,7 @@ public:
         if (!positions.empty()) {
             std::string snippet = extractSnippetFromPositions(text, positions, query_terms);
             if (!snippet.empty()) {
-                spdlog::info("Extracted snippet from positions");
+                // spdlog::info("Extracted snippet from positions");
                 return snippet;
             }
         }
@@ -191,11 +191,11 @@ public:
         // Fall back to substring search
         std::string substring_snippet = extractSnippetFromSubstring(text, query_terms);
         if (!substring_snippet.empty()) {
-            spdlog::info("Extracted snippet from substring search");
+            // spdlog::info("Extracted snippet from substring search");
             return substring_snippet;
         }
 
-        spdlog::info("No snippet found, using fallback");
+        // spdlog::info("No snippet found, using fallback");
         // Last resort: take beginning of document
         return getFallbackSnippet(text);
     }
@@ -227,7 +227,7 @@ private:
     }
 
     // Find good snippet boundaries
-    std::pair<size_t, size_t> getSnippetBoundaries(const std::string& text, size_t pos, size_t context_length = 150) {
+    std::pair<size_t, size_t> getSnippetBoundaries(const std::string& text, size_t pos, size_t context_length = 75) {
         size_t start = pos > context_length ? pos - context_length : 0;
         size_t end = std::min(pos + context_length, text.length());
 
@@ -350,7 +350,7 @@ private:
 
     std::string getFallbackSnippet(const std::string& text) {
         // Just take the beginning of the text
-        const size_t max_length = 150;
+        const size_t max_length = 75;
         if (text.length() <= max_length) {
             return text;
         }
