@@ -131,7 +131,9 @@ private:
                 }
                 // If there's no operator but we have another component, treat as implicit AND
                 else if (peek().type == TokenType::WORD || peek().type == TokenType::QUOTE ||
-                         peek().type == TokenType::FIELD || peek().type == TokenType::LPAREN) {
+                         peek().type == TokenType::FIELD || peek().type == TokenType::LPAREN ||
+                         peek().type == TokenType::TITLE || peek().type == TokenType::URL ||
+                         peek().type == TokenType::ANCHOR || peek().type == TokenType::DESC) {
                     auto rightComponent = parseQueryComponent();
                     leftComponent = std::make_unique<AndQuery>(leftComponent.release(), rightComponent.release());
                 }

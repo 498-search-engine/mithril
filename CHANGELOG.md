@@ -138,8 +138,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - fix description term decorator (#178)
 - fix ranking singleton design (#176)
 - Limit network throughput and merge amounts (#180)
-- add short circuit for larger rank queries (#179)
-- skip position lookup for stopwords in ranking (#181)
+- Add short circuit for larger rank queries (#179)
+- Skip position lookup for stopwords in ranking (#181)
+- Ensure that parser properly handles whitespace separated title, url, and desc tokens
 
 ## [0.1.0] - 2025-02-07
 
