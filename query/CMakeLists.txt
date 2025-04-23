@@ -42,6 +42,7 @@ add_executable(lexer_driver tests/lexer_driver.cpp)
 add_executable(query_driver tests/query_driver.cpp)
 add_executable(and_test tests/and_test.cpp)
 add_executable(or_test tests/or_test.cpp)
+add_executable(quote_test tests/quote_test.cpp)
 add_executable(test_freq_ct tests/lexer_token_freq_test.cpp)
 
 # Test targets linking
@@ -53,6 +54,7 @@ target_link_libraries(lexer_driver PRIVATE query)
 target_link_libraries(query_driver PRIVATE query index)
 target_link_libraries(and_test PRIVATE query index common)
 target_link_libraries(or_test PRIVATE query index common)
+target_link_libraries(quote_test PRIVATE query index common)
 target_link_libraries(test_freq_ct PRIVATE query)
 
 # Tests registration

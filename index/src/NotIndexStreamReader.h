@@ -1,106 +1,85 @@
 #ifndef INDEX_NOTISR_H
 #define INDEX_NOTISR_H
 
-#include "DocumentMapReader.h"
 #include "IndexStreamReader.h"
-#include "PositionIndex.h"
-#include "TermDictionary.h"
-
-#include <fstream>
 #include <memory>
-#include <optional>
-#include <string>
-#include <vector>
 
 namespace mithril {
 
 class NotISR : public IndexStreamReader {
 public:
     explicit NotISR(std::unique_ptr<IndexStreamReader> reader_in, size_t document_count_in)
-        : reader_(std::move(reader_in)), current_doc_id_(0), doc_at_end_(false), max_doc_id_(document_count_in) {}
-
-    ~NotISR() override { return; }
-
-
-    // ISR
-
-    size_t get_boundary_doc_id() {
-        if (doc_at_end_) {
-            return max_doc_id_;
-        }
-        return reader_->currentDocID();
-    }
-
-    bool atEnd() const { return doc_at_end_; }
-
-    bool hasNext() const override { return !atEnd(); }
-
-    void move_reader_next() {
+        : reader_(std::move(reader_in)), doc_count_(document_count_in) {
+        // Start at document ID 0 (before first document)
+        current_doc_id_ = 0;
+        
+        // If reader is empty, all documents are included
         if (!reader_->hasNext()) {
             return;
         }
-        reader_->moveNext();
+        
+        // Find first valid document
+        moveNext();
+    }
+
+    ~NotISR() override = default;
+
+    bool hasNext() const override {
+        return current_doc_id_ < doc_count_;
     }
 
     void moveNext() override {
-        if (atEnd()) {
+        if (!hasNext()) {
             return;
         }
 
-        while (current_doc_id_ < max_doc_id_) {
-            if (current_doc_id_ < get_boundary_doc_id()) {
-                current_doc_id_ += 1;
-            } else {
-                move_reader_next();
-            }
-        }
+        current_doc_id_++;
 
-        if (current_doc_id_ >= max_doc_id_) {
-            doc_at_end_ = true;
+        // Skip over any document IDs that exist in the underlying reader
+        while (current_doc_id_ <= doc_count_ && 
+               reader_->hasNext() && 
+               reader_->currentDocID() <= current_doc_id_) {
+            
+            if (reader_->currentDocID() == current_doc_id_) {
+                // This document ID exists in reader, so skip it
+                current_doc_id_++;
+                // Reset from the beginning if we need to
+                if (current_doc_id_ <= doc_count_) {
+                    reader_->seekToDocID(current_doc_id_);
+                }
+            } else if (reader_->currentDocID() < current_doc_id_) {
+                // Advance the reader until we catch up
+                reader_->moveNext();
+            }
         }
     }
 
     data::docid_t currentDocID() const override {
-        if (current_doc_id_ > max_doc_id_) {
-            throw std::runtime_error("Current document ID exceeds maximum document ID.");
-        }
         return current_doc_id_;
     }
 
-
     void seekToDocID(data::docid_t target_doc_id) override {
-        if (target_doc_id >= max_doc_id_) {
-            current_doc_id_ = max_doc_id_;
-            doc_at_end_ = true;
-            return;
-        }
-
         if (target_doc_id < current_doc_id_) {
-            // Reset the reader to the beginning
-            reader_->seekToDocID(0);
+            // If seeking backwards, reset to the beginning
+            reader_->seekToDocID(1);
             current_doc_id_ = 0;
-            doc_at_end_ = false;
         }
-
-        while (current_doc_id_ < target_doc_id && !doc_at_end_) {
-            moveNext();
-        }
+        
+        // Skip to just before the target
+        current_doc_id_ = target_doc_id - 1;
+        
+        // Then use moveNext to find the next valid document ID
+        moveNext();
+        
+        // If we didn't land exactly on target_doc_id, the target must be
+        // in the excluded set, so we don't need to do anything else
     }
 
-    // term specific funcs
-    // uint32_t currentFrequency() const;
-    // std::string getTerm() const { return term_; }
-    // uint32_t getDocumentCount() const { return postings_.size(); }
-
-    // postion specific funcs
-    // bool hasPositions() const;
-    // std::vector<uint32_t> currentPositions() const;
-
+    
 private:
     std::unique_ptr<IndexStreamReader> reader_;
     data::docid_t current_doc_id_;
-    data::docid_t max_doc_id_;
-    bool doc_at_end_;
+    size_t doc_count_;
 };
 
 }  // namespace mithril

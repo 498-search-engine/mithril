@@ -73,7 +73,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add basic multiterm support for ranking (#153)
 - add scripts that made us build idx1(/5)
 - query coverage, density + position based ranking (#159)
+- Link server to mithril managers (#168)
+- Add proper field, title, url, desc logic to query (#169)
+- Do proper linking of coordinator and stopwards, add identity ISR, and move stopward logic to ISR (#164)
 - Link server to mithril managers
+- add order sensitive ranking & BM25 (#166)
+- performance improvements to position index (#172)
+- Query Engine V2, add in decorator to quries, AND/OR/NOT, FIELD, QUOTE queries working (#149)
 
 ### Fixed
 
@@ -125,6 +131,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - better utf8 handling in json escaping for frontend (#161)
 - Hooked up distributed backend with frontend web-server (#162)
 - Sending urls and titles over network from backend (#163)
+- Strip all HTML from title on frontend (#168)
+- Fix hardcoded path (#171)
+- optimize usage of positions in ranker (#170)
+- downstream fixes after ranking (#172)
+- precompute offsets in term dictionary (#177)
+- fix description term decorator (#178)
+- fix ranking singleton design (#176)
+- Limit network throughput and merge amounts (#180)
+- Add short circuit for larger rank queries (#179)
+- Skip position lookup for stopwords in ranking (#181)
+- Ensure that parser properly handles whitespace separated title, url, and desc tokens
+- get query results' snippets from corpus + format (#178)
+- fix ranking tokenization (#182)
+- add circuitbreakers (#185)
+- allow for missing mithril docs (#184)
+>>>>>>> origin/main
 
 ## [0.1.0] - 2025-02-07
 

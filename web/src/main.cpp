@@ -1,3 +1,4 @@
+#include "Ranker.h"
 #include "SearchPlugin.h"
 #include "Server.h"
 

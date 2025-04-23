@@ -1,5 +1,5 @@
-#ifndef INDEX_TERMQUOTE_H
-#define INDEX_TERMQUOTE_H
+#ifndef INDEX_TERMPHRASE_H
+#define INDEX_TERMPHRASE_H
 
 #include "DocumentMapReader.h"
 #include "IndexStreamReader.h"
@@ -18,8 +18,7 @@ namespace mithril {
 
 class TermPhrase : public IndexStreamReader {
 public:
-    explicit TermPhrase(DocumentMapReader& doc_reader,
-                        const std::string& index_path,
+    explicit TermPhrase(const std::string& index_path,
                         const std::vector<std::string>& phrase,
                         const core::MemMapFile& index_file,
                         TermDictionary& term_dict,
@@ -40,7 +39,6 @@ private:
     bool findNextMatch();
 
 private:
-    DocumentMapReader& doc_reader_;
     const std::string& index_path_;
     const std::vector<std::string>& phrase_;
     const core::MemMapFile& index_file_;

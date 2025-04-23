@@ -1,3 +1,18 @@
+query
+NOT query
+
+50
+1269
+
+30
+1279
+
+38
+1281  
+
+
+
+
 
 while (1):
     socket code

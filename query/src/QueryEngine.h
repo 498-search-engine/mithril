@@ -1,6 +1,7 @@
 #ifndef QUERYENGINE_H
 #define QUERYENGINE_H
 
+#include "BM25.h"
 #include "DocumentMapReader.h"
 #include "Parser.h"
 #include "PositionIndex.h"
@@ -8,10 +9,12 @@
 #include "QueryConfig.h"
 #include "TermDictionary.h"
 #include "core/mem_map_file.h"
+#include "spdlog/spdlog.h"
 
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <spdlog/spdlog.h>
 
 using namespace mithril;
 
@@ -22,8 +25,12 @@ public:
           index_file_(index_dir + "/final_index.data"),
           term_dict_(index_dir),
           position_index_(index_dir) {
+        spdlog::info("about to make query engine for {}", index_dir);
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
+        results_.reserve(1000);
+        spdlog::info("about to make bm25 for {}", index_dir);
+        BM25Lib_ = new ranking::BM25(index_dir);
     }
 
     auto ParseQuery(const std::string& input) -> std::unique_ptr<Query> {
@@ -37,13 +44,32 @@ public:
     }
 
     std::vector<uint32_t> EvaluateQuery(std::string input) {
-        Parser parser(input, index_file_, term_dict_, position_index_);
-        auto queryTree = parser.parse();
-        if (!queryTree) {
-            std::cerr << "Failed to parse query: " << input << std::endl;
+
+        try {
+            spdlog::info("🚀 Evaluating query: {}", input);
+            Parser parser(input, index_file_, term_dict_, position_index_);
+
+            auto queryTree = parser.parse();
+            if (!queryTree) {
+                std::cerr << "Failed to parse query: " << input << std::endl;
+                return {};
+            }
+            spdlog::info("⭐ Parsing query: {}", input);
+            spdlog::info("⭐ Query structure: {}", queryTree->to_string());
+
+            results_.clear();
+            auto isr = queryTree->generate_isr();
+
+            while (isr->hasNext()) {
+                results_.emplace_back(isr->currentDocID());
+                isr->moveNext();
+            }
+            return std::move(results_);
+        } catch (const std::exception& e) {
+            spdlog::warn("Error evaluating query: {}", e.what());
             return {};
         }
-        return queryTree->evaluate();
+        // return queryTree->evaluate();
     }
 
     void DisplayTokens(const std::vector<Token>& tokens) const {
@@ -71,11 +97,14 @@ public:
     DocInfo GetDocumentInfo(uint32_t doc_id) const { return map_reader_.getDocInfo(doc_id); }
 
     mithril::PositionIndex position_index_;
+    mithril::TermDictionary term_dict_;
+    ranking::BM25* BM25Lib_;
 
 private:
     mithril::DocumentMapReader map_reader_;
     core::MemMapFile index_file_;
-    mithril::TermDictionary term_dict_;
+    // mithril::TermDictionary term_dict_;
+    std::vector<uint32_t> results_;
 };
 
 #endif /* QUERYENGINE_H */

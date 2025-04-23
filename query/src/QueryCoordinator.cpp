@@ -6,9 +6,9 @@
 #include "rpc_handler.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
-#include <stdexcept>
 
 using namespace core;
 using namespace mithril;
@@ -59,7 +59,8 @@ void mithril::QueryCoordinator::print_server_configs() const {
 
 QueryResults mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
     mithril::TokenNormalizer token_normalizer;
-    std::string normalized_query = token_normalizer.normalize(query);
+    // std::string normalized_query = token_normalizer.normalize(query);
+    auto normalized_query = query;
 
     if (normalized_query.empty()) {
         spdlog::warn("Normalized query is empty");
@@ -104,7 +105,7 @@ QueryResults mithril::QueryCoordinator::send_query_to_workers(const std::string&
 }
 
 QueryResults mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
-                                                                        const std::string& query) {
+                                                               const std::string& query) {
 
     QueryResults results;
 

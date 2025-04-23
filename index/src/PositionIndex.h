@@ -42,7 +42,12 @@ public:
     PositionIndex(const std::string& index_dir);
     ~PositionIndex();
 
+    std::pair<bool, const char*> hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data) const;
     bool hasPositions(const std::string& term, uint32_t doc_id) const;
+
+    std::pair<std::vector<uint16_t>, const char*>
+    getPositionsFromByte(const char* data_ptr, const std::string& term, uint32_t doc_id) const;
+
     std::vector<uint16_t> getPositions(const std::string& term, uint32_t doc_id) const;
     uint8_t getFieldFlags(const std::string& term, uint32_t doc_id) const;
     bool checkPhrase(const std::string& term1, const std::string& term2, uint32_t doc_id, int distance = 1) const;
@@ -60,10 +65,11 @@ public:
     static void finalizeIndex(const std::string& output_dir);
     static bool shouldStorePositions(const std::string& term, uint32_t freq, size_t total_terms);
 
+    mutable core::MemMapFile data_file_;
+    std::unordered_map<std::string, PositionMetadata> posDict_;
+
 private:
     std::string index_dir_;
-    std::unordered_map<std::string, PositionMetadata> posDict_;
-    mutable core::MemMapFile data_file_;
 
     bool loadPosDict();
     uint32_t decodeVByte(const char*& ptr) const;

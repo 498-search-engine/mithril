@@ -12,6 +12,7 @@ add_library(index STATIC
     src/TermQuote.cpp
     src/PositionIndex.cpp
     src/GenericTermReader.cpp
+    src/ISRFactory.cpp
 )
 target_include_directories(index PUBLIC src)
 target_link_libraries(index PUBLIC
