@@ -12,8 +12,36 @@
 #define RESULTS_COLLECTED_AFTER_SHORTCIRCUIT 100
 
 namespace mithril {
-
 using QueryResult_t = QueryManager::QueryResult;
+
+namespace {
+#include <algorithm>
+#include <vector>
+
+QueryResult_t TopKElementsFast(QueryResult_t& results, int k = 50) {
+    auto comparator = [](const auto& a, const auto& b) {
+        if (std::get<1>(a) != std::get<1>(b)) {
+            return std::get<1>(a) > std::get<1>(b);
+        }
+        return std::get<0>(a) > std::get<0>(b);
+    };
+
+    // The partial sort way
+    if (results.size() <= k) {
+        std::sort(results.begin(), results.end(), comparator);
+        return results;
+    }
+
+    std::partial_sort(results.begin(), results.begin() + k, results.end(), comparator);
+
+    // The nth element way
+    // std::nth_element(results.begin(), results.begin() + k, results.end(), comparator);
+    // std::sort(results.begin(), results.begin() + k, comparator);
+
+    return QueryResult_t(results.begin(), results.begin() + k);
+}
+}  // namespace
+
 
 QueryManager::QueryManager(const std::vector<std::string>& index_dirs)
     : stop_(false), query_available_(index_dirs.size(), 0), worker_completion_count_(0) {
@@ -205,17 +233,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         // }
     }
 
-
-    std::sort(ranked_matches.begin(), ranked_matches.end(), [](const auto& a, const auto& b) {
-        if (std::get<1>(a) != std::get<1>(b)) {
-            return std::get<1>(a) > std::get<1>(b);
-        }
-        return std::get<0>(a) > std::get<0>(b);
-    });
-
-    int top50 = std::min((int)ranked_matches.size(), 50);
-
-    return QueryResult_t(ranked_matches.begin(), ranked_matches.begin() + top50);
+    return TopKElementsFast(ranked_matches);
 }
 
 }  // namespace mithril
