@@ -8,6 +8,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultsContainer = document.getElementById('results');
     const exampleLinks = document.querySelectorAll('.example');
 
+    function strip(html) {
+        let doc = new DOMParser().parseFromString(html, 'text/html');
+        return doc.body.textContent || "";
+    }
+     
     // Client-side cache setup
     const queryCache = {
         data: {},
@@ -198,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const faviconUrl = `https://www.google.com/s2/favicons?sz=16&domain_url=${domain}`;
 
                 resultElement.innerHTML = `
-                    <h2><a href="${result.url}" target="_blank">${result.title}</a></h2>
+                    <h2><a href="${result.url}" target="_blank">${strip(result.title)}</a></h2>
                     <div class="result-url" style="display: flex; align-items: center; gap: 6px; margin: 4px 0;">
                         <img src="${faviconUrl}" alt="favicon" class="favicon" style="width: 16px; height: 16px;">
                         <span>${result.url}</span>
