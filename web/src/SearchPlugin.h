@@ -29,7 +29,7 @@ public:
     static std::string EscapeJsonString(const std::string& input);
     static std::string DecodeUrlString(const std::string& encoded);
 
-    static constexpr std::chrono::seconds QUERY_TIMEOUT{3};  // 3s
+    static constexpr std::chrono::seconds QUERY_TIMEOUT{30};  // 3s
     static constexpr size_t MAX_CACHE_SIZE = 100;
     static constexpr std::chrono::seconds CACHE_TTL{300};  // 5min
 

@@ -119,7 +119,7 @@ struct RPCHandler {
                 //std::cout << word << " ";
                 title.push_back(word);
             }
-            std::cout << std::endl;
+            //std::cout << std::endl;
             result.emplace_back(a, b, url, title);
         }
     
