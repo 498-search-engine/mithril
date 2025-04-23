@@ -6,6 +6,8 @@
 #include <iostream>
 #include <memory>
 #include "Util.h"
+#include <chrono>
+#include <spdlog/spdlog.h>
 
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " --port PORT --index INDEX_PATH [--index INDEX_PATH ...]" << std::endl;
@@ -21,6 +23,7 @@ struct MithrilManager {
     int server_fd;
 
     void Handle(int client_fd){
+        auto start = high_resolution_clock::now();
         connection_cleaner client(client_fd);
         //get query from socket
         try{
@@ -32,6 +35,11 @@ struct MithrilManager {
     
             //send the results back
             RPCHandler::SendResults(client.connectionfd, results);
+            
+            auto end = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(end - start);
+
+            spdlog::info("took {} seconds to answer query", to_string(duration.count()));
         } catch (std::exception& e){
             std::cerr << e.what() << std::endl;
             return;
