@@ -6,6 +6,24 @@
 #include <spdlog/spdlog.h>
 
 namespace mithril::ranking {
+
+inline bool IsValidToken(const std::string& token) {
+    if (token.empty()) {
+        return false;
+    }
+
+    if (token == "AND" || token == "OR" || token == "NOT") {
+        return false;
+    }
+
+    if (token.starts_with("title") || token.starts_with("url") || token.starts_with("anchor") ||
+        token.starts_with("desc")) {
+        return false;
+    }
+
+    return true;
+}
+
 /**
  * query is {term, multiplicity}
  * e.g A and (B or A) => {“A”: 2”, “B”: 1}

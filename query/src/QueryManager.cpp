@@ -4,6 +4,7 @@
 #include "TextPreprocessor.h"
 
 #include <algorithm>
+#include <cctype>
 #include <mutex>
 #include <string>
 #include <spdlog/spdlog.h>
@@ -206,19 +207,23 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
     std::cout << "tokens: ";
     for (char c : query) {
         if (c == ' ') {
-            if (!current.empty()) {
+            if (mithril::ranking::IsValidToken(current)) {
                 std::cout << current << " ";
                 tokens.emplace_back(std::move(current), 1);
-                current = "";
             }
+            current = "";
             continue;
         }
-        current += c;
+
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+            current += std::tolower(c);
+        }
     }
 
     if (!current.empty()) {
-        std::cout << current << " ";
-        tokens.emplace_back(std::move(current), 1);
+        if (mithril::ranking::IsValidToken(current)) {
+            tokens.emplace_back(std::move(current), 1);
+        }
     }
 
     std::cout << std::endl;
