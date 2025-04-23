@@ -190,6 +190,14 @@ footer {
   font-size: 14px;
 }
 
+.result-url-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+}
+
 .result-snippet {
   font-size: 14px;
   color: #4d5156;
