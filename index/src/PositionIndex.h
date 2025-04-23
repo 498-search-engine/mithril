@@ -42,6 +42,7 @@ public:
     PositionIndex(const std::string& index_dir);
     ~PositionIndex();
 
+    bool hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data) const;
     bool hasPositions(const std::string& term, uint32_t doc_id) const;
 
     std::pair<std::vector<uint16_t>, const char*>

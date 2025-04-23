@@ -52,7 +52,6 @@ GetDocumentFrequencies(const TermDictionary& term_dict, const std::vector<std::p
             continue;
         }
 
-
         std::optional<TermDictionary::TermEntry> termEntry = term_dict.lookup(query);
         if (!termEntry.has_value()) {
             map[query] = 0;
@@ -69,7 +68,7 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
                        const data::DocInfo& info,
                        const PositionIndex& position_index,
                        const std::unordered_map<std::string, uint32_t>& termFreq,
-                       const char*& data) {
+                       std::unordered_map<std::string, const char*>& termToData) {
 
     auto logger = spdlog::get("ranker_logger");
     if (!logger) {
@@ -108,11 +107,18 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
 
     float weightedBM25 = 0.0F;
 
-    for (const auto& [term, multiplicity] : query) {
-        std::vector<uint16_t> bodyPositions = position_index.getPositions(term, doc.id);
+    std::unordered_map<std::string, const char*> newTermToData = termToData;
 
-        bool termInDescription =
-            position_index.hasPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id);
+    for (const auto& [term, multiplicity] : query) {
+        auto bodyPositionsIndex = position_index.getPositionsFromByte(termToData[term], term, doc.id);
+
+        newTermToData[term] = bodyPositionsIndex.second;
+
+        std::vector<uint16_t>& bodyPositions = bodyPositionsIndex.first;
+
+        bool termInDescription = position_index.hasPositionsFromByte(
+            mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id, termToData[term]);
+
         bool termInBody = bodyPositions.size() > 0;
         bool termInUrl = doc.url.find(term) != std::string::npos;
 
@@ -158,6 +164,8 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
         weightedBM25 += static_cast<float>(BM25Lib->ScoreTermForDoc(info, termFreq.at(term), bodyPositions.size())) *
                         (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
     }
+
+    termToData = std::move(newTermToData);
 
     float orderedTitleScore = std::sqrt(ranking::dynamic::OrderedMatchScore(query, doc.title));
 

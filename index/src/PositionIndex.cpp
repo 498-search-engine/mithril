@@ -527,14 +527,13 @@ bool PositionIndex::loadPosDict() {
     }
 }
 
-bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const {
+bool PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data_ptr) const {
     auto it = posDict_.find(term);
     if (it == posDict_.end()) {
         return false;
     }
 
-    const auto* data_ptr = data_file_.data();
-    const auto* const data_end = data_ptr + data_file_.size();
+    const auto* const data_end = data_file_.data() + data_file_.size();
 
     try {  // TODO: remove exceptions
         const PositionMetadata& metadata = it->second;
@@ -568,6 +567,10 @@ bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const
     }
 }
 
+bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const {
+    return hasPositionsFromByte(term, doc_id, data_file_.data());
+}
+
 std::pair<std::vector<uint16_t>, const char*>
 PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& term, uint32_t doc_id) const {
     auto it = posDict_.find(term);
@@ -579,7 +582,6 @@ PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& ter
 
     try {  // TODO: remove exceptions
         const PositionMetadata& metadata = it->second;
-        data_ptr += metadata.data_offset;
 
         for (uint32_t i = 0; i < metadata.doc_count; i++) {
             const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
@@ -592,7 +594,7 @@ PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& ter
             data_ptr += sizeof(pos_count);
 
             if (curr_doc_id > doc_id) {
-                return {};
+                return {{}, data_ptr};
             } else if (curr_doc_id == doc_id) {
                 std::vector<uint16_t> positions;
                 positions.reserve(pos_count);
@@ -613,15 +615,24 @@ PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& ter
             }
         }
 
-        return {{}, data_file_.data()};
+        return {{}, data_ptr};
     } catch (const std::exception& e) {
         spdlog::error("Error getting positions: {}", e.what());
-        return {{}, data_file_.data()};
+        return {{}, data_ptr};
     }
 }
 
 std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint32_t doc_id) const {
-    return getPositionsFromByte(data_file_.data(), term, doc_id).first;
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return {};
+    }
+
+    const char* data_ptr = data_file_.data();
+    const PositionMetadata& metadata = it->second;
+    data_ptr += metadata.data_offset;
+
+    return getPositionsFromByte(data_ptr, term, doc_id).first;
 }
 
 uint8_t PositionIndex::getFieldFlags(const std::string& term, uint32_t doc_id) const {
