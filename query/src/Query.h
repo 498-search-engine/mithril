@@ -114,7 +114,9 @@ public:
         return term_reader_factory.CreateISR(token_.value, field);
     }
 
-    [[nodiscard]] std::string to_string() const override { return "TERM(" + token_.value + ")"; }
+    [[nodiscard]] std::string to_string() const override { 
+        return "TERM(" + token_.value + " " + token_.toString() + ")";
+         }
 
     [[nodiscard]] std::string get_type() const override { return "TermQuery"; }
 
@@ -207,7 +209,7 @@ public:
             std::vector<std::unique_ptr<mithril::IndexStreamReader>> readers;
             readers.push_back(std::move(left_isr));
             readers.push_back(std::move(right_isr));
-            return std::make_unique<mithril::TermAND>(std::move(readers));
+            return std::make_unique<mithril::TermOR>(std::move(readers));
         }
     }
 
