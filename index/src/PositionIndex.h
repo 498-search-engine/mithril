@@ -29,11 +29,6 @@ struct PositionEntry {
     std::vector<uint16_t> positions;
 };
 
-struct PositionSyncPoint {
-    uint32_t doc_id;
-    uint64_t offset;
-};
-
 static constexpr size_t NUM_FIELDS = static_cast<size_t>(FieldType::DESC) + 1;
 static_assert(NUM_FIELDS == 5, "Unexpected number of field types");
 
@@ -72,20 +67,6 @@ private:
 
     bool loadPosDict();
     uint32_t decodeVByte(const char*& ptr) const;
-
-    // Map of term -> sync points
-    std::unordered_map<std::string, std::vector<PositionSyncPoint>> sync_points_;
-    bool loadSyncPoints();
-    uint64_t findNearestSyncPoint(const std::string& term, uint32_t doc_id) const;
-
-    // Helper struct for getPositions and getFieldFlags
-    struct DocPositionData {
-        uint8_t field_flags;
-        std::vector<uint16_t> positions;
-        bool found;
-    };
-
-    DocPositionData getDocPositionData(const std::string& term, uint32_t doc_id) const;
 
     static std::mutex buffer_mutex_;
     static std::unordered_map<std::string, std::vector<PositionEntry>> position_buffer_;
