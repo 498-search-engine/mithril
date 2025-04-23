@@ -19,6 +19,7 @@ namespace mithril {
 
 TermDictionary::TermDictionary(const std::string& index_dir) {
     std::string dict_path = index_dir + "/term_dictionary.data";
+    spdlog::info("constructing term dictionary for {}", index_dir);
 
     dict_fd_ = open(dict_path.c_str(), O_RDONLY);
     if (dict_fd_ == -1) {
@@ -47,11 +48,7 @@ TermDictionary::TermDictionary(const std::string& index_dir) {
 
     // Force in memory
     if (mlock(dict_data_, dict_size_) != 0) {
-        std::cerr << "Failed to lock into memory dictionary file" << std::endl;
-        close(dict_fd_);
-        dict_fd_ = -1;
-        dict_data_ = nullptr;
-        return;
+        spdlog::warn("Failed to lock into memory dictionary file");
     }
 
     // Touch all pages to force in memory

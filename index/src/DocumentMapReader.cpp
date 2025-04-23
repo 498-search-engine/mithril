@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <spdlog/spdlog.h>
 
 namespace mithril {
 
@@ -13,6 +14,8 @@ DocumentMapReader::DocumentMapReader(const std::string& index_dir) {
 
 void DocumentMapReader::loadDocumentMap(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
+    spdlog::info("loading document map {}", path);
+
     if (!in) {
         throw std::runtime_error("Failed to open document map: " + path);
     }

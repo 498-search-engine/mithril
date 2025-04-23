@@ -135,6 +135,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - optimize usage of positions in ranker (#170)
 - downstream fixes after ranking (#172)
 - precompute offsets in term dictionary (#177)
+- fix description term decorator (#178)
+- fix ranking singleton design (#176)
+- Limit network throughput and merge amounts (#180)
 
 ## [0.1.0] - 2025-02-07
 

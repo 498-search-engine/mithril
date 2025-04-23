@@ -46,13 +46,6 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        try {
-            // Init ranker
-            mithril::ranking::InitRanker(index_path);
-        } catch (std::exception& e){
-            spdlog::info("ranker was not initialized, make sure this is distributed one");
-        }
-
         // Create and init search plugin with both paths
         auto search_plugin = new SearchPlugin(server_config_path, index_path);
         mithril::Plugin = search_plugin;

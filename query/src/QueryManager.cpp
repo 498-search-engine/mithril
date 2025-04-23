@@ -16,8 +16,7 @@ QueryManager::QueryManager(const std::vector<std::string>& index_dirs)
     const auto num_workers = index_dirs.size();
     marginal_results_.resize(num_workers);
     for (size_t i = 0; i < num_workers; ++i) {
-        // Init ranker
-        mithril::ranking::InitRanker(index_dirs[i]);
+        spdlog::info("about to query manager for {}", index_dirs[i]);
         query_engines_.emplace_back(std::make_unique<QueryEngine>(index_dirs[i]));
         threads_.emplace_back(&QueryManager::WorkerThread, this, i);
     }
@@ -70,8 +69,10 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         return std::get<0>(a) > std::get<0>(b);
     });
 
-    spdlog::info("Returning results of size: {}", aggregated.size());
-    return aggregated;
+    auto top50 = std::min<uint32_t>(aggregated.size(), 50);
+    QueryResult_t filtered_results(aggregated.begin(), aggregated.begin()+top50);
+    spdlog::info("Returning results of size: {}", filtered_results.size());
+    return filtered_results;
 }
 
 void QueryManager::WorkerThread(size_t worker_id) {
@@ -89,19 +90,11 @@ void QueryManager::WorkerThread(size_t worker_id) {
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
 
-        // if no results found, tell main thread that this worker is done
-        // Could also mean nothing was found because of a parsing error
-        if (result.empty()) {
-            spdlog::warn("No results found for query: {}", query_to_run);
-            std::scoped_lock lock{mtx_};
-            ++worker_completion_count_;  
-            if (worker_completion_count_ == threads_.size())
-                main_cv_.notify_one();
-            query_available_[worker_id] = 0;
-            continue;
+        QueryResult_t result_ranked = {};
+        if (!result.empty()) {
+            result_ranked = HandleRanking(query_to_run, worker_id, result);
         }
-
-        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, result);
+        
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
@@ -174,6 +167,14 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         } else {
             termToPointer[token.first] = data + (it->second.data_offset);
         }
+
+        std::string descToken = mithril::TokenNormalizer::decorateToken(token.first, FieldType::DESC);
+        it = query_engine->position_index_.posDict_.find(descToken);
+        if (it == query_engine->position_index_.posDict_.end()) {
+            termToPointer[descToken] = nullptr;
+        } else {
+            termToPointer[descToken] = data + (it->second.data_offset);
+        }
     }
 
     for (uint32_t match : matches) {
@@ -186,12 +187,15 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         const data::Document& doc = doc_opt.value();
         const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
 
-        uint32_t score =
-            ranking::GetFinalScore(tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
+        uint32_t score = ranking::GetFinalScore(
+            query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
     }
 
-    return ranked_matches;
+    uint32_t top50 = std::min<uint32_t>(ranked_matches.size(), 50);
+    QueryResult_t best50(ranked_matches.begin(), ranked_matches.begin()+top50);
+
+    return best50;
 }
 
 }  // namespace mithril
