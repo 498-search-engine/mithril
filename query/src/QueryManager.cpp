@@ -9,9 +9,18 @@
 #include <string>
 #include <spdlog/spdlog.h>
 
-#define RESULTS_REQUIRED_TO_SHORTCIRCUIT 50000
+#define RESULTS_REQUIRED_TO_SHORTCIRCUIT 30000
 #define SCORE_FOR_SHORTCIRCUIT_REQUIRED 5500
 #define RESULTS_COLLECTED_AFTER_SHORTCIRCUIT 100
+
+
+// If after MINIMUM_QUOTA_FOR_RESULTS_CHECK documents, there are <REQUIRED_RESULTS_QTY documents with score
+// >=REQUIRED_RESULTS_SCORE, we end ranking since there probably aren't great matches on this chunk.
+#define MINIMUM_QUOTA_FOR_RESULTS_CHECK 50000
+#define REQUIRED_RESULTS_SCORE 5000
+#define REQUIRED_RESULTS_QTY 10
+
+#define RESULTS_HARD_CAP 100000
 
 namespace mithril {
 using QueryResult_t = QueryManager::QueryResult;
@@ -254,9 +263,13 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         }
     }
 
+
+    //
     bool shortCircuit = matches.size() > RESULTS_REQUIRED_TO_SHORTCIRCUIT;
     uint32_t resultsCollectedAboveMin = 0;
 
+    uint32_t rankedDocuments = 0;
+    uint32_t rankedDocumentsAboveMin = 0;
     for (uint32_t match : matches) {
         const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
         if (!doc_opt.has_value()) {
@@ -275,8 +288,25 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         if (shortCircuit && score >= SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
             resultsCollectedAboveMin += 1;
             if (resultsCollectedAboveMin >= RESULTS_COLLECTED_AFTER_SHORTCIRCUIT) {
+                spdlog::info("Query shortcircuit since enough good results found");
                 break;
             }
+        }
+
+        rankedDocuments++;
+        if (score >= REQUIRED_RESULTS_SCORE) {
+            rankedDocumentsAboveMin++;
+        }
+
+        if (rankedDocuments >= MINIMUM_QUOTA_FOR_RESULTS_CHECK) {
+            if (rankedDocumentsAboveMin < REQUIRED_RESULTS_QTY) {
+                spdlog::info("Query shortcircuit since not enough good results found");
+                break;
+            }
+        }
+
+        if (rankedDocuments >= RESULTS_HARD_CAP) {
+            break;
         }
     }
 
