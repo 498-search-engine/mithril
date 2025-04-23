@@ -40,6 +40,55 @@ QueryResult_t TopKElementsFast(QueryResult_t& results, int k = 50) {
 
     return QueryResult_t(results.begin(), results.begin() + k);
 }
+
+QueryResult_t TopKFromSortedLists(const std::vector<QueryResult_t>& sortedLists, size_t k = 50) {
+    if (sortedLists.size() == 1) {
+        return sortedLists[0];
+    }
+
+    auto comparator = [](const auto& a, const auto& b) {
+        if (std::get<1>(a) != std::get<1>(b)) {
+            return std::get<1>(a) > std::get<1>(b);
+        }
+        return std::get<0>(a) > std::get<0>(b);
+    };
+
+    QueryResult_t sortedList;
+    std::unordered_map<size_t, int> listToIndex;
+
+    for (size_t i = 0; i < k; ++i) {
+        bool allEmpty = true;
+
+        QueryResult_t::value_type el;
+        size_t associatedList = 0;
+
+        for (size_t j = 0; j < sortedLists.size(); ++j) {
+            const auto& list = sortedLists[j];
+            int index = listToIndex[j];
+            if (index >= list.size()) {
+                continue;
+            }
+
+            if (allEmpty) {
+                el = list[index];
+                associatedList = j;
+                allEmpty = false;
+            } else if (comparator(list[index], el)) {
+                associatedList = j;
+                el = list[index];
+            }
+        }
+
+        if (allEmpty) {
+            break;
+        }
+
+        sortedList.push_back(el);
+        listToIndex[associatedList]++;
+    }
+
+    return sortedList;
+}
 }  // namespace
 
 
@@ -91,21 +140,21 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     }
 
     // aggregate results
-    QueryResult_t aggregated;
+    QueryResult_t filtered_results = TopKFromSortedLists(marginal_results_);
 
-    for (const auto& marginal : marginal_results_) {
-        aggregated.insert(aggregated.end(), marginal.begin(), marginal.end());
-    }
+    // for (const auto& marginal : marginal_results_) {
+    //     aggregated.insert(aggregated.end(), marginal.begin(), marginal.end());
+    // }
 
-    std::sort(aggregated.begin(), aggregated.end(), [](const auto& a, const auto& b) {
-        if (std::get<1>(a) != std::get<1>(b)) {
-            return std::get<1>(a) > std::get<1>(b);
-        }
-        return std::get<0>(a) > std::get<0>(b);
-    });
+    // std::sort(aggregated.begin(), aggregated.end(), [](const auto& a, const auto& b) {
+    //     if (std::get<1>(a) != std::get<1>(b)) {
+    //         return std::get<1>(a) > std::get<1>(b);
+    //     }
+    //     return std::get<0>(a) > std::get<0>(b);
+    // });
 
-    auto top50 = std::min<uint32_t>(aggregated.size(), 50);
-    QueryResult_t filtered_results(aggregated.begin(), aggregated.begin() + top50);
+    // auto top50 = std::min<uint32_t>(aggregated.size(), 50);
+    // QueryResult_t filtered_results(aggregated.begin(), aggregated.begin() + top50);
     spdlog::info("Returning results of size: {}", filtered_results.size());
     return filtered_results;
 }
