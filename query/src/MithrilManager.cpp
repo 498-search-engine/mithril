@@ -43,6 +43,7 @@ struct MithrilManager {
             spdlog::info("took {} seconds to answer query", std::to_string(duration.count()));
         } catch (std::exception& e){
             std::cerr << e.what() << std::endl;
+            spdlog::warn("❌ Error answering query (Handle Function): {}", e.what());
             return;
         }
     }

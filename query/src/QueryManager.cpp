@@ -161,9 +161,12 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
-        // auto front_1k = std::min<uint32_t>(result.size(), 1000);
-        // std::vector<uint32_t> one_thousand_results(result.begin(), result.begin()+front_1k);
-        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, result);
+
+        QueryResult_t result_ranked = {};
+        if (!result.empty()) {
+            result_ranked = HandleRanking(query_to_run, worker_id, result);
+        }
+        
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};

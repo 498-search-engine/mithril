@@ -59,7 +59,8 @@ void mithril::QueryCoordinator::print_server_configs() const {
 
 QueryResults mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
     mithril::TokenNormalizer token_normalizer;
-    std::string normalized_query = token_normalizer.normalize(query);
+    // std::string normalized_query = token_normalizer.normalize(query);
+    auto normalized_query = query;
 
     if (normalized_query.empty()) {
         spdlog::warn("Normalized query is empty");

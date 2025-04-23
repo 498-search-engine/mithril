@@ -67,6 +67,7 @@ private:
     // Token lexing functions
     auto LexWordOrKeyword() -> Token;  // Lexes a word or keyword and returns the corresponding token
     auto LexQuotedPhrase() -> Token;   // Lexes a quoted phrase and returns the corresponding token
+    auto LexSingleQuotedPhrase() -> Token;  // Lexes a single quoted phrase and returns the corresponding token
     auto LexSymbol() -> Token;         // Lexes symbols (COLON, LPAREN, RPAREN) and returns the corresponding token
     auto PeekWithoutConsuming() const -> std::vector<Token>; //Returns a vector of all tokens without consuming
 };
