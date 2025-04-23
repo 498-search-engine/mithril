@@ -55,11 +55,10 @@ public:
             results_.clear();
             auto isr = queryTree->generate_isr();
 
-            if (!isr->isIdentity()) do {
+            while (isr->hasNext()) {
                 results_.emplace_back(isr->currentDocID());
                 isr->moveNext();
-            } while (isr->hasNext());
-
+            }
             return std::move(results_);
         } catch (const std::exception& e) {
             spdlog::warn("Error evaluating query: {}", e.what());
