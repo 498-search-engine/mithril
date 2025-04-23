@@ -39,7 +39,7 @@ static inline T CopyFromBytes(const char* ptr) {
 }
 
 PositionIndex::PositionIndex(const std::string& index_dir)
-    : index_dir_(index_dir), data_file_(index_dir + "/positions.data") {
+    : index_dir_(index_dir), data_file_(index_dir + "/positions.data", true) {
     // Load term -> position mapping
     if (loadPosDict())
         loadSyncPoints();
@@ -528,6 +528,112 @@ bool PositionIndex::loadPosDict() {
     }
 }
 
+bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const {
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return false;
+    }
+
+    try {
+        // Get positions
+        std::vector<uint16_t> positions = getPositions(term, doc_id);
+        return !positions.empty();
+    } catch (const std::exception& e) {
+        spdlog::error("Error checking positions: {}", e.what());
+        return false;
+    }
+}
+
+std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint32_t doc_id) const {
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return {};
+    }
+
+    auto data_ptr = data_file_.data();
+    const auto data_end = data_ptr + data_file_.size();
+
+    try {  // TODO: remove exceptions
+        const PositionMetadata& metadata = it->second;
+        data_ptr += metadata.data_offset;
+
+        for (uint32_t i = 0; i < metadata.doc_count; i++) {
+            const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(curr_doc_id);
+
+            const uint8_t field_flags = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(field_flags);
+
+            const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(pos_count);
+
+            if (curr_doc_id == doc_id) {
+                std::vector<uint16_t> positions;
+                positions.reserve(pos_count);
+
+                uint16_t prev_pos = 0;
+                for (uint32_t j = 0; j < pos_count; j++) {
+                    uint16_t delta = decodeVByte(data_ptr);
+                    prev_pos += delta;
+                    positions.push_back(prev_pos);
+                }
+
+                return positions;
+            }
+
+            // Otherwise, skip positions for this doc
+            for (uint32_t j = 0; j < pos_count; j++) {
+                (void)decodeVByte(data_ptr);
+            }
+        }
+
+        return {};
+    } catch (const std::exception& e) {
+        spdlog::error("Error getting positions: {}", e.what());
+        return {};
+    }
+}
+
+uint8_t PositionIndex::getFieldFlags(const std::string& term, uint32_t doc_id) const {
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return {};
+    }
+
+    auto data_ptr = data_file_.data();
+    const auto data_end = data_ptr + data_file_.size();
+
+    try {  // TODO: remove exceptions
+        const PositionMetadata& metadata = it->second;
+        data_ptr += metadata.data_offset;
+
+        for (uint32_t i = 0; i < metadata.doc_count; i++) {
+            const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(curr_doc_id);
+
+            const uint8_t field_flags = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(field_flags);
+
+            const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(pos_count);
+
+            if (curr_doc_id == doc_id) {
+                return field_flags;
+            }
+
+            // Otherwise, skip positions for this doc
+            for (uint32_t j = 0; j < pos_count; j++) {
+                (void)decodeVByte(data_ptr);
+            }
+        }
+
+        return 0;
+    } catch (const std::exception& e) {
+        spdlog::error("Error getting field flags: {}", e.what());
+        return 0;
+    }
+}
+
 bool PositionIndex::checkPhrase(const std::string& term1,
                                 const std::string& term2,
                                 uint32_t doc_id,
@@ -696,6 +802,11 @@ PositionIndex::DocPositionData PositionIndex::getDocPositionData(const std::stri
             const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
             data_ptr += sizeof(pos_count);
 
+            // Early termination if we've passed our target
+            if (curr_doc_id > doc_id) {
+                break;
+            }
+
             // Check if this is our target document
             if (curr_doc_id == doc_id) {
                 // Found target document, extract positions
@@ -717,10 +828,6 @@ PositionIndex::DocPositionData PositionIndex::getDocPositionData(const std::stri
                 (void)decodeVByte(data_ptr);
             }
 
-            // Early termination if we've passed our target
-            if (curr_doc_id > doc_id) {
-                break;
-            }
         }
 
         return {0, {}, false};
