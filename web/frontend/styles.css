@@ -194,3 +194,16 @@ footer {
   font-size: 14px;
   color: #4d5156;
 }
+
+/* snippets */
+.result-snippet .highlight {
+  background-color: #fff1a8;
+  font-weight: bold;
+  padding: 0 2px;
+}
+
+.result-snippet {
+  color: #4d5156;
+  line-height: 1.58;
+  word-wrap: break-word;
+}

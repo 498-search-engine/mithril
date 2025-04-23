@@ -169,6 +169,62 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }, 300);
 
+    function loadSnippetsForVisibleResults() {
+        const results = document.querySelectorAll('.result');
+        if (results.length === 0) return;
+        
+        const visibleDocIds = [];
+        results.forEach(result => {
+            const docId = result.getAttribute('data-doc-id');
+            if (docId) {
+                visibleDocIds.push(docId);
+            }
+        });
+        
+        if (visibleDocIds.length === 0) return;
+        
+        const query = document.getElementById('search-input').value;
+        fetch(`/api/snippets?ids=${visibleDocIds.join(',')}&q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(snippets => {
+                for (const [docId, snippet] of Object.entries(snippets)) {
+                    updateSnippetForDoc(docId, snippet);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading snippets:', error);
+            });
+    }
+    
+    function updateSnippetForDoc(docId, snippet) {
+        const resultElement = document.querySelector(`.result[data-doc-id="${docId}"]`);
+        if (resultElement) {
+            const snippetElement = resultElement.querySelector('.result-snippet');
+            if (snippetElement) {
+                snippetElement.innerHTML = highlightQueryTerms(snippet, document.getElementById('search-input').value);
+            }
+        }
+    }
+    
+    function highlightQueryTerms(snippet, query) {
+        const terms = query.toLowerCase()
+            .split(/\s+/)
+            .filter(term => term.length > 2 && term !== 'and' && term !== 'or' && term !== 'not');
+            
+        let result = snippet;
+        
+        for (const term of terms) {
+            const regex = new RegExp(`(\\b${escapeRegExp(term)}\\b)`, 'gi');
+            result = result.replace(regex, '<span class="highlight">$1</span>');
+        }
+        
+        return result;
+    }
+    
+    function escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
     // Display results function
     function displayResults(data, fromCache) {
         // Hide loading indicator
@@ -198,7 +254,7 @@ document.addEventListener('DOMContentLoaded', function() {
             data.results.forEach(result => {
                 const resultElement = document.createElement('div');
                 resultElement.className = 'result';
-
+                resultElement.setAttribute('data-doc-id', result.id);
                 const domain = new URL(result.url).origin;
                 const faviconUrl = `https://www.google.com/s2/favicons?sz=16&domain_url=${domain}`;
 
@@ -213,6 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 resultsContainer.appendChild(resultElement);
             });
+            setTimeout(loadSnippetsForVisibleResults, 100);
         } else {
             resultsContainer.innerHTML = '<div class="no-results">No results found</div>';
         }

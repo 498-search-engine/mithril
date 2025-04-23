@@ -12,9 +12,9 @@
 #include "Token.h"
 
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
-#include <unordered_map>
 
 class Lexer {
 public:
@@ -40,9 +40,9 @@ public:
      */
     [[nodiscard]] auto EndOfInput() -> bool;
 
-    /** 
+    /**
      * Goes through the query and returns a frequency count of all the tokens
-    */
+     */
     [[nodiscard]] auto GetTokenFrequencies() const -> std::unordered_map<std::string, int>;
 
 
@@ -69,7 +69,7 @@ private:
     auto LexQuotedPhrase() -> Token;   // Lexes a quoted phrase and returns the corresponding token
     auto LexSingleQuotedPhrase() -> Token;  // Lexes a single quoted phrase and returns the corresponding token
     auto LexSymbol() -> Token;         // Lexes symbols (COLON, LPAREN, RPAREN) and returns the corresponding token
-    auto PeekWithoutConsuming() const -> std::vector<Token>; //Returns a vector of all tokens without consuming
+    auto PeekWithoutConsuming() const -> std::vector<Token>;  // Returns a vector of all tokens without consuming
 };
 
 #endif  // LEXER_H_

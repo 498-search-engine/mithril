@@ -54,10 +54,10 @@ int main(int argc, char* argv[]) {
 
         try {
             auto results = queryCoordinator.send_query_to_workers(query);
-            for (auto& result : results){
+            for (auto& result : results) {
                 std::cout << std::get<2>(result) << std::endl;
                 auto title = std::get<3>(result);
-                for (auto& word : title){
+                for (auto& word : title) {
                     std::cout << word << " ";
                 }
                 std::cout << std::endl;

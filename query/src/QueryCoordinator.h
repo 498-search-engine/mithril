@@ -4,8 +4,8 @@
 #include "Parser.h"
 #include "Query.h"
 #include "QueryConfig.h"
-#include "Util.h"
 #include "QueryManager.h"
+#include "Util.h"
 
 #include <condition_variable>
 #include <future>
