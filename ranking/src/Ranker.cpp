@@ -2,10 +2,23 @@
 
 #include "BM25.h"
 #include "DynamicRanker.h"
+#include "PositionIndex.h"
 #include "StaticRanker.h"
+#include "TermDictionary.h"
 #include "TextPreprocessor.h"
+#include "data/Document.h"
 #include "spdlog/sinks/basic_file_sink.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 #include <spdlog/spdlog.h>
 
 #define LOGGING 0
@@ -95,19 +108,12 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
     float weightedBM25 = 0.0F;
 
     for (const auto& [term, multiplicity] : query) {
-        std::vector<uint16_t> urlPositions =
-            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::URL), doc.id);
-        std::vector<uint16_t> titlePositions =
-            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::TITLE), doc.id);
-        std::vector<uint16_t> descPositions =
-            position_index.getPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id);
         std::vector<uint16_t> bodyPositions = position_index.getPositions(term, doc.id);
 
-        bool termInUrl = urlPositions.size() > 0;
-        bool termInDescription = descPositions.size() > 0;
+        bool termInDescription =
+            position_index.hasPositions(mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id);
         bool termInBody = bodyPositions.size() > 0;
-
-        termInUrl = doc.url.find(term) != std::string::npos;
+        bool termInUrl = doc.url.find(term) != std::string::npos;
 
         size_t pos = title.find(term);
         bool termInTitle = pos != std::string::npos;
@@ -150,7 +156,6 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
 
         weightedBM25 += static_cast<float>(BM25Lib->ScoreTermForDoc(info, termFreq.at(term), bodyPositions.size())) *
                         (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
-        ;
     }
 
     float orderedTitleScore = std::sqrt(ranking::dynamic::OrderedMatchScore(query, doc.title));
