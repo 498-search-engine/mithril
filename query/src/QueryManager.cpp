@@ -26,12 +26,12 @@ QueryResult_t TopKElementsFast(QueryResult_t& results, int k = 50) {
         return std::get<0>(a) > std::get<0>(b);
     };
 
-    // The partial sort way
     if (results.size() <= k) {
         std::sort(results.begin(), results.end(), comparator);
         return results;
     }
 
+    // The partial sort way (seems to be faster)
     std::partial_sort(results.begin(), results.begin() + k, results.end(), comparator);
 
     // The nth element way
