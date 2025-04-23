@@ -27,7 +27,7 @@ public:
     TermQuote(const TermQuote&) = delete;
     TermQuote& operator=(const TermQuote&) = delete;
 
-    ~TermQuote() override = default;
+    ~TermQuote() override;
 
     bool hasNext() const override;
     void moveNext() override;
