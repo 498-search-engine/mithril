@@ -162,6 +162,14 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         } else {
             termToPointer[token.first] = data + (it->second.data_offset);
         }
+
+        std::string descToken = mithril::TokenNormalizer::decorateToken(token.first, FieldType::DESC);
+        it = query_engine->position_index_.posDict_.find(descToken);
+        if (it == query_engine->position_index_.posDict_.end()) {
+            termToPointer[descToken] = nullptr;
+        } else {
+            termToPointer[descToken] = data + (it->second.data_offset);
+        }
     }
 
     for (uint32_t match : matches) {
