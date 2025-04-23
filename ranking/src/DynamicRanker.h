@@ -1,7 +1,7 @@
 #ifndef RANKING_RANKER_H
 #define RANKING_RANKER_H
 #include "core/config.h"
-
+#include <vector>
 namespace mithril::ranking::dynamic {
 static inline core::Config Config = core::Config("dynamicranker.conf");
 
