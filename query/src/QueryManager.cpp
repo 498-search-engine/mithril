@@ -123,6 +123,7 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     // prepare new query
     {
         std::scoped_lock lock{mtx_};
+        curr_result_ct_ = 0;
         current_query_ = query;
         worker_completion_count_ = 0;
         for (auto& result : marginal_results_)
@@ -161,7 +162,7 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
-
+        auto total_sz = result.size();
         QueryResult_t result_ranked = {};
         if (!result.empty()) {
             result_ranked = HandleRanking(query_to_run, worker_id, result);
@@ -170,6 +171,7 @@ void QueryManager::WorkerThread(size_t worker_id) {
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
+            curr_result_ct_ += total_sz;
             marginal_results_[worker_id] = std::move(result_ranked);
             ++worker_completion_count_;  // TODO: change this to std::atomic increment?
             // if finished, tell main thread
