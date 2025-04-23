@@ -58,6 +58,18 @@ struct Token {
         case TokenType::EOFTOKEN:
             typeStr = "EOF";
             break;
+        case TokenType::TITLE:
+            typeStr = "TITLE";
+            break;
+        case TokenType::URL:
+            typeStr = "URL";
+            break;
+        case TokenType::ANCHOR:
+            typeStr = "ANCHOR";
+            break;
+        case TokenType::DESC:
+            typeStr = "DESC";
+            break; 
         default:
             typeStr = "UNKNOWN";
         }
