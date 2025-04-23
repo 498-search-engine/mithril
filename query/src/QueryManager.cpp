@@ -4,13 +4,23 @@
 #include "TextPreprocessor.h"
 
 #include <algorithm>
+#include <cctype>
 #include <mutex>
 #include <string>
 #include <spdlog/spdlog.h>
 
-#define RESULTS_REQUIRED_TO_SHORTCIRCUIT 50000
+#define RESULTS_REQUIRED_TO_SHORTCIRCUIT 30000
 #define SCORE_FOR_SHORTCIRCUIT_REQUIRED 5500
 #define RESULTS_COLLECTED_AFTER_SHORTCIRCUIT 100
+
+
+// If after MINIMUM_QUOTA_FOR_RESULTS_CHECK documents, there are <REQUIRED_RESULTS_QTY documents with score
+// >=REQUIRED_RESULTS_SCORE, we end ranking since there probably aren't great matches on this chunk.
+#define MINIMUM_QUOTA_FOR_RESULTS_CHECK 50000
+#define REQUIRED_RESULTS_SCORE 5000
+#define REQUIRED_RESULTS_QTY 10
+
+#define RESULTS_HARD_CAP 100000
 
 namespace mithril {
 using QueryResult_t = QueryManager::QueryResult;
@@ -166,7 +176,7 @@ void QueryManager::WorkerThread(size_t worker_id) {
         if (!result.empty()) {
             result_ranked = HandleRanking(query_to_run, worker_id, result);
         }
-        
+
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
@@ -196,55 +206,73 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
     auto& query_engine = query_engines_[worker_id];
 
-    // Parse query terms
+    // Anu - code for getting the multiplicities here
     Lexer lex(query);
+
+    // unordered_map<string, int> of token multiplicities you can just index
     auto token_multiplicities = lex.GetTokenFrequencies();
 
-    // Extract actual query terms (excluding operators)
-    std::vector<std::pair<std::string, int>> query_terms;
-    for (const auto& [term, count] : token_multiplicities) {
-        if (term != "AND" && term != "OR" && term != "NOT" && term.length() >= 2) {
-            query_terms.emplace_back(term, count);
-        }
-    }
+    // you can do whatever you want with token_multiplicities now
 
-    // Get document frequencies for ranking
-    std::unordered_map<std::string, uint32_t> doc_freq_map =
-        ranking::GetDocumentFrequencies(query_engine->term_dict_, query_terms);
-
-    // Prepare term pointer map for more efficient position access
-    std::unordered_map<std::string, const char*> term_to_pointer;
-    const char* data = query_engine->position_index_.data_file_.data();
-    
-    for (const auto& [term, _] : query_terms) {
-        if (StopwordFilter::isStopword(term)) {
+    std::vector<std::pair<std::string, int>> tokens;
+    std::string current;
+    std::cout << "tokens: ";
+    for (char c : query) {
+        if (c == ' ') {
+            if (mithril::ranking::IsValidToken(current)) {
+                std::cout << current << " ";
+                tokens.emplace_back(std::move(current), 1);
+            }
+            current = "";
             continue;
         }
 
-        // Regular term
-        auto it = query_engine->position_index_.posDict_.find(term);
-        if (it != query_engine->position_index_.posDict_.end()) {
-            term_to_pointer[term] = data + (it->second.data_offset);
-        } else {
-            term_to_pointer[term] = nullptr;
-        }
-
-        // Decorated term
-        std::string descToken = mithril::TokenNormalizer::decorateToken(term, FieldType::DESC);
-        it = query_engine->position_index_.posDict_.find(descToken);
-        if (it != query_engine->position_index_.posDict_.end()) {
-            term_to_pointer[descToken] = data + (it->second.data_offset);
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+            current += std::tolower(c);
         }
     }
 
-    // Add shortcircuit logic
+    if (!current.empty()) {
+        if (mithril::ranking::IsValidToken(current)) {
+            tokens.emplace_back(std::move(current), 1);
+        }
+    }
+
+    std::cout << std::endl;
+
+    std::unordered_map<std::string, uint32_t> map = ranking::GetDocumentFrequencies(query_engine->term_dict_, tokens);
+
+    std::unordered_map<std::string, const char*> termToPointer;
+
+    for (const auto& token : tokens) {
+        if (StopwordFilter::isStopword(token.first)) {
+            continue;
+        }
+
+        const char* data = query_engine->position_index_.data_file_.data();
+
+        auto it = query_engine->position_index_.posDict_.find(token.first);
+        if (it != query_engine->position_index_.posDict_.end()) {
+            termToPointer[token.first] = data + (it->second.data_offset);
+        }
+
+        std::string descToken = mithril::TokenNormalizer::decorateToken(token.first, FieldType::DESC);
+        it = query_engine->position_index_.posDict_.find(descToken);
+        if (it != query_engine->position_index_.posDict_.end()) {
+            termToPointer[descToken] = data + (it->second.data_offset);
+        }
+    }
+
+
+    //
     bool shortCircuit = matches.size() > RESULTS_REQUIRED_TO_SHORTCIRCUIT;
     uint32_t resultsCollectedAboveMin = 0;
 
+    uint32_t rankedDocuments = 0;
+    uint32_t rankedDocumentsAboveMin = 0;
     for (uint32_t match : matches) {
         const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
         if (!doc_opt.has_value()) {
-            // Add empty result when document not found
             ranked_matches.push_back({match, 0, "", {}, {}});
             continue;
         }
@@ -252,64 +280,36 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         const data::Document& doc = doc_opt.value();
         const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
 
-        // Calculate score using BM25Lib from main
         uint32_t score = ranking::GetFinalScore(
-            query_engine->BM25Lib_, query_terms, doc, docInfo, query_engine->position_index_, doc_freq_map, term_to_pointer);
+            query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
 
-        // Collect position data for query terms
-        TermPositionMap term_positions;
+        ranked_matches.push_back({match, score, doc.url, doc.title, {}});
 
-        // Only collect positions for actual query terms, not operators
-        for (const auto& [term, _] : query_terms) {
-            // Skip stopwords
-            if (StopwordFilter::isStopword(term)) {
-                continue;
-            }
-            
-            // Get positions for the term in this document
-            std::vector<uint16_t> positions = query_engine->position_index_.getPositions(term, match);
-
-            // Only keep first 2 positions to keep data size small
-            if (positions.size() > 2) {
-                positions.resize(2);
-            }
-
-            // Only add non-empty position lists
-            if (!positions.empty()) {
-                term_positions[term] = std::move(positions);
-            }
-            
-            // Also check for decorated term positions
-            std::string descToken = mithril::TokenNormalizer::decorateToken(term, FieldType::DESC);
-            std::vector<uint16_t> descPositions = query_engine->position_index_.getPositions(descToken, match);
-            
-            if (descPositions.size() > 2) {
-                descPositions.resize(2);
-            }
-            
-            if (!descPositions.empty()) {
-                term_positions[descToken] = std::move(descPositions);
-            }
-        }
-
-        // Add to results with all data
-        ranked_matches.emplace_back(match,                     // Document ID
-                                   score,                     // Score
-                                   doc.url,                   // URL
-                                   doc.title,                 // Title words
-                                   std::move(term_positions)  // Term positions
-        );
-        
-        // Add shortcircuit logic
         if (shortCircuit && score >= SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
             resultsCollectedAboveMin += 1;
             if (resultsCollectedAboveMin >= RESULTS_COLLECTED_AFTER_SHORTCIRCUIT) {
+                spdlog::info("Query shortcircuit since enough good results found");
                 break;
             }
         }
+
+        rankedDocuments++;
+        if (score >= REQUIRED_RESULTS_SCORE) {
+            rankedDocumentsAboveMin++;
+        }
+
+        if (rankedDocuments >= MINIMUM_QUOTA_FOR_RESULTS_CHECK) {
+            if (rankedDocumentsAboveMin < REQUIRED_RESULTS_QTY) {
+                spdlog::info("Query shortcircuit since not enough good results found");
+                break;
+            }
+        }
+
+        if (rankedDocuments >= RESULTS_HARD_CAP) {
+            break;
+        }
     }
 
-    // Use TopK optimization
     return TopKElementsFast(ranked_matches);
 }
 
