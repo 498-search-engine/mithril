@@ -551,14 +551,15 @@ PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_id, co
             const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
             data_ptr += sizeof(pos_count);
 
+            // Otherwise, skip positions for this doc
+            for (uint32_t j = 0; j < pos_count; j++) {
+                (void)decodeVByte(data_ptr);
+            }
+
             if (curr_doc_id > doc_id) {
                 return {false, data_ptr};
             } else if (curr_doc_id == doc_id) {
                 return {true, data_ptr};
-            }
-            // Otherwise, skip positions for this doc
-            for (uint32_t j = 0; j < pos_count; j++) {
-                (void)decodeVByte(data_ptr);
             }
         }
 
