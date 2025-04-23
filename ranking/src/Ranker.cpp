@@ -63,7 +63,8 @@ GetDocumentFrequencies(const TermDictionary& term_dict, const std::vector<std::p
     return map;
 }
 
-uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
+uint32_t GetFinalScore(BM25* BM25Lib,
+                       const std::vector<std::pair<std::string, int>>& query,
                        const data::Document& doc,
                        const data::DocInfo& info,
                        const PositionIndex& position_index,
@@ -110,15 +111,24 @@ uint32_t GetFinalScore(const std::vector<std::pair<std::string, int>>& query,
     std::unordered_map<std::string, const char*> newTermToData = termToData;
 
     for (const auto& [term, multiplicity] : query) {
-        auto bodyPositionsIndex = position_index.getPositionsFromByte(termToData[term], term, doc.id);
+        std::vector<uint16_t> bodyPositions;
+        if (termToData[term] != nullptr) {
+            auto bodyPositionsIndex = position_index.getPositionsFromByte(termToData[term], term, doc.id);
 
-        newTermToData[term] = bodyPositionsIndex.second;
+            newTermToData[term] = bodyPositionsIndex.second;
 
-        std::vector<uint16_t>& bodyPositions = bodyPositionsIndex.first;
+            bodyPositions = std::move(bodyPositionsIndex.first);
+        }
 
-        bool termInDescription = position_index.hasPositionsFromByte(
-            mithril::TokenNormalizer::decorateToken(term, FieldType::DESC), doc.id, termToData[term]);
+        std::string descToken = mithril::TokenNormalizer::decorateToken(term, FieldType::DESC);
 
+        bool termInDescription = false;
+        if (termToData[descToken] != nullptr) {
+            auto termInDescriptionIndex = position_index.hasPositionsFromByte(descToken, doc.id, termToData[descToken]);
+            termInDescription = termInDescriptionIndex.first;
+
+            newTermToData[descToken] = termInDescriptionIndex.second;
+        }
         // std::vector<uint16_t> bodyPositions = position_index.getPositions(term, doc.id);
 
         // bool termInDescription =

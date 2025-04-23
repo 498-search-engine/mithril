@@ -34,6 +34,7 @@ private:
 
     // simple first-letter index to speed up lookups
     std::array<uint32_t, 256> first_char_index_{};
+    std::vector<uint32_t> entry_offsets_;
     bool loaded_ = false;
 
     std::optional<TermEntry> search(const std::string& term) const;

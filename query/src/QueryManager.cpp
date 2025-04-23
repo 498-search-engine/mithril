@@ -16,8 +16,7 @@ QueryManager::QueryManager(const std::vector<std::string>& index_dirs)
     const auto num_workers = index_dirs.size();
     marginal_results_.resize(num_workers);
     for (size_t i = 0; i < num_workers; ++i) {
-        // Init ranker
-        mithril::ranking::InitRanker(index_dirs[i]);
+        spdlog::info("about to query manager for {}", index_dirs[i]);
         query_engines_.emplace_back(std::make_unique<QueryEngine>(index_dirs[i]));
         threads_.emplace_back(&QueryManager::WorkerThread, this, i);
     }
@@ -88,9 +87,9 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
-        auto front_1k = std::min<uint32_t>(result.size(), 1000);
-        std::vector<uint32_t> one_thousand_results(result.begin(), result.begin()+front_1k);
-        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, one_thousand_results);
+        // auto front_1k = std::min<uint32_t>(result.size(), 1000);
+        // std::vector<uint32_t> one_thousand_results(result.begin(), result.begin()+front_1k);
+        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, result);
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
@@ -163,6 +162,14 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         } else {
             termToPointer[token.first] = data + (it->second.data_offset);
         }
+
+        std::string descToken = mithril::TokenNormalizer::decorateToken(token.first, FieldType::DESC);
+        it = query_engine->position_index_.posDict_.find(descToken);
+        if (it == query_engine->position_index_.posDict_.end()) {
+            termToPointer[descToken] = nullptr;
+        } else {
+            termToPointer[descToken] = data + (it->second.data_offset);
+        }
     }
 
     for (uint32_t match : matches) {
@@ -175,8 +182,8 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         const data::Document& doc = doc_opt.value();
         const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
 
-        uint32_t score =
-            ranking::GetFinalScore(tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
+        uint32_t score = ranking::GetFinalScore(
+            query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
     }
 
