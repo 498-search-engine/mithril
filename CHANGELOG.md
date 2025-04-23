@@ -75,6 +75,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - query coverage, density + position based ranking (#159)
 - Link server to mithril managers (#168)
 - Add proper field, title, url, desc logic to query (#169)
+- Do proper linking of coordinator and stopwards, add identity ISR, and move stopward logic to ISR (#164)
 
 ### Fixed
 
