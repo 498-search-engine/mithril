@@ -20,7 +20,6 @@
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
-#include <queue>
 
 namespace fs = std::filesystem;
 
@@ -40,7 +39,7 @@ static inline T CopyFromBytes(const char* ptr) {
 }
 
 PositionIndex::PositionIndex(const std::string& index_dir)
-    : index_dir_(index_dir), data_file_(index_dir + "/positions.data") {
+    : index_dir_(index_dir), data_file_(index_dir + "/positions.data", true) {
     // Load term -> position mapping
     loadPosDict();
 }
