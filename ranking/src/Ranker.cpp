@@ -2,10 +2,23 @@
 
 #include "BM25.h"
 #include "DynamicRanker.h"
+#include "PositionIndex.h"
 #include "StaticRanker.h"
+#include "TermDictionary.h"
 #include "TextPreprocessor.h"
+#include "data/Document.h"
 #include "spdlog/sinks/basic_file_sink.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 #include <spdlog/spdlog.h>
 
 #define LOGGING 0
