@@ -231,6 +231,8 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
         if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
             current += std::tolower(c);
+        } else if (c >= '1' && c <= '9') {
+            current += c;
         }
     }
 
@@ -265,8 +267,6 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         }
     }
 
-
-    //
     bool shortCircuit = matches.size() > RESULTS_REQUIRED_TO_SHORTCIRCUIT;
     uint32_t resultsCollectedAboveMin = 0;
 
