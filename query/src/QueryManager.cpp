@@ -7,8 +7,8 @@
 #include <string>
 #include <spdlog/spdlog.h>
 
-#define RESULTS_REQUIRED_TO_SHORTCIRCUIT 20000
-#define SCORE_FOR_SHORTCIRCUIT_REQUIRED 5000
+#define RESULTS_REQUIRED_TO_SHORTCIRCUIT 50000
+#define SCORE_FOR_SHORTCIRCUIT_REQUIRED 5500
 #define RESULTS_COLLECTED_AFTER_SHORTCIRCUIT 100
 
 namespace mithril {
@@ -142,19 +142,6 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     // aggregate results
     QueryResult_t filtered_results = TopKFromSortedLists(marginal_results_);
 
-    // for (const auto& marginal : marginal_results_) {
-    //     aggregated.insert(aggregated.end(), marginal.begin(), marginal.end());
-    // }
-
-    // std::sort(aggregated.begin(), aggregated.end(), [](const auto& a, const auto& b) {
-    //     if (std::get<1>(a) != std::get<1>(b)) {
-    //         return std::get<1>(a) > std::get<1>(b);
-    //     }
-    //     return std::get<0>(a) > std::get<0>(b);
-    // });
-
-    // auto top50 = std::min<uint32_t>(aggregated.size(), 50);
-    // QueryResult_t filtered_results(aggregated.begin(), aggregated.begin() + top50);
     spdlog::info("Returning results of size: {}", filtered_results.size());
     return filtered_results;
 }
@@ -274,12 +261,12 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         uint32_t score = ranking::GetFinalScore(
             query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
-        // if (shortCircuit && score >= SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
-        //     resultsCollectedAboveMin += 1;
-        //     if (resultsCollectedAboveMin > RESULTS_COLLECTED_AFTER_SHORTCIRCUIT) {
-        //         break;
-        //     }
-        // }
+        if (shortCircuit && score >= SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
+            resultsCollectedAboveMin += 1;
+            if (resultsCollectedAboveMin >= RESULTS_COLLECTED_AFTER_SHORTCIRCUIT) {
+                break;
+            }
+        }
     }
 
     return TopKElementsFast(ranked_matches);
