@@ -25,6 +25,7 @@ public:
           position_index_(index_dir) {
         query::QueryConfig::SetIndexPath(index_dir);
         query::QueryConfig::SetMaxDocId(map_reader_.documentCount());
+        spdlog::info("about to make bm25 for {}", index_dir);
         BM25Lib_ = new ranking::BM25(index_dir);
     }
 
