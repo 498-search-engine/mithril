@@ -108,6 +108,9 @@ void QueryManager::WorkerThread(size_t worker_id) {
 */
 QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worker_id, std::vector<uint32_t>& matches) {
     spdlog::info("Ranking results of size: {}", matches.size());
+    if (matches.empty()) {
+        return {};
+    }
 
     QueryResult_t ranked_matches;
     ranked_matches.reserve(matches.size());

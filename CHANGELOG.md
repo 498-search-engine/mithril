@@ -126,6 +126,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Hooked up distributed backend with frontend web-server (#162)
 - Sending urls and titles over network from backend (#163)
 - Strip all HTML from title on frontend (#168)
+- Fix hardcoded path (#171)
+- optimize usage of positions in ranker (#170)
 
 ## [0.1.0] - 2025-02-07
 
