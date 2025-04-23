@@ -37,6 +37,21 @@ TermDictionary::TermDictionary(const std::string& index_dir) {
         return;
     }
 
+    // Force in memory
+    if (mlock(dict_data_, dict_size_) != 0) {
+        std::cerr << "Failed to lock into memory dictionary file" << std::endl;
+        close(dict_fd_);
+        dict_fd_ = -1;
+        dict_data_ = nullptr;
+        return;
+    }
+
+    // Touch all pages to force in memory
+    volatile char tmp;
+    for (size_t i = 0; i < dict_size_; i += 4096) {
+        tmp = *((char*)dict_data_ + i);
+    }
+
     const char* ptr = dict_data_;
     uint32_t magic = *reinterpret_cast<const uint32_t*>(ptr);
     ptr += sizeof(uint32_t);

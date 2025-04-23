@@ -41,8 +41,7 @@ static inline T CopyFromBytes(const char* ptr) {
 PositionIndex::PositionIndex(const std::string& index_dir)
     : index_dir_(index_dir), data_file_(index_dir + "/positions.data", true) {
     // Load term -> position mapping
-    if (loadPosDict())
-        loadSyncPoints();
+    loadPosDict();
 }
 
 PositionIndex::~PositionIndex() {}
@@ -528,6 +527,164 @@ bool PositionIndex::loadPosDict() {
     }
 }
 
+bool PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data_ptr) const {
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return false;
+    }
+
+    const auto* const data_end = data_file_.data() + data_file_.size();
+
+    try {  // TODO: remove exceptions
+        const PositionMetadata& metadata = it->second;
+
+        for (uint32_t i = 0; i < metadata.doc_count; i++) {
+            const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(curr_doc_id);
+
+            const uint8_t field_flags = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(field_flags);
+
+            const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(pos_count);
+
+            if (curr_doc_id > doc_id) {
+                return false;
+            } else if (curr_doc_id == doc_id) {
+                return true;
+            }
+            // Otherwise, skip positions for this doc
+            for (uint32_t j = 0; j < pos_count; j++) {
+                (void)decodeVByte(data_ptr);
+            }
+        }
+
+        return false;
+    } catch (const std::exception& e) {
+        spdlog::error("Error checking positions: {}", e.what());
+        return false;
+    }
+}
+
+bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const {
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return {};
+    }
+
+    const char* data_ptr = data_file_.data();
+    const PositionMetadata& metadata = it->second;
+    data_ptr += metadata.data_offset;
+
+    return hasPositionsFromByte(term, doc_id, data_ptr);
+}
+
+std::pair<std::vector<uint16_t>, const char*>
+PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& term, uint32_t doc_id) const {
+    const char* input_data_ptr = data_ptr;
+
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return {{}, data_ptr};
+    }
+
+    const auto data_end = data_file_.data() + data_file_.size();
+
+    try {  // TODO: remove exceptions
+        const PositionMetadata& metadata = it->second;
+
+        for (uint32_t i = 0; i < metadata.doc_count; i++) {
+            const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(curr_doc_id);
+
+            const uint8_t field_flags = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(field_flags);
+
+            const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(pos_count);
+
+            if (curr_doc_id > doc_id) {
+                return {{}, input_data_ptr};
+            } else if (curr_doc_id == doc_id) {
+                std::vector<uint16_t> positions;
+                positions.reserve(pos_count);
+
+                uint16_t prev_pos = 0;
+                for (uint32_t j = 0; j < pos_count; j++) {
+                    uint16_t delta = decodeVByte(data_ptr);
+                    prev_pos += delta;
+                    positions.push_back(prev_pos);
+                }
+
+                return {positions, data_ptr};
+            }
+
+            // Otherwise, skip positions for this doc
+            for (uint32_t j = 0; j < pos_count; j++) {
+                (void)decodeVByte(data_ptr);
+            }
+        }
+
+        return {{}, input_data_ptr};
+    } catch (const std::exception& e) {
+        spdlog::error("Error getting positions: {}", e.what());
+        return {{}, input_data_ptr};
+    }
+}
+
+std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint32_t doc_id) const {
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return {};
+    }
+
+    const char* data_ptr = data_file_.data();
+    const PositionMetadata& metadata = it->second;
+    data_ptr += metadata.data_offset;
+
+    return getPositionsFromByte(data_ptr, term, doc_id).first;
+}
+
+uint8_t PositionIndex::getFieldFlags(const std::string& term, uint32_t doc_id) const {
+    auto it = posDict_.find(term);
+    if (it == posDict_.end()) {
+        return {};
+    }
+
+    auto data_ptr = data_file_.data();
+    const auto data_end = data_ptr + data_file_.size();
+
+    try {  // TODO: remove exceptions
+        const PositionMetadata& metadata = it->second;
+        data_ptr += metadata.data_offset;
+
+        for (uint32_t i = 0; i < metadata.doc_count; i++) {
+            const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(curr_doc_id);
+
+            const uint8_t field_flags = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(field_flags);
+
+            const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
+            data_ptr += sizeof(pos_count);
+
+            if (curr_doc_id == doc_id) {
+                return field_flags;
+            }
+
+            // Otherwise, skip positions for this doc
+            for (uint32_t j = 0; j < pos_count; j++) {
+                (void)decodeVByte(data_ptr);
+            }
+        }
+
+        return 0;
+    } catch (const std::exception& e) {
+        spdlog::error("Error getting field flags: {}", e.what());
+        return 0;
+    }
+}
+
 bool PositionIndex::checkPhrase(const std::string& term1,
                                 const std::string& term2,
                                 uint32_t doc_id,
@@ -573,176 +730,6 @@ uint32_t PositionIndex::decodeVByte(const char*& ptr) const {
     }
 
     return result;
-}
-
-bool PositionIndex::loadSyncPoints() {
-    std::string sync_file = index_dir_ + "/positions.sync";
-    if (!std::filesystem::exists(sync_file)) {
-        spdlog::info("No position sync points file found (this is not an error)");
-        return true;  // cant opt
-    }
-
-    try {
-        std::ifstream in(sync_file, std::ios::binary);
-        if (!in) {
-            spdlog::warn("Failed to open sync points file: {}", sync_file);
-            return false;
-        }
-
-        // Read file version and term count
-        uint32_t version;
-        in.read(reinterpret_cast<char*>(&version), sizeof(version));
-        if (version != 1) {
-            spdlog::warn("Unsupported sync points file version: {}", version);
-            return false;
-        }
-
-        uint32_t term_count;
-        in.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
-        sync_points_.reserve(term_count);
-
-        // Read term data
-        for (uint32_t i = 0; i < term_count && in.good(); i++) {
-            // Read term
-            uint32_t term_len;
-            in.read(reinterpret_cast<char*>(&term_len), sizeof(term_len));
-
-            std::string term(term_len, ' ');
-            in.read(&term[0], term_len);
-
-            // Read sync points
-            uint32_t point_count;
-            in.read(reinterpret_cast<char*>(&point_count), sizeof(point_count));
-
-            std::vector<PositionSyncPoint> points(point_count);
-            in.read(reinterpret_cast<char*>(points.data()), point_count * sizeof(PositionSyncPoint));
-
-            sync_points_[term] = std::move(points);
-        }
-
-        spdlog::info("Loaded sync points for {} terms", sync_points_.size());
-        return true;
-    } catch (const std::exception& e) {
-        spdlog::error("Error loading sync points: {}", e.what());
-        sync_points_.clear();
-        return false;
-    }
-}
-
-uint64_t PositionIndex::findNearestSyncPoint(const std::string& term, uint32_t doc_id) const {
-    // Check if we have sync points for this term
-    auto it = sync_points_.find(term);
-    if (it == sync_points_.end()) {
-        // Fall back to term metadata offset
-        auto dict_it = posDict_.find(term);
-        return (dict_it != posDict_.end()) ? dict_it->second.data_offset : 0;
-    }
-
-    const auto& points = it->second;
-    if (points.empty()) {
-        auto dict_it = posDict_.find(term);
-        return (dict_it != posDict_.end()) ? dict_it->second.data_offset : 0;
-    }
-
-    // Find the first sync point with doc_id > target_doc_id using std::upper_bound
-    auto iter =
-        std::upper_bound(points.begin(), points.end(), doc_id, [](uint32_t target, const PositionSyncPoint& point) {
-            return target < point.doc_id;
-        });
-
-    // If we're at the beginning, all sync points have doc_id > target_doc_id
-    if (iter == points.begin()) {
-        auto dict_it = posDict_.find(term);
-        return (dict_it != posDict_.end()) ? dict_it->second.data_offset : 0;
-    }
-
-    // Otherwise, use the previous sync point (which has doc_id <= target_doc_id)
-    --iter;
-    return iter->offset;
-}
-
-// Helper method to retrieve document position data
-PositionIndex::DocPositionData PositionIndex::getDocPositionData(const std::string& term, uint32_t doc_id) const {
-
-    auto it = posDict_.find(term);
-    if (it == posDict_.end()) {
-        return {0, {}, false};
-    }
-
-    try {
-        // Find starting offset using sync points
-        uint64_t start_offset = findNearestSyncPoint(term, doc_id);
-
-        // Safety check for valid offset
-        if (start_offset >= data_file_.size()) {
-            spdlog::error("Invalid offset for term '{}': {} (file size: {})", term, start_offset, data_file_.size());
-            return {0, {}, false};
-        }
-
-        const char* data_ptr = data_file_.data() + start_offset;
-        const char* data_end = data_file_.data() + data_file_.size();
-
-        // Scan for the document
-        while (data_ptr < data_end) {
-            // Read document ID
-            const uint32_t curr_doc_id = CopyFromBytes<uint32_t>(data_ptr);
-            data_ptr += sizeof(curr_doc_id);
-
-            // Read field flags
-            const uint8_t field_flags = CopyFromBytes<uint8_t>(data_ptr);
-            data_ptr += sizeof(field_flags);
-
-            // Read position count
-            const uint32_t pos_count = CopyFromBytes<uint32_t>(data_ptr);
-            data_ptr += sizeof(pos_count);
-
-            // Early termination if we've passed our target
-            if (curr_doc_id > doc_id) {
-                break;
-            }
-
-            // Check if this is our target document
-            if (curr_doc_id == doc_id) {
-                // Found target document, extract positions
-                std::vector<uint16_t> positions;
-                positions.reserve(pos_count);
-
-                uint16_t prev_pos = 0;
-                for (uint32_t j = 0; j < pos_count && data_ptr < data_end; j++) {
-                    uint16_t delta = decodeVByte(data_ptr);
-                    prev_pos += delta;
-                    positions.push_back(prev_pos);
-                }
-
-                return {field_flags, std::move(positions), true};
-            }
-
-            // Not our target, skip positions
-            for (uint32_t j = 0; j < pos_count && data_ptr < data_end; j++) {
-                (void)decodeVByte(data_ptr);
-            }
-        }
-
-        return {0, {}, false};
-    } catch (const std::exception& e) {
-        spdlog::error("Error getting position data for term '{}', doc {}: {}", term, doc_id, e.what());
-        return {0, {}, false};
-    }
-}
-
-std::vector<uint16_t> PositionIndex::getPositions(const std::string& term, uint32_t doc_id) const {
-    auto result = getDocPositionData(term, doc_id);
-    return result.positions;
-}
-
-uint8_t PositionIndex::getFieldFlags(const std::string& term, uint32_t doc_id) const {
-    auto result = getDocPositionData(term, doc_id);
-    return result.field_flags;
-}
-
-bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const {
-    auto result = getDocPositionData(term, doc_id);
-    return result.found && !result.positions.empty();
 }
 
 }  // namespace mithril
