@@ -88,8 +88,9 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
         // Evaluate query over this thread's index
         auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
-
-        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, result);
+        auto front_1k = std::min<uint32_t>(result.size(), 1000);
+        std::vector<uint32_t> one_thousand_results(result.begin(), result.begin()+front_1k);
+        QueryResult_t result_ranked = HandleRanking(query_to_run, worker_id, one_thousand_results);
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
@@ -162,7 +163,10 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         ranked_matches.emplace_back(match, score, doc.url, doc.title);
     }
 
-    return ranked_matches;
+    uint32_t top50 = std::min<uint32_t>(ranked_matches.size(), 50);
+    QueryResult_t best50(ranked_matches.begin(), ranked_matches.begin()+top50);
+
+    return best50;
 }
 
 }  // namespace mithril
