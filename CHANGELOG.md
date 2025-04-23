@@ -142,6 +142,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Skip position lookup for stopwords in ranking (#181)
 - Ensure that parser properly handles whitespace separated title, url, and desc tokens
 - get query results' snippets from corpus + format (#178)
+- fix ranking tokenization (#182)
 
 ## [0.1.0] - 2025-02-07
 
