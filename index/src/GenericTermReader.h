@@ -2,13 +2,13 @@
 #define INDEX_GENERIC_TERMREADER
 
 #include "IndexStreamReader.h"
-#include "PositionIndex.h"
-#include "TermDictionary.h"
-#include "TermOR.h"
 #include "core/mem_map_file.h"
+#include "TermDictionary.h"
+#include "PositionIndex.h"
+#include "TermOR.h"
 
-#include <memory>
 #include <string>
+#include <memory>
 
 namespace mithril {
 

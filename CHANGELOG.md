@@ -78,6 +78,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Do proper linking of coordinator and stopwards, add identity ISR, and move stopward logic to ISR (#164)
 - Link server to mithril managers
 - add order sensitive ranking & BM25 (#166)
+- performance improvements to position index (#172)
 
 ### Fixed
 
@@ -128,11 +129,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - better utf8 handling in json escaping for frontend (#161)
 - Hooked up distributed backend with frontend web-server (#162)
 - Sending urls and titles over network from backend (#163)
-- add script to make positions sync points from built idx (#167)
 - Strip all HTML from title on frontend (#168)
 - Fix hardcoded path (#171)
 - optimize usage of positions in ranker (#170)
 - downstream fixes after ranking (#172)
+- precompute offsets in term dictionary (#177)
 
 ## [0.1.0] - 2025-02-07
 

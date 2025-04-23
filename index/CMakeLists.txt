@@ -44,9 +44,6 @@ target_link_libraries(test_termPhrase PRIVATE index)
 target_link_libraries(test_genericTermReader PRIVATE index)
 
 
-add_executable_with_copy(generate_position_sync_points src/generate_position_sync_points.cpp)
-target_link_libraries(generate_position_sync_points PRIVATE index)
-
 # add_executable(index_debug
 #     src/debugPrintIndex.cpp
 # )

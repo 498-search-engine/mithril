@@ -29,11 +29,6 @@ struct PositionEntry {
     std::vector<uint16_t> positions;
 };
 
-struct PositionSyncPoint {
-    uint32_t doc_id;
-    uint64_t offset;
-};
-
 static constexpr size_t NUM_FIELDS = static_cast<size_t>(FieldType::DESC) + 1;
 static_assert(NUM_FIELDS == 5, "Unexpected number of field types");
 
@@ -47,7 +42,12 @@ public:
     PositionIndex(const std::string& index_dir);
     ~PositionIndex();
 
+    bool hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data) const;
     bool hasPositions(const std::string& term, uint32_t doc_id) const;
+
+    std::pair<std::vector<uint16_t>, const char*>
+    getPositionsFromByte(const char* data_ptr, const std::string& term, uint32_t doc_id) const;
+
     std::vector<uint16_t> getPositions(const std::string& term, uint32_t doc_id) const;
     uint8_t getFieldFlags(const std::string& term, uint32_t doc_id) const;
     bool checkPhrase(const std::string& term1, const std::string& term2, uint32_t doc_id, int distance = 1) const;
@@ -65,27 +65,14 @@ public:
     static void finalizeIndex(const std::string& output_dir);
     static bool shouldStorePositions(const std::string& term, uint32_t freq, size_t total_terms);
 
+    mutable core::MemMapFile data_file_;
+    std::unordered_map<std::string, PositionMetadata> posDict_;
+
 private:
     std::string index_dir_;
-    std::unordered_map<std::string, PositionMetadata> posDict_;
-    mutable core::MemMapFile data_file_;
 
     bool loadPosDict();
     uint32_t decodeVByte(const char*& ptr) const;
-
-    // Map of term -> sync points
-    std::unordered_map<std::string, std::vector<PositionSyncPoint>> sync_points_;
-    bool loadSyncPoints();
-    uint64_t findNearestSyncPoint(const std::string& term, uint32_t doc_id) const;
-
-    // Helper struct for getPositions and getFieldFlags
-    struct DocPositionData {
-        uint8_t field_flags;
-        std::vector<uint16_t> positions;
-        bool found;
-    };
-
-    DocPositionData getDocPositionData(const std::string& term, uint32_t doc_id) const;
 
     static std::mutex buffer_mutex_;
     static std::unordered_map<std::string, std::vector<PositionEntry>> position_buffer_;
