@@ -149,6 +149,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add circuitbreakers (#185)
 - allow for missing mithril docs (#184)
 - add numbers to ranking (#187)
+- fix query coordinator sorting (#191)
 
 ## [0.1.0] - 2025-02-07
 
