@@ -8,6 +8,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultsContainer = document.getElementById('results');
     const exampleLinks = document.querySelectorAll('.example');
 
+    function normalizeURL(url) {
+        try {
+          const parsed = new URL(url);
+          // Remove 'www.' from the beginning of the hostname (case-insensitive)
+          const hostname = parsed.hostname.replace(/^www\./i, '');
+          // Remove trailing slash from the pathname
+          const pathname = parsed.pathname.endsWith('/') 
+            ? parsed.pathname.slice(0, -1) 
+            : parsed.pathname;
+          // Reconstruct the normalized URL
+          return `${parsed.protocol}//${hostname}${pathname}${parsed.search}${parsed.hash}`;
+        } catch (e) {
+          return url; // Return original if invalid URL
+        }
+    }
+      
     function strip(html) {
         let doc = new DOMParser().parseFromString(html, 'text/html');
         return doc.body.textContent || "";
@@ -152,6 +168,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(data => {
+                // Filter data to remove duplicate URL results
+                let urlSet = new Set();
+                let newDataResults = [];
+
+                data.results.forEach(result => {
+                    let normalizedUrl = normalizeURL(result.url);
+                    if (urlSet.has(normalizedUrl)) {
+                        console.log("Skipping " + normalizedUrl);
+                        return;
+                    }
+
+                    urlSet.add(normalizedUrl);
+                    newDataResults.push(result);
+                });
+
+                data.results = newDataResults;
+
                 // Cache the results
                 queryCache.set(query, data);
 
