@@ -319,8 +319,13 @@ void SearchPlugin::ProcessSnippetRequest(const std::string& request, ResponseWri
     }
 
     // Generate snippets for each doc ID -andbuild JSON manually
-    std::string json_response = "{";
+    std::string json_response;
     bool first = true;
+
+    auto chunkWriter = rw.BeginChunked(http::StatusCode::OK, "application/json"sv);
+    if (!chunkWriter) {
+        return;
+    }
 
     for (uint32_t doc_id : doc_ids) {
         // Look up position data for this doc (currently empty)
@@ -328,16 +333,21 @@ void SearchPlugin::ProcessSnippetRequest(const std::string& request, ResponseWri
 
         std::string snippet = snippet_generator_->generateSnippet(doc_id, query_terms, positions);
 
-        if (!first) {
-            json_response += ",";
-        }
-        first = false;
+        // Build JSON response for snippet
+        json_response.clear();
+        json_response.append("{\"");
+        json_response.append(std::to_string(doc_id));
+        json_response.append("\":\"");
+        json_response.append(EscapeJsonString(snippet));
+        json_response.append("\"}");
 
-        json_response += "\"" + std::to_string(doc_id) + "\":\"" + EscapeJsonString(snippet) + "\"";
+        bool ok = chunkWriter->WriteChunk(json_response);
+        if (!ok) {
+            break;
+        }
     }
 
-    json_response += "}";
-    rw.WriteResponse(http::StatusCode::OK, "application/json"sv, json_response);
+    chunkWriter->Finish();
 }
 
 std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_results) {
