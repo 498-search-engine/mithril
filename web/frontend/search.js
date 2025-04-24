@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 300);
 
     function loadSnippetsForVisibleResults() {
-        const results = document.querySelectorAll('.result');
+        const results = document.querySelectorAll('div[data-doc-id]');
         if (results.length === 0) return;
         
         const visibleDocIds = [];
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateSnippetForDoc(docId, snippet) {
-        const resultElement = document.querySelector(`.result[data-doc-id="${docId}"]`);
+        const resultElement = document.querySelector(`div[data-doc-id="${docId}"]`);
         if (resultElement) {
             const snippetElement = resultElement.querySelector('.result-snippet');
             if (snippetElement) {
@@ -253,10 +253,12 @@ document.addEventListener('DOMContentLoaded', function() {
         for (let i = 1; i < group.length; i++) {
             const child = group[i];
             const sitelink = document.createElement('div');
+            sitelink.setAttribute('data-doc-id', child.id);
+
             sitelink.className = 'sitelink';
             sitelink.innerHTML = `
                 <a href="${child.url}" target="_blank">${strip(child.title)}</a>
-                <p>${child.snippet}</p>
+                <p class="result-snippet">${child.snippet}</p>
             `;
             sitelinksContainer.appendChild(sitelink);
         }
