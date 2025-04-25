@@ -215,3 +215,51 @@ footer {
   line-height: 1.58;
   word-wrap: break-word;
 }
+
+.favicon {
+  width: 16px;
+  height: 16px;
+}
+
+.result-group {
+  margin-bottom: 32px;
+}
+
+.result-url {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #555;
+  font-size: 0.9em;
+  margin-bottom: 6px;
+}
+
+
+.sitelinks {
+  margin-left: 20px;
+  margin-top: 8px;
+  border-left: 2px solid #eee;
+  padding-left: 12px;
+}
+
+.sitelink {
+  margin-top: 8px;
+}
+
+.sitelink a {
+  font-weight: 550;
+  color: #1f2937;
+  text-decoration: none;
+}
+
+.sitelink a:hover {
+  text-decoration: underline;
+}
+
+.sitelink p {
+  margin: 4px 0 0 0;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

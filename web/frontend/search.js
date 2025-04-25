@@ -8,6 +8,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultsContainer = document.getElementById('results');
     const exampleLinks = document.querySelectorAll('.example');
 
+    function normalizeURL(url) {
+        try {
+          const parsed = new URL(url);
+          // Remove 'www.' from the beginning of the hostname (case-insensitive)
+          const hostname = parsed.hostname.replace(/^www\./i, '');
+          // Remove trailing slash from the pathname
+          const pathname = parsed.pathname.endsWith('/') 
+            ? parsed.pathname.slice(0, -1) 
+            : parsed.pathname;
+          // Reconstruct the normalized URL
+          return `${parsed.protocol}//${hostname}${pathname}${parsed.search}${parsed.hash}`;
+        } catch (e) {
+          return url; // Return original if invalid URL
+        }
+    }
+
+    function truncateString(str) {
+        const words = str.trim().split(/\s+/);
+        if (words.length <= 15) {
+          return str;
+        }
+        return words.slice(0, 15).join(' ') + '...';
+    }
+
     function strip(html) {
         let doc = new DOMParser().parseFromString(html, 'text/html');
         return doc.body.textContent || "";
@@ -152,6 +176,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(data => {
+                // Filter data to remove duplicate URL results
+                let urlSet = new Set();
+                let newDataResults = [];
+
+                data.results.forEach(result => {
+                    let normalizedUrl = normalizeURL(result.url);
+                    if (urlSet.has(normalizedUrl)) {
+                        console.log("Skipping " + normalizedUrl);
+                        return;
+                    }
+
+                    result.title = truncateString(result.title);
+                    
+                    urlSet.add(normalizedUrl);
+                    newDataResults.push(result);
+                });
+
+                data.results = newDataResults;
+
                 // Cache the results
                 queryCache.set(query, data);
 
@@ -170,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 300);
 
     function loadSnippetsForVisibleResults() {
-        const results = document.querySelectorAll('.result');
+        const results = document.querySelectorAll('div[data-doc-id]');
         if (results.length === 0) return;
         
         const visibleDocIds = [];
@@ -197,7 +240,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateSnippetForDoc(docId, snippet) {
-        const resultElement = document.querySelector(`.result[data-doc-id="${docId}"]`);
+        const resultElement = document.querySelector(`div[data-doc-id="${docId}"]`);
         if (resultElement) {
             const snippetElement = resultElement.querySelector('.result-snippet');
             if (snippetElement) {
@@ -223,6 +266,48 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function escapeRegExp(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function createResult(group) {
+        const groupContainer = document.createElement('div');
+        groupContainer.className = 'result-group';
+
+        const mainResult = group[0];
+        const domain = new URL(mainResult.url).origin;
+
+        const mainElement = document.createElement('div');
+        mainElement.className = 'result';
+        mainElement.setAttribute('data-doc-id', mainResult.id);
+        const faviconUrl = `https://www.google.com/s2/favicons?sz=64&domain_url=${domain}`;
+
+        mainElement.innerHTML = `
+            <h2><a href="${mainResult.url}" target="_blank">${strip(mainResult.title)}</a></h2>
+            <div class="result-url">
+                <img src="${faviconUrl}" alt="favicon" class="favicon">
+                <span>${mainResult.url}</span>
+            </div>
+            <p class="result-snippet">${mainResult.snippet}</p>
+        `;
+        groupContainer.appendChild(mainElement);
+
+        const sitelinksContainer = document.createElement('div');
+        sitelinksContainer.className = 'sitelinks';
+
+        for (let i = 1; i < group.length; i++) {
+            const child = group[i];
+            const sitelink = document.createElement('div');
+            sitelink.setAttribute('data-doc-id', child.id);
+
+            sitelink.className = 'sitelink';
+            sitelink.innerHTML = `
+                <a href="${child.url}" target="_blank">${strip(child.title)}</a>
+                <p class="result-snippet">${child.snippet}</p>
+            `;
+            sitelinksContainer.appendChild(sitelink);
+        }
+
+        groupContainer.appendChild(sitelinksContainer);
+        resultsContainer.appendChild(groupContainer);
     }
     
     // Display results function
@@ -251,24 +336,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (data.results && data.results.length > 0) {
-            data.results.forEach(result => {
-                const resultElement = document.createElement('div');
-                resultElement.className = 'result';
-                resultElement.setAttribute('data-doc-id', result.id);
-                const domain = new URL(result.url).origin;
-                const faviconUrl = `https://www.google.com/s2/favicons?sz=64&domain_url=${domain}`;
+            const domainToMatch = new URL(data.results[0].url).hostname;
+            let group = [data.results[0]];
+            let startI = 1;
 
-                resultElement.innerHTML = `
-                    <h2><a href="${result.url}" target="_blank">${strip(result.title)}</a></h2>
-                    <div class="result-url" style="display: flex; align-items: center; gap: 6px; margin: 4px 0;">
-                        <img src="${faviconUrl}" alt="favicon" class="favicon" style="width: 16px; height: 16px;">
-                        <span class="result-url-text">${result.url}</span>
-                    </div>
-                    <p class="result-snippet">${result.snippet}</p>
-                `;
+            // Match up to 5 domains for grouping
+            for (let i = 1; i < Math.min(data.results.length, 5); ++i) {
+                const domain = new URL(data.results[i].url).hostname;
+                if (domain != domainToMatch) {
+                    startI = i;
+                    break; 
+                }
 
-                resultsContainer.appendChild(resultElement);
-            });
+                group.push(data.results[i]);
+                startI = i + 1;
+            }
+
+            createResult(group);
+
+            for (let i = startI; i < data.results.length; ++i) {
+                const result = data.results[i];
+                createResult([result]);
+            }
+        
             setTimeout(loadSnippetsForVisibleResults, 50);
         } else {
             resultsContainer.innerHTML = '<div class="no-results">No results found</div>';
