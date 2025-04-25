@@ -23,7 +23,15 @@ document.addEventListener('DOMContentLoaded', function() {
           return url; // Return original if invalid URL
         }
     }
-      
+
+    function truncateString(str) {
+        const words = str.trim().split(/\s+/);
+        if (words.length <= 15) {
+          return str;
+        }
+        return words.slice(0, 15).join(' ') + '...';
+    }
+
     function strip(html) {
         let doc = new DOMParser().parseFromString(html, 'text/html');
         return doc.body.textContent || "";
@@ -179,6 +187,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
 
+                    result.title = truncateString(result.title);
+                    
                     urlSet.add(normalizedUrl);
                     newDataResults.push(result);
                 });
