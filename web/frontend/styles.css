@@ -258,4 +258,8 @@ footer {
 
 .sitelink p {
   margin: 4px 0 0 0;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
