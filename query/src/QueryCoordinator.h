@@ -55,7 +55,8 @@ private:
     std::vector<ServerConfig> server_configs_;
 
 
-    static std::pair<QueryResults, size_t> handle_worker_response(const ServerConfig& server_config, const std::string& query);
+    static std::pair<QueryResults, size_t> handle_worker_response(const ServerConfig& server_config,
+                                                                  const std::string& query);
 
     // TODO: Add caching for frequently executed queries
     // TODO: Add query suggestion/autocomplete functionality
