@@ -58,7 +58,7 @@ public:
     std::vector<std::unique_ptr<QueryEngine>> query_engines_;
 
     size_t curr_result_ct_;
-    
+
 private:
     void WorkerThread(size_t worker_id);
     QueryResult HandleRanking(const std::string& query, size_t worker_id, std::vector<uint32_t>& matches);
@@ -75,7 +75,7 @@ private:
     std::string current_query_;
     size_t worker_completion_count_;
 
-    
+    std::atomic_flag stop_ranking_;
 };
 
 }  // namespace mithril

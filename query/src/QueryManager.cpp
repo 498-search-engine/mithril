@@ -9,10 +9,11 @@
 #include <string>
 #include <spdlog/spdlog.h>
 
+// If after RESULTS_REQUIRED_TO_SHORTCIRCUIT documents, there are >=RESULTS_COLLECTED_AFTER_SHORTCIRCUIT results with
+// score at least SCORE_FOR_SHORTCIRCUIT_REQUIRED, then we will return
 #define RESULTS_REQUIRED_TO_SHORTCIRCUIT 30000
 #define SCORE_FOR_SHORTCIRCUIT_REQUIRED 5500
 #define RESULTS_COLLECTED_AFTER_SHORTCIRCUIT 100
-
 
 // If after MINIMUM_QUOTA_FOR_RESULTS_CHECK documents, there are <REQUIRED_RESULTS_QTY documents with score
 // >=REQUIRED_RESULTS_SCORE, we end ranking since there probably aren't great matches on this chunk.
@@ -21,6 +22,9 @@
 #define REQUIRED_RESULTS_QTY 10
 
 #define RESULTS_HARD_CAP 100000
+
+// The number of milliseconds before query manager tells threads to wrap up ranking
+#define SOFT_QUERY_TIMEOUT 150
 
 namespace mithril {
 using QueryResult_t = QueryManager::QueryResult;
@@ -122,6 +126,8 @@ QueryManager::~QueryManager() {
         worker_cv_.notify_all();
     }
 
+    stop_ranking_.test_and_set();
+
     // join all threads
     for (auto& t : threads_) {
         if (t.joinable()) {
@@ -132,6 +138,8 @@ QueryManager::~QueryManager() {
 
 QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     // prepare new query
+    stop_ranking_.clear();
+
     {
         std::scoped_lock lock{mtx_};
         curr_result_ct_ = 0;
@@ -151,19 +159,36 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     // wait for workers to finish
     {
         std::unique_lock lock{mtx_};
-        main_cv_.wait(lock, [this]() { return worker_completion_count_ == threads_.size(); });
+
+        // Soft query timeout
+        main_cv_.wait_for(lock, std::chrono::milliseconds(SOFT_QUERY_TIMEOUT), [this]() {
+            return worker_completion_count_ == threads_.size();
+        });
+
+        stop_ranking_.test_and_set();
+
+        // Wait for 50 ms to allow threads to wrap up everything.
+        // We do not wait more than 50 ms because sometimes a thread might be stuck inside PositionIndex.
+        main_cv_.wait_for(
+            lock, std::chrono::milliseconds(50), [this]() { return worker_completion_count_ == threads_.size(); });
+
+        // Wait for at least one thread to complete in case the query timeout isn't responded to fast enough (we want to
+        // return at least some results.)
+        main_cv_.wait(lock, [this]() { return worker_completion_count_ >= 1; });
+
 
         // TODO: this is redundant but safer
         for (auto& flag : query_available_) {
             flag = 0;
         }
+
+        // aggregate results and return
+        QueryResult_t filteredResults = TopKFromSortedLists(marginal_results_);
+
+        spdlog::info("Returning results of size: {}", filteredResults.size());
+
+        return filteredResults;
     }
-
-    // aggregate results
-    QueryResult_t filteredResults = TopKFromSortedLists(marginal_results_);
-
-    spdlog::info("Returning results of size: {}", filteredResults.size());
-    return filteredResults;
 }
 
 void QueryManager::WorkerThread(size_t worker_id) {
@@ -277,6 +302,11 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
     uint32_t rankedDocuments = 0;
     uint32_t rankedDocumentsAboveMin = 0;
     for (uint32_t match : matches) {
+        if (stop_ranking_.test()) {
+            spdlog::info("Stopping ranking early on query engine {} due to ranking timeout", worker_id);
+            break;
+        }
+
         const std::optional<data::Document>& docOpt = queryEngine->GetDocument(match);
         if (!docOpt.has_value()) {
             rankedMatches.push_back({match, 0, "", {}, {}});
