@@ -20,21 +20,16 @@ using QueryResults = QueryManager::QueryResult;
 
 namespace {
 template<typename T>
-void wait_for_any(std::vector<std::future<T>>& futures) {
+void wait_for_any(std::vector<std::shared_future<T>>& futures) {
     if (futures.empty()) {
         return;
-    }
-
-    std::vector<std::shared_future<T>> shared_futures;
-    for (auto& f : futures) {
-        shared_futures.emplace_back(f.share());
     }
 
     std::mutex mtx;
     std::condition_variable cv;
     int readyCount = 0;
 
-    for (auto& sf : shared_futures) {
+    for (auto& sf : futures) {
         std::thread([sf, &mtx, &cv, &readyCount]() mutable {
             try {
                 sf.wait();
@@ -112,13 +107,14 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers
     }
 
     std::vector<QueryResults> worker_results;
-    std::vector<std::future<std::pair<QueryResults, size_t>>> futures;
+    std::vector<std::shared_future<std::pair<QueryResults, size_t>>> futures;
+    futures.reserve(server_configs_.size());
 
     // Create futures for each worker
     for (const auto& config : server_configs_) {
         // gotta use a lambda as handle_worker_response is not a static method
         futures.push_back(std::async(std::launch::async, [this, config, normalized_query]() {
-            return this->handle_worker_response(config, normalized_query);
+            return handle_worker_response(config, normalized_query);
         }));
     }
 
