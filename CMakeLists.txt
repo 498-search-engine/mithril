@@ -7,16 +7,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Enable LTO
-include(CheckIPOSupported)
-check_ipo_supported(RESULT ipo_supported OUTPUT error)
-
-if(ipo_supported)
-  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-  add_link_options("-flto=thin")
-  message(STATUS "Using thin flto")
-endif()
-
 add_compile_definitions(
     $<$<CONFIG:Debug>:SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE>
     $<$<NOT:$<CONFIG:Debug>>:SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO>
