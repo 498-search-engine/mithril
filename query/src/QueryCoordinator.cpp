@@ -11,10 +11,48 @@
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
 
+#define SOFT_QUERY_TIMEOUT 500
+
 using namespace core;
 using namespace mithril;
 
 using QueryResults = QueryManager::QueryResult;
+
+namespace {
+template<typename T>
+void wait_for_any(std::vector<std::shared_future<T>>& futures) {
+    if (futures.empty()) {
+        return;
+    }
+
+    std::mutex mtx;
+    std::condition_variable cv;
+    int readyCount = 0;
+
+    for (auto& sf : futures) {
+        std::thread([sf, &mtx, &cv, &readyCount]() mutable {
+            try {
+                sf.wait();
+                std::lock_guard<std::mutex> lock(mtx);
+                ++readyCount;
+                cv.notify_one();
+            } catch (std::exception& e) {
+                return;
+            }
+        }).detach();
+    }
+
+    std::unique_lock<std::mutex> lock(mtx);
+
+    // Wait until soft query timeout for all threads
+    cv.wait_for(lock, std::chrono::milliseconds(SOFT_QUERY_TIMEOUT), [&readyCount, &futures]() {
+        return readyCount == futures.size();
+    });
+
+    // Then ensure at least one future is done.
+    cv.wait(lock, [&readyCount]() { return readyCount > 0; });
+}
+}  // namespace
 
 mithril::QueryCoordinator::QueryCoordinator(const std::string& conf_path) {
     try {
@@ -69,28 +107,32 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers
     }
 
     std::vector<QueryResults> worker_results;
-    std::vector<std::future<std::pair<QueryResults, size_t>>> futures;
+    std::vector<std::shared_future<std::pair<QueryResults, size_t>>> futures;
+    futures.reserve(server_configs_.size());
 
     // Create futures for each worker
     for (const auto& config : server_configs_) {
         // gotta use a lambda as handle_worker_response is not a static method
         futures.push_back(std::async(std::launch::async, [this, config, normalized_query]() {
-            return this->handle_worker_response(config, normalized_query);
+            return handle_worker_response(config, normalized_query);
         }));
     }
 
+    wait_for_any(futures);
+
     // Collect results
     for (auto& future : futures) {
-        try {
-            auto results = future.get();
-            worker_results.push_back(std::move(results.first));
-            total_results += results.second;
-        } catch (const std::exception& e) {
-            spdlog::error("Worker error: {}", e.what());
+        if (future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            try {
+                auto results = future.get();
+                worker_results.push_back(std::move(results.first));
+                total_results += results.second;
+            } catch (const std::exception& e) {
+                spdlog::error("Worker error: {}", e.what());
+            }
         }
     }
 
-    // Aggregate all results
     QueryResults all_results = QueryManager::TopKFromSortedLists(worker_results);
 
     spdlog::info("Aggregated {} results from {} workers which gave {} total results",
