@@ -104,11 +104,11 @@ QueryResult_t TopKFromSortedLists(const std::vector<QueryResult_t>& sortedLists,
 
 
 QueryManager::QueryManager(const std::vector<std::string>& index_dirs)
-    : stop_(false), query_available_(index_dirs.size(), 0), worker_completion_count_(0) {
-    const auto num_workers = index_dirs.size();
-    marginal_results_.resize(num_workers);
-    for (size_t i = 0; i < num_workers; ++i) {
-        spdlog::info("about to query manager for {}", index_dirs[i]);
+    : stop_(false), query_available_(index_dirs.size(), 0), worker_completion_count_(0), curr_result_ct_(0) {
+    const auto numWorkers = index_dirs.size();
+    marginal_results_.resize(numWorkers);
+    for (size_t i = 0; i < numWorkers; ++i) {
+        spdlog::info("Loading query engine {} at index directory {}", i, index_dirs[i]);
         query_engines_.emplace_back(std::make_unique<QueryEngine>(index_dirs[i]));
         threads_.emplace_back(&QueryManager::WorkerThread, this, i);
     }
@@ -124,8 +124,9 @@ QueryManager::~QueryManager() {
 
     // join all threads
     for (auto& t : threads_) {
-        if (t.joinable())
+        if (t.joinable()) {
             t.join();
+        }
     }
 }
 
@@ -136,10 +137,14 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         curr_result_ct_ = 0;
         current_query_ = query;
         worker_completion_count_ = 0;
-        for (auto& result : marginal_results_)
+        for (auto& result : marginal_results_) {
             result.clear();
-        for (auto& flag : query_available_)
+        }
+
+        for (auto& flag : query_available_) {
             flag = 1;
+        }
+
         worker_cv_.notify_all();
     }
 
@@ -147,48 +152,55 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     {
         std::unique_lock lock{mtx_};
         main_cv_.wait(lock, [this]() { return worker_completion_count_ == threads_.size(); });
-        for (auto& flag : query_available_)  // TODO: this is redundant but safer
+
+        // TODO: this is redundant but safer
+        for (auto& flag : query_available_) {
             flag = 0;
+        }
     }
 
     // aggregate results
-    QueryResult_t filtered_results = TopKFromSortedLists(marginal_results_);
+    QueryResult_t filteredResults = TopKFromSortedLists(marginal_results_);
 
-    spdlog::info("Returning results of size: {}", filtered_results.size());
-    return filtered_results;
+    spdlog::info("Returning results of size: {}", filteredResults.size());
+    return filteredResults;
 }
 
 void QueryManager::WorkerThread(size_t worker_id) {
     while (true) {
-        std::string query_to_run;
+        std::string queryToRun;
         // wait for new query
         {
             std::unique_lock lock{mtx_};
             worker_cv_.wait(lock, [this, worker_id]() { return query_available_[worker_id] == 1 || stop_; });
-            if (stop_)
+            if (stop_) {
                 break;
-            query_to_run = current_query_;
+            }
+
+            queryToRun = current_query_;
         }
 
         // Evaluate query over this thread's index
-        auto result = query_engines_[worker_id]->EvaluateQuery(query_to_run);
-        auto total_sz = result.size();
-        QueryResult_t result_ranked = {};
+        auto result = query_engines_[worker_id]->EvaluateQuery(queryToRun);
+        auto totalSize = result.size();
+        QueryResult_t rankedResults = {};
         if (!result.empty()) {
-            result_ranked = HandleRanking(query_to_run, worker_id, result);
+            rankedResults = HandleRanking(queryToRun, worker_id, result);
         }
 
         // TODO: optimize this to not use mutex
         {
             std::scoped_lock lock{mtx_};
-            curr_result_ct_ += total_sz;
-            marginal_results_[worker_id] = std::move(result_ranked);
+            curr_result_ct_ += totalSize;
+            marginal_results_[worker_id] = std::move(rankedResults);
             ++worker_completion_count_;  // TODO: change this to std::atomic increment?
-            // if finished, tell main thread
-            if (worker_completion_count_ == threads_.size())
-                main_cv_.notify_one();
 
-            // record that worker finished current query
+            // If finished, tell main thread
+            if (worker_completion_count_ == threads_.size()) {
+                main_cv_.notify_one();
+            }
+
+            // Record that worker finished current query
             query_available_[worker_id] = 0;
         }
     }
@@ -203,18 +215,10 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         return {};
     }
 
-    QueryResult_t ranked_matches;
-    ranked_matches.reserve(matches.size());
+    QueryResult_t rankedMatches;
+    rankedMatches.reserve(matches.size());
 
-    auto& query_engine = query_engines_[worker_id];
-
-    // Anu - code for getting the multiplicities here
-    Lexer lex(query);
-
-    // unordered_map<string, int> of token multiplicities you can just index
-    auto token_multiplicities = lex.GetTokenFrequencies();
-
-    // you can do whatever you want with token_multiplicities now
+    auto& queryEngine = query_engines_[worker_id];
 
     std::vector<std::pair<std::string, int>> tokens;
     std::string current;
@@ -244,7 +248,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
     std::cout << std::endl;
 
-    std::unordered_map<std::string, uint32_t> map = ranking::GetDocumentFrequencies(query_engine->term_dict_, tokens);
+    std::unordered_map<std::string, uint32_t> map = ranking::GetDocumentFrequencies(queryEngine->term_dict_, tokens);
 
     std::unordered_map<std::string, const char*> termToPointer;
 
@@ -253,16 +257,16 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
             continue;
         }
 
-        const char* data = query_engine->position_index_.data_file_.data();
+        const char* data = queryEngine->position_index_.data_file_.data();
 
-        auto it = query_engine->position_index_.posDict_.find(token.first);
-        if (it != query_engine->position_index_.posDict_.end()) {
+        auto it = queryEngine->position_index_.posDict_.find(token.first);
+        if (it != queryEngine->position_index_.posDict_.end()) {
             termToPointer[token.first] = data + (it->second.data_offset);
         }
 
         std::string descToken = mithril::TokenNormalizer::decorateToken(token.first, FieldType::DESC);
-        it = query_engine->position_index_.posDict_.find(descToken);
-        if (it != query_engine->position_index_.posDict_.end()) {
+        it = queryEngine->position_index_.posDict_.find(descToken);
+        if (it != queryEngine->position_index_.posDict_.end()) {
             termToPointer[descToken] = data + (it->second.data_offset);
         }
     }
@@ -273,19 +277,19 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
     uint32_t rankedDocuments = 0;
     uint32_t rankedDocumentsAboveMin = 0;
     for (uint32_t match : matches) {
-        const std::optional<data::Document>& doc_opt = query_engine->GetDocument(match);
-        if (!doc_opt.has_value()) {
-            ranked_matches.push_back({match, 0, "", {}, {}});
+        const std::optional<data::Document>& docOpt = queryEngine->GetDocument(match);
+        if (!docOpt.has_value()) {
+            rankedMatches.push_back({match, 0, "", {}, {}});
             continue;
         }
 
-        const data::Document& doc = doc_opt.value();
-        const DocInfo& docInfo = query_engine->GetDocumentInfo(match);
+        const data::Document& doc = docOpt.value();
+        const DocInfo& docInfo = queryEngine->GetDocumentInfo(match);
 
         uint32_t score = ranking::GetFinalScore(
-            query_engine->BM25Lib_, tokens, doc, docInfo, query_engine->position_index_, map, termToPointer);
+            queryEngine->BM25Lib_, tokens, doc, docInfo, queryEngine->position_index_, map, termToPointer);
 
-        ranked_matches.push_back({match, score, doc.url, doc.title, {}});
+        rankedMatches.push_back({match, score, doc.url, doc.title, {}});
 
         if (shortCircuit && score >= SCORE_FOR_SHORTCIRCUIT_REQUIRED) {
             resultsCollectedAboveMin += 1;
@@ -312,7 +316,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
         }
     }
 
-    return TopKElementsFast(ranked_matches);
+    return TopKElementsFast(rankedMatches);
 }
 
 }  // namespace mithril
