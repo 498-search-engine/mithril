@@ -343,9 +343,8 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
             spdlog::info("Executing local query: '{}'", query_text);
 
             auto results = query_manager_->AnswerQuery(query_text);
-            size_t num_results = std::min(results.size(), static_cast<size_t>(max_results));
 
-            json = GenerateJsonResults(results, num_results, false, temp);
+            json = GenerateJsonResults(results, query_manager_->curr_result_ct_, false, temp);
             return json;
         }
 
