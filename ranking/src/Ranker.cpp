@@ -209,4 +209,35 @@ uint32_t GetFinalScore(BM25* BM25Lib,
 
     return ranking::dynamic::GetUrlDynamicRank(features);
 }
+
+std::vector<std::pair<std::string, int>> TokenifyQuery(const std::string& query) {
+    std::vector<std::pair<std::string, int>> tokens;
+    std::string current;
+    std::cout << "tokens: ";
+    for (char c : query) {
+        if (c == ' ') {
+            if (mithril::ranking::IsValidToken(current)) {
+                std::cout << current << " ";
+                tokens.emplace_back(std::move(current), 1);
+            }
+            current = "";
+            continue;
+        }
+
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+            current += std::tolower(c);
+        } else if (c >= '1' && c <= '9') {
+            current += c;
+        }
+    }
+
+    if (!current.empty()) {
+        if (mithril::ranking::IsValidToken(current)) {
+            tokens.emplace_back(std::move(current), 1);
+        }
+    }
+
+    std::cout << std::endl;
+    return tokens;
+}
 }  // namespace mithril::ranking
