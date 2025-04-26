@@ -10,9 +10,6 @@ target_include_directories(query PUBLIC
     ${CMAKE_SOURCE_DIR}/ranking/src
 )
 target_link_libraries(query PUBLIC
-    spdlog::spdlog
-    lib::core
-    common
     index
     ranking
 )
@@ -25,8 +22,8 @@ add_executable_with_copy(mithril_manager src/mithril_manager.cpp)
 
 target_link_libraries(mithril_lexer PRIVATE query)
 target_link_libraries(mithril_coordinator PRIVATE query)
-target_link_libraries(mithril_worker PRIVATE query index)
-target_link_libraries(mithril_manager PRIVATE query index)
+target_link_libraries(mithril_worker PRIVATE query)
+target_link_libraries(mithril_manager PRIVATE query)
 
 # Test executables
 set(TEST_LIBS
@@ -47,14 +44,14 @@ add_executable(test_freq_ct tests/lexer_token_freq_test.cpp)
 
 # Test targets linking
 target_link_libraries(test_lexer PRIVATE ${TEST_LIBS})
-target_link_libraries(test_query PRIVATE ${TEST_LIBS} index)
-target_link_libraries(parser_driver PRIVATE query index)
-target_link_libraries(manager_driver PRIVATE query index)
+target_link_libraries(test_query PRIVATE ${TEST_LIBS})
+target_link_libraries(parser_driver PRIVATE query)
+target_link_libraries(manager_driver PRIVATE query)
 target_link_libraries(lexer_driver PRIVATE query)
-target_link_libraries(query_driver PRIVATE query index)
-target_link_libraries(and_test PRIVATE query index common)
-target_link_libraries(or_test PRIVATE query index common)
-target_link_libraries(quote_test PRIVATE query index common)
+target_link_libraries(query_driver PRIVATE query)
+target_link_libraries(and_test PRIVATE query)
+target_link_libraries(or_test PRIVATE query)
+target_link_libraries(quote_test PRIVATE query)
 target_link_libraries(test_freq_ct PRIVATE query)
 
 # Tests registration
