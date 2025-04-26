@@ -4,9 +4,6 @@ add_library(web STATIC
 )
 target_include_directories(web PUBLIC src)
 target_link_libraries(web PUBLIC
-    spdlog::spdlog
-    lib::core
-    common
     query
     pthread
 )
