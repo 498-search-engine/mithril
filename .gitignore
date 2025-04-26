@@ -11,6 +11,7 @@ bench/
 tags
 *.swp
 *.txt
+!README.txt
 
 # crawler data
 /data/
