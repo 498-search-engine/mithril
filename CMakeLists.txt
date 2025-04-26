@@ -18,7 +18,6 @@ endif()
 add_compile_definitions(
     $<$<CONFIG:Debug>:SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE>
     $<$<NOT:$<CONFIG:Debug>>:SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO>
-    "$<$<CONFIG:Release>:-funroll-loops -march=native -mtune=native>"
 )
 
 option(USE_JEMALLOC "Use jemalloc as memory allocator" OFF)
