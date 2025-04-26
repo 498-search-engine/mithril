@@ -1,6 +1,7 @@
 #include "Server.h"
 
 #include "Plugin.h"
+#include "ResponseWriter.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -376,8 +377,8 @@ void HttpServer::HandleClient(std::shared_ptr<ClientContext> context) {
 
     // Check if this is a plugin path
     if (Plugin && Plugin->MagicPath(request.path)) {
-        std::string response = Plugin->ProcessRequest(request_str);
-        send(client_fd, response.c_str(), response.length(), 0);
+        ResponseWriter writer{client_fd};
+        Plugin->ProcessRequest(request_str, writer);
         return;
     }
 

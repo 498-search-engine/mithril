@@ -1,4 +1,5 @@
 add_library(web STATIC
+    src/ResponseWriter.cpp
     src/Server.cpp
     src/SearchPlugin.cpp
 )

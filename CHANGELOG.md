@@ -82,6 +82,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Query Engine V2, add in decorator to quries, AND/OR/NOT, FIELD, QUOTE queries working (#149)
 - truncate url link text (#188)
 - add coalescing of urls + filter out duplicate urls on frontend (#192)
+- stream snippets to client (#193)
 
 ### Fixed
 
