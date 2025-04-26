@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <mutex>
+#include <regex>
 #include <string>
 #include <spdlog/spdlog.h>
 
@@ -288,6 +289,10 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
         const data::Document& doc = docOpt.value();
         const DocInfo& docInfo = queryEngine->GetDocumentInfo(match);
+
+        if (ranking::ContainsPornKeywords(doc.title) || ranking::ContainsPornKeywords(doc.url)) {
+            continue;
+        }
 
         uint32_t score = ranking::GetFinalScore(
             queryEngine->BM25Lib_, tokens, doc, docInfo, queryEngine->position_index_, map, termToPointer);

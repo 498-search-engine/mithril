@@ -3,6 +3,7 @@
 #include "TermDictionary.h"
 #include "data/Document.h"
 
+#include <regex>
 #include <spdlog/spdlog.h>
 
 namespace mithril::ranking {
@@ -47,4 +48,19 @@ uint32_t GetFinalScore(BM25* BM25Lib,
 
 std::vector<std::pair<std::string, int>> TokenifyQuery(const std::string& query);
 
+inline bool ContainsPornKeywords(const std::string& input) {
+    // Precompiled regex pattern (optimized for performance)
+    static const std::regex pornPattern(R"((?:p[0o]rn|\bs[e3]x\b|xxx|nsfw|nudes?|fetish|blow[-_]?job))",
+                                        std::regex_constants::icase | std::regex_constants::optimize);
+    return std::regex_search(input, pornPattern);
+}
+
+inline bool ContainsPornKeywords(const std::vector<std::string>& input) {
+    for (const auto& in : input) {
+        if (ContainsPornKeywords(in)) {
+            return true;
+        }
+    }
+    return false;
+}
 }  // namespace mithril::ranking
