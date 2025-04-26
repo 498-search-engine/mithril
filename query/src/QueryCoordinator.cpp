@@ -90,13 +90,14 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers
         }
     }
 
+    // BIG HEAVY TODO: use querymanager::topksortedlists once that PR is merged in
     // Aggregate all results
     QueryResults all_results;
     for (const auto& results : worker_results) {
         all_results.insert(all_results.end(), results.begin(), results.end());
     }
 
-    // Sort and remove duplicates (unneeded imo as diff shards)
+    // Sort all results
     auto comparator = [](const auto& a, const auto& b) {
         if (std::get<1>(a) != std::get<1>(b)) {
             return std::get<1>(a) > std::get<1>(b);
@@ -105,6 +106,8 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers
     };
 
     std::sort(all_results.begin(), all_results.end(), comparator);
+
+    // Remove duplicates (unneded as different shards)
     // auto last = std::unique(all_results.begin(), all_results.end());
     // all_results.erase(last, all_results.end());
 
