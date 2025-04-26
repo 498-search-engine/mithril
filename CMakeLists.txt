@@ -14,6 +14,7 @@ check_ipo_supported(RESULT ipo_supported OUTPUT error)
 if(ipo_supported)
   set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
   add_link_options("-flto=thin")
+  message(STATUS "Using thin flto")
 endif()
 
 add_compile_definitions(
