@@ -84,7 +84,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add coalescing of urls + filter out duplicate urls on frontend (#192)
 - stream snippets to client (#193)
 - add mithril_stats script for getting idx nums for report (#194)
-- add cmakelists optimisations (#203)
 
 ### Fixed
 
@@ -161,7 +160,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add soft timeout on query manager (#194)
 - add porn filter (#202)
 - fixed the time displayed to be calculated on the frontend (#203)
-
 
 ## [0.1.0] - 2025-02-07
 
