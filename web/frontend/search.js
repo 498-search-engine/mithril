@@ -365,7 +365,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const resultCount = data.total || 0;
         const searchTime = ((data.time_ms || 0) / 1000).toFixed(3);
 
-        resultsCount.textContent = `${resultCount} results`;
+        const formatter = new Intl.NumberFormat('en-US');
+
+        resultsCount.textContent = `${formatter.format(resultCount)} results`;
         queryTime.textContent = `${searchTime}s${fromCache ? ' (cached)' : ''}`;
         resultsMeta.style.display = 'flex';
 
