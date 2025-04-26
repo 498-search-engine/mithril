@@ -5,6 +5,7 @@
 #include "QueryCoordinator.h"
 #include "QueryEngine.h"
 #include "QueryManager.h"
+#include "ResponseWriter.h"
 #include "Snippets.h"
 
 #include <chrono>
@@ -22,9 +23,10 @@ public:
     SearchPlugin(const std::string& server_config_path, const std::string& index_path);
     ~SearchPlugin() override;
 
-    bool MagicPath(const std::string path) override;
-    std::string ProcessRequest(std::string request) override;
-    std::string ProcessSnippetRequest(const std::string& request);
+    bool MagicPath(const std::string& path) override;
+    void ProcessRequest(std::string request, ResponseWriter& rw) override;
+    void ProcessSearchRequest(const std::string& request, ResponseWriter& rw);
+    void ProcessSnippetRequest(const std::string& request, ResponseWriter& rw);
 
     struct CacheEntry {
         std::string result;

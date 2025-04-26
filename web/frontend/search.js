@@ -223,22 +223,68 @@ document.addEventListener('DOMContentLoaded', function() {
                 visibleDocIds.push(docId);
             }
         });
-        
+
         if (visibleDocIds.length === 0) return;
-        
+
         const query = document.getElementById('search-input').value;
-        fetch(`/api/snippets?ids=${visibleDocIds.join(',')}&q=${encodeURIComponent(query)}`)
-            .then(response => response.json())
-            .then(snippets => {
-                for (const [docId, snippet] of Object.entries(snippets)) {
-                    updateSnippetForDoc(docId, snippet);
+        const url = `/api/snippets?ids=${visibleDocIds.join(',')}&q=${encodeURIComponent(query)}`;
+
+        // Create a new fetch request
+        fetch(url)
+            .then(response => {
+                // Check if response is ok
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
                 }
+
+                // Get a reader from the response body stream
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                // Function to process the stream chunks
+                function processChunks() {
+                    return reader.read().then(({ done, value }) => {
+                        // If the stream is done, return
+                        if (done) return;
+
+                        // Decode the chunk and add it to our buffer
+                        buffer += decoder.decode(value, { stream: true });
+
+                        // Process any complete JSON objects in the buffer
+                        let jsonEndIndex;
+                        while ((jsonEndIndex = buffer.indexOf('}')) !== -1) {
+                            try {
+                                // Extract and parse a JSON object
+                                const jsonStr = buffer.substring(0, jsonEndIndex + 1);
+                                const snippetData = JSON.parse(jsonStr);
+
+                                // Update the snippet in the DOM
+                                const docId = Object.keys(snippetData)[0];
+                                const snippet = snippetData[docId];
+                                updateSnippetForDoc(docId, snippet);
+
+                                // Remove the processed JSON from the buffer
+                                buffer = buffer.substring(jsonEndIndex + 1);
+                            } catch (e) {
+                                // If we can't parse the JSON yet, wait for more data
+                                break;
+                            }
+                        }
+
+                        // Continue processing chunks
+                        return processChunks();
+                    });
+                }
+
+                // Start processing the stream
+                return processChunks();
             })
             .catch(error => {
                 console.error('Error loading snippets:', error);
             });
     }
-    
+
     function updateSnippetForDoc(docId, snippet) {
         const resultElement = document.querySelector(`div[data-doc-id="${docId}"]`);
         if (resultElement) {

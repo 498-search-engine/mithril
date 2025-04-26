@@ -59,6 +59,9 @@ public:
 
     size_t curr_result_ct_;
 
+    static QueryResult TopKElementsFast(QueryResult& results, int k = 50);
+    static QueryResult TopKFromSortedLists(const std::vector<QueryResult>& sortedLists, size_t k = 50);
+
 private:
     void WorkerThread(size_t worker_id);
     QueryResult HandleRanking(const std::string& query, size_t worker_id, std::vector<uint32_t>& matches);

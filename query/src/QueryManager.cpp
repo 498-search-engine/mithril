@@ -29,11 +29,10 @@
 namespace mithril {
 using QueryResult_t = QueryManager::QueryResult;
 
-namespace {
 #include <algorithm>
 #include <vector>
 
-QueryResult_t TopKElementsFast(QueryResult_t& results, int k = 50) {
+QueryResult_t QueryManager::TopKElementsFast(QueryResult_t& results, int k) {
     auto comparator = [](const auto& a, const auto& b) {
         if (std::get<1>(a) != std::get<1>(b)) {
             return std::get<1>(a) > std::get<1>(b);
@@ -56,7 +55,7 @@ QueryResult_t TopKElementsFast(QueryResult_t& results, int k = 50) {
     return QueryResult_t(results.begin(), results.begin() + k);
 }
 
-QueryResult_t TopKFromSortedLists(const std::vector<QueryResult_t>& sortedLists, size_t k = 50) {
+QueryResult_t QueryManager::TopKFromSortedLists(const std::vector<QueryResult_t>& sortedLists, size_t k) {
     if (sortedLists.size() == 1) {
         return sortedLists[0];
     }
@@ -104,8 +103,6 @@ QueryResult_t TopKFromSortedLists(const std::vector<QueryResult_t>& sortedLists,
 
     return sortedList;
 }
-}  // namespace
-
 
 QueryManager::QueryManager(const std::vector<std::string>& index_dirs)
     : stop_(false), query_available_(index_dirs.size(), 0), worker_completion_count_(0), curr_result_ct_(0) {

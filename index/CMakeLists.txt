@@ -15,11 +15,7 @@ add_library(index STATIC
     src/ISRFactory.cpp
 )
 target_include_directories(index PUBLIC src)
-target_link_libraries(index PUBLIC
-    spdlog::spdlog
-    lib::core
-    common
-)
+target_link_libraries(index PUBLIC common)
 
 # Main application 
 add_executable_with_copy(mithril_indexer src/main.cpp)

@@ -2,6 +2,8 @@
 
 #include "QueryCoordinator.h"
 #include "QueryManager.h"
+#include "ResponseWriter.h"
+#include "http/Response.h"
 
 #include <algorithm>
 #include <chrono>
@@ -14,12 +16,13 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
 
 using namespace std::chrono_literals;
-
+using namespace std::string_view_literals;
 
 const std::vector<std::pair<std::string, std::string>> SearchPlugin::MOCK_RESULTS = {
     {       "https://example.com/search-intro",   "Introduction to Search Engines"},
@@ -91,7 +94,7 @@ bool SearchPlugin::TryInitializeCoordinator() {
     }
 }
 
-bool SearchPlugin::MagicPath(const std::string path) {
+bool SearchPlugin::MagicPath(const std::string& path) {
     return path.rfind("/api/search", 0) == 0 || path.rfind("/api/snippets", 0) == 0;
 }
 
@@ -130,11 +133,20 @@ std::string SearchPlugin::DecodeUrlString(const std::string& encoded) {
     return decoded;
 }
 
-std::string SearchPlugin::ProcessRequest(std::string request) {
-    if (request.find("GET /api/snippets") != std::string::npos) {
-        return ProcessSnippetRequest(request);
+void SearchPlugin::ProcessRequest(std::string request, ResponseWriter& rw) {
+    try {
+        if (request.find("GET /api/snippets") != std::string::npos) {
+            ProcessSnippetRequest(request, rw);
+        } else {
+            ProcessSearchRequest(request, rw);
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("internal server error servicing request: {}", e.what());
+        rw.WriteResponse(http::StatusCode::InternalServerError, ""sv, ""sv);
     }
+}
 
+void SearchPlugin::ProcessSearchRequest(const std::string& request, ResponseWriter& rw) {
     std::string query_text;
     int max_results = 50;
 
@@ -177,7 +189,8 @@ std::string SearchPlugin::ProcessRequest(std::string request) {
         auto it = query_cache_.find(query_text);
         if (it != query_cache_.end()) {
             it->second.timestamp = std::chrono::steady_clock::now();
-            return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + it->second.result;
+            rw.WriteResponse(http::StatusCode::OK, "application/json"sv, it->second.result);
+            return;
         }
     }
 
@@ -230,10 +243,10 @@ std::string SearchPlugin::ProcessRequest(std::string request) {
         query_cache_[query_text] = {json_result, std::chrono::steady_clock::now()};
     }
 
-    return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + json_result;
+    rw.WriteResponse(http::StatusCode::OK, "application/json"sv, json_result);
 }
 
-std::string SearchPlugin::ProcessSnippetRequest(const std::string& request) {
+void SearchPlugin::ProcessSnippetRequest(const std::string& request, ResponseWriter& rw) {
     // Parse doc IDs from request
     std::vector<uint32_t> doc_ids;
     std::string query;
@@ -291,8 +304,8 @@ std::string SearchPlugin::ProcessSnippetRequest(const std::string& request) {
 
     // If no query or doc IDs, return error
     if (query.empty() || doc_ids.empty()) {
-        return "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n\r\n"
-               "{\"error\":\"Missing required parameters\"}";
+        rw.WriteResponse(
+            http::StatusCode::BadRequest, "application/json"sv, R"({"error":"Missing required parameters"})");
     }
 
     // Parse query into terms
@@ -306,8 +319,13 @@ std::string SearchPlugin::ProcessSnippetRequest(const std::string& request) {
     }
 
     // Generate snippets for each doc ID -andbuild JSON manually
-    std::string json_response = "{";
+    std::string json_response;
     bool first = true;
+
+    auto chunkWriter = rw.BeginChunked(http::StatusCode::OK, "application/json"sv);
+    if (!chunkWriter) {
+        return;
+    }
 
     for (uint32_t doc_id : doc_ids) {
         // Look up position data for this doc (currently empty)
@@ -315,16 +333,21 @@ std::string SearchPlugin::ProcessSnippetRequest(const std::string& request) {
 
         std::string snippet = snippet_generator_->generateSnippet(doc_id, query_terms, positions);
 
-        if (!first) {
-            json_response += ",";
-        }
-        first = false;
+        // Build JSON response for snippet
+        json_response.clear();
+        json_response.append("{\"");
+        json_response.append(std::to_string(doc_id));
+        json_response.append("\":\"");
+        json_response.append(EscapeJsonString(snippet));
+        json_response.append("\"}");
 
-        json_response += "\"" + std::to_string(doc_id) + "\":\"" + EscapeJsonString(snippet) + "\"";
+        bool ok = chunkWriter->WriteChunk(json_response);
+        if (!ok) {
+            break;
+        }
     }
 
-    json_response += "}";
-    return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + json_response;
+    chunkWriter->Finish();
 }
 
 std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_results) {
@@ -343,9 +366,8 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
             spdlog::info("Executing local query: '{}'", query_text);
 
             auto results = query_manager_->AnswerQuery(query_text);
-            size_t num_results = std::min(results.size(), static_cast<size_t>(max_results));
 
-            json = GenerateJsonResults(results, num_results, false, temp);
+            json = GenerateJsonResults(results, query_manager_->curr_result_ct_, false, temp);
             return json;
         }
 
