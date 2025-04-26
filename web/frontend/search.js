@@ -167,6 +167,8 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Disabled cache on this device');
         }
 
+        const startTime = performance.now();
+        
         // Fetch search results from API
         fetch(`/api/search?q=${encodeURIComponent(query)}&max=50`)
             .then(response => {
@@ -197,7 +199,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Cache the results
                 queryCache.set(query, data);
+                const endTime = performance.now();
 
+                const totalElapsedMs = endTime - startTime;
+
+                data._frontend_time_ms = totalElapsedMs;
                 // Display results
                 displayResults(data, false);
             })
@@ -363,8 +369,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Display results metadata
         const resultCount = data.total || 0;
-        const searchTime = ((data.time_ms || 0) / 1000).toFixed(3);
+        //const searchTime = ((data.time_ms || 0) / 1000).toFixed(3);
 
+        const searchTime = ((data._frontend_time_ms || 0) / 1000).toFixed(3);
         const formatter = new Intl.NumberFormat('en-US');
 
         resultsCount.textContent = `${formatter.format(resultCount)} results`;
