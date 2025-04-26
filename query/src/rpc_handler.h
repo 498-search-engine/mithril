@@ -21,6 +21,8 @@ public:
         // Step 1: Receive query length (4 bytes)
         ssize_t bytes_read = recv(client_fd, &query_length, sizeof(query_length), MSG_WAITALL);
         if (bytes_read != sizeof(query_length)) {
+            spdlog::error("length of query length was supposed to be {}", sizeof(query_length));
+            spdlog::error("query length was read to be {}", query_length);
             spdlog::error("Failed to read query length, received {} bytes", bytes_read);
             uint32_t result_count = 0;
             send(client_fd, &result_count, sizeof(uint32_t), 0);
