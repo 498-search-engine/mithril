@@ -25,7 +25,8 @@ public:
             spdlog::error("query length was read to be {}", query_length);
             spdlog::error("Failed to read query length, received {} bytes", bytes_read);
             uint32_t result_count = 0;
-            send(client_fd, &result_count, sizeof(uint32_t), 0);
+            //send(client_fd, &result_count, sizeof(uint32_t), 0);
+            SendResults(client_fd, {}, 0);
             return "";
         }
 
@@ -38,7 +39,8 @@ public:
         if (bytes_read != query_length) {
             spdlog::error("Failed to read query, expected {} bytes but got {}", query_length, bytes_read);
             uint32_t result_count = 0;
-            send(client_fd, &result_count, sizeof(uint32_t), 0);
+            //send(client_fd, &result_count, sizeof(uint32_t), 0);
+            SendResults(client_fd, {}, 0);
             return query;
         }
 
