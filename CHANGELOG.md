@@ -157,7 +157,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - server crash issue fixed (#192)
 - cleanup query manager ranking side (#200)
 - add comma formatting to numbers on frontend (#201)
-
+- fixed the time displayed to be calculated on the frontend (#202)
 ## [0.1.0] - 2025-02-07
 
 ### Added
