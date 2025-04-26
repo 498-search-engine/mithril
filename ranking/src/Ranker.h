@@ -45,4 +45,6 @@ uint32_t GetFinalScore(BM25* BM25Lib,
                        const std::unordered_map<std::string, uint32_t>& termFreq,
                        std::unordered_map<std::string, const char*>& data);
 
+std::vector<std::pair<std::string, int>> TokenifyQuery(const std::string& query);
+
 }  // namespace mithril::ranking

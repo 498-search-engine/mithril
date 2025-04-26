@@ -83,6 +83,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - truncate url link text (#188)
 - add coalescing of urls + filter out duplicate urls on frontend (#192)
 - stream snippets to client (#193)
+- add mithril_stats script for getting idx nums for report (#194)
 
 ### Fixed
 
@@ -153,6 +154,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add numbers to ranking (#187)
 - fix result count on local query manager (#196)
 - fix query coordinator sorting (#191)
+- server crash issue fixed (#192)
+- cleanup query manager ranking side (#200)
 - add soft timeout on query manager (#194)
 
 ## [0.1.0] - 2025-02-07
