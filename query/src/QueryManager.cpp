@@ -22,10 +22,14 @@
 #define REQUIRED_RESULTS_SCORE 5000
 #define REQUIRED_RESULTS_QTY 10
 
+// Only 100,000 matches will be ranked per thread.
 #define RESULTS_HARD_CAP 100000
 
+// Minimum rank before responding to stop ranking flag
+#define MINIMUM_RANKED_RESULTS_REQUIRED 50
+
 // The number of milliseconds before query manager tells threads to wrap up ranking
-#define SOFT_QUERY_TIMEOUT 150
+#define SOFT_QUERY_TIMEOUT 250
 
 namespace mithril {
 using QueryResult_t = QueryManager::QueryResult;
@@ -174,7 +178,6 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         // return at least some results.)
         main_cv_.wait(lock, [this]() { return worker_completion_count_ >= 1; });
 
-
         // TODO: this is redundant but safer
         for (auto& flag : query_available_) {
             flag = 0;
@@ -276,8 +279,11 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
     uint32_t rankedDocuments = 0;
     uint32_t rankedDocumentsAboveMin = 0;
     for (uint32_t match : matches) {
-        if (stop_ranking_.test()) {
-            spdlog::info("Stopping ranking early on query engine {} due to ranking timeout", worker_id);
+        if (stop_ranking_.test() && rankedDocuments >= MINIMUM_RANKED_RESULTS_REQUIRED) {
+            spdlog::info("Stopping ranking early on query engine {} due to ranking timeout. Ranked {}/{} documents.",
+                         worker_id,
+                         rankedDocuments,
+                         matches.size());
             break;
         }
 
