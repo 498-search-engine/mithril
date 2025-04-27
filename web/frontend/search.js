@@ -154,6 +154,22 @@ document.addEventListener('DOMContentLoaded', function() {
         resultsMeta.style.display = 'none';
         resultsContainer.innerHTML = '';
 
+        // Check if the query is a math expression
+        try {
+            const mathResult = math.evaluate(query);
+            loadingIndicator.style.display = 'none';
+            resultsContainer.innerHTML = `
+                <div class="math-result">
+                    <div class="math-expression">${query}</div>
+                    <div class="math-equals">=</div>
+                    <div class="math-value">${mathResult}</div>
+                </div>
+            `;
+            return;
+        } catch (e) {
+            // This was not a math expression, so do nothing.
+        }
+
         // Check client-side cache first
         const urlParams = new URLSearchParams(window.location.search);
         const cachedResults = queryCache.get(query);
