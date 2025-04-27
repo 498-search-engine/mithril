@@ -309,7 +309,7 @@ void UrlFrontier::ProcessFreshURLs(ThreadSync& sync) {
     long end;
 
     // 0. Wait for fresh URLs
-    std::deque<std::string> urls;
+    core::Deque<std::string> urls;
     {
         core::LockGuard freshLock(freshURLsMu_);
         freshURLsCv_.Wait(freshLock, [&]() { return !freshURLs_.empty() || sync.ShouldSynchronize(); });

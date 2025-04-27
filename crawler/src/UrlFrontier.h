@@ -198,7 +198,7 @@ private:
 
     // List of fresh URLs to consider for placement into the frontier, pushed by
     // workers
-    std::deque<std::string> freshURLs_;
+    core::Deque<std::string> freshURLs_;
 
     core::LRUCache<http::CanonicalHost, core::Optional<unsigned long>> delayCache_;
 };
