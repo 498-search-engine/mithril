@@ -84,6 +84,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - add coalescing of urls + filter out duplicate urls on frontend (#192)
 - stream snippets to client (#193)
 - add mithril_stats script for getting idx nums for report (#194)
+- add minimum results required before responding to stop ranking flag (#206)
 
 ### Fixed
 
