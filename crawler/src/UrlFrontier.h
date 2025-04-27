@@ -13,6 +13,7 @@
 #include "core/optional.h"
 #include "http/URL.h"
 #include "ranking/CrawlerRanker.h"
+#include "core/deque.h"
 
 #include <cstddef>
 #include <deque>
