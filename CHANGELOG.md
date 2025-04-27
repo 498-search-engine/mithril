@@ -85,6 +85,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - stream snippets to client (#193)
 - add mithril_stats script for getting idx nums for report (#194)
 - add minimum results required before responding to stop ranking flag (#206)
+- add calculator (#207)
 
 ### Fixed
 
