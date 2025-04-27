@@ -234,7 +234,6 @@ footer {
   margin-bottom: 6px;
 }
 
-
 .sitelinks {
   margin-left: 20px;
   margin-top: 8px;
@@ -262,4 +261,31 @@ footer {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Calculator results */
+.math-result {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 16px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.math-expression {
+  font-size: 18px;
+  color: #2b2d42;
+}
+
+.math-equals {
+  font-size: 16px;
+  color: #6c757d;
+  margin: 8px 0;
+}
+
+.math-value {
+  font-size: 24px;
+  color: #2a9d8f;
+  font-weight: bold;
 }
