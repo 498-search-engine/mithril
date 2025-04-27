@@ -31,6 +31,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 #include <spdlog/spdlog.h>
 #include <sys/stat.h>
@@ -279,7 +280,7 @@ void Worker::ProcessDocument(const http::Request& req, http::Response& res) {
     }
 }
 
-std::pair<data::docid_t, std::string> Worker::NextDocument() {
+core::Pair<data::docid_t, std::string> Worker::NextDocument() {
     data::docid_t docID = state_.nextDocumentID.fetch_add(1);
     auto chunk = docID / DocumentChunkSize;
 

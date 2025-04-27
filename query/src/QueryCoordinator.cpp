@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
+#include "core/pair.h"
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
 
@@ -96,7 +97,7 @@ void mithril::QueryCoordinator::print_server_configs() const {
     }
 }
 
-std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
+core::Pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
     mithril::TokenNormalizer token_normalizer;
     // std::string normalized_query = token_normalizer.normalize(query);
     auto normalized_query = query;
@@ -107,7 +108,7 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers
     }
 
     std::vector<QueryResults> worker_results;
-    std::vector<std::shared_future<std::pair<QueryResults, size_t>>> futures;
+    std::vector<std::shared_future<core::Pair<QueryResults, size_t>>> futures;
     futures.reserve(server_configs_.size());
 
     // Create futures for each worker
@@ -143,7 +144,7 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers
     return {all_results, total_results};
 }
 
-std::pair<QueryResults, size_t> mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
+core::Pair<QueryResults, size_t> mithril::QueryCoordinator::handle_worker_response(const ServerConfig& server_config,
                                                                                   const std::string& query) {
 
     QueryResults results;

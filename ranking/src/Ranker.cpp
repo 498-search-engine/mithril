@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 #include <spdlog/spdlog.h>
 
@@ -44,7 +45,7 @@ int CountWordOccurrences(const std::string& text, const std::string& word) {
 }  // namespace
 
 std::unordered_map<std::string, uint32_t>
-GetDocumentFrequencies(const TermDictionary& term_dict, const std::vector<std::pair<std::string, int>>& query) {
+GetDocumentFrequencies(const TermDictionary& term_dict, const std::vector<core::Pair<std::string, int>>& query) {
     std::unordered_map<std::string, uint32_t> map;
     for (const auto& [query, multiplicity] : query) {
         auto it = map.find(query);
@@ -64,7 +65,7 @@ GetDocumentFrequencies(const TermDictionary& term_dict, const std::vector<std::p
 }
 
 uint32_t GetFinalScore(BM25* BM25Lib,
-                       const std::vector<std::pair<std::string, int>>& query,
+                       const std::vector<core::Pair<std::string, int>>& query,
                        const data::Document& doc,
                        const data::DocInfo& info,
                        const PositionIndex& position_index,
@@ -210,8 +211,8 @@ uint32_t GetFinalScore(BM25* BM25Lib,
     return ranking::dynamic::GetUrlDynamicRank(features);
 }
 
-std::vector<std::pair<std::string, int>> TokenifyQuery(const std::string& query) {
-    std::vector<std::pair<std::string, int>> tokens;
+std::vector<core::Pair<std::string, int>> TokenifyQuery(const std::string& query) {
+    std::vector<core::Pair<std::string, int>> tokens;
     std::string current;
     std::cout << "tokens: ";
     for (char c : query) {

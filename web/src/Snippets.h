@@ -20,6 +20,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 #include <spdlog/spdlog.h>
 
@@ -243,7 +244,7 @@ private:
     }
 
     // Find good snippet boundaries
-    std::pair<size_t, size_t> getSnippetBoundaries(const std::string& text, size_t pos, size_t context_length = 75) {
+    core::Pair<size_t, size_t> getSnippetBoundaries(const std::string& text, size_t pos, size_t context_length = 75) {
         size_t start = pos > context_length ? pos - context_length : 0;
         size_t end = std::min(pos + context_length, text.length());
 
@@ -288,7 +289,7 @@ private:
                                             const std::unordered_map<std::string, std::vector<uint16_t>>& positions,
                                             const std::vector<std::string>& query_terms) {
         // Find best position to use (prioritize positions that match multiple terms)
-        std::vector<std::pair<size_t, std::string>> char_positions;
+        std::vector<core::Pair<size_t, std::string>> char_positions;
 
         for (const auto& [term, pos_vec] : positions) {
             for (uint16_t token_pos : pos_vec) {

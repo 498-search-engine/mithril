@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 
 namespace mithril::http {

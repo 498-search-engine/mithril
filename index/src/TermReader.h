@@ -51,7 +51,7 @@ private:
     bool at_end_{false};
 
     // Current posting state
-    std::vector<std::pair<uint32_t, uint32_t>> postings_;  // doc_id, freq pairs
+    std::vector<core::Pair<uint32_t, uint32_t>> postings_;  // doc_id, freq pairs
     size_t current_posting_index_{0};
     std::vector<SyncPoint> sync_points_;
 

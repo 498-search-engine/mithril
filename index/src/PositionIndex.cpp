@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 #include <spdlog/spdlog.h>
 
@@ -70,7 +71,7 @@ PositionIndex::~PositionIndex() {}
 
 void PositionIndex::addPositionsBatch(const std::string& output_dir,
                                       uint32_t doc_id,
-                                      const std::vector<std::pair<std::string, FieldPositions>>& term_positions) {
+                                      const std::vector<core::Pair<std::string, FieldPositions>>& term_positions) {
 
     if (term_positions.empty())
         return;
@@ -363,7 +364,7 @@ void PositionIndex::mergePositionBuffers(const std::string& output_dir) {
                 }
 
                 if (read_success) {
-                    current_positions.emplace_back(doc_id, std::make_pair(field_flags, std::move(positions)));
+                    current_positions.emplace_back(doc_id, core::make_pair(field_flags, std::move(positions)));
                 }
             }
 
@@ -527,7 +528,7 @@ bool PositionIndex::loadPosDict() {
     }
 }
 
-std::pair<bool, const char*>
+core::Pair<bool, const char*>
 PositionIndex::hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data_ptr) const {
     const char* init_ptr = data_ptr;
 
@@ -583,7 +584,7 @@ bool PositionIndex::hasPositions(const std::string& term, uint32_t doc_id) const
     return hasPositionsFromByte(term, doc_id, data_ptr).first;
 }
 
-std::pair<std::vector<uint16_t>, const char*>
+core::Pair<std::vector<uint16_t>, const char*>
 PositionIndex::getPositionsFromByte(const char* data_ptr, const std::string& term, uint32_t doc_id) const {
     const char* input_data_ptr = data_ptr;
 

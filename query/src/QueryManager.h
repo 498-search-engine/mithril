@@ -63,7 +63,7 @@ public:
     static QueryResult TopKFromSortedLists(const std::vector<QueryResult>& sortedLists, size_t k = 50);
     static void SetupPositionIndexPointers(QueryEngine* query_engine,
                                            std::unordered_map<std::string, const char*>& termToPointer,
-                                           const std::vector<std::pair<std::string, int>>& tokens);
+                                           const std::vector<core::Pair<std::string, int>>& tokens);
 
 private:
     void WorkerThread(size_t worker_id);

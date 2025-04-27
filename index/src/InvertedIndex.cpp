@@ -261,7 +261,7 @@ void IndexBuilder::process_document(Document doc) {
         }
 
         // position indexing batching
-        std::vector<std::pair<std::string, FieldPositions>> position_batch;
+        std::vector<core::Pair<std::string, FieldPositions>> position_batch;
         position_batch.reserve(term_positions.size());
         for (auto it = term_positions.begin(); it != term_positions.end(); /* no increment */) {
             const std::string& term = it->first;
@@ -700,7 +700,7 @@ void IndexBuilder::create_term_dictionary() {
         return;
     }
 
-    std::vector<std::pair<std::string, uint64_t>> term_entries;
+    std::vector<core::Pair<std::string, uint64_t>> term_entries;
     if (term_count > 0) {
         try {
             term_entries.reserve(term_count);

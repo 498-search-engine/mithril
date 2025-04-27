@@ -365,7 +365,7 @@ public:
                 posting_out << "TERM: " << term << " (docs: " << postings_size << ")" << std::endl;
 
                 // Read and decode postings
-                std::vector<std::pair<uint32_t, uint32_t>> postings;  // doc_id, freq
+                std::vector<core::Pair<uint32_t, uint32_t>> postings;  // doc_id, freq
                 postings.reserve(postings_size);
 
                 uint32_t last_doc_id = 0;

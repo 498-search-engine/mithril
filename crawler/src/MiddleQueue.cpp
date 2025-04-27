@@ -20,6 +20,7 @@
 #include <string_view>
 #include <unistd.h>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 
 namespace mithril {

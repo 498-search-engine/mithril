@@ -46,7 +46,7 @@ public:
 
     void print_server_configs() const;
 
-    std::pair<QueryResults, size_t> send_query_to_workers(const std::string& query);
+    core::Pair<QueryResults, size_t> send_query_to_workers(const std::string& query);
 
     static void
     handle_worker_response(const ServerConfig& server_config, QueryResults& results, const std::string& query);
@@ -55,7 +55,7 @@ private:
     std::vector<ServerConfig> server_configs_;
 
 
-    static std::pair<QueryResults, size_t> handle_worker_response(const ServerConfig& server_config, const std::string& query);
+    static core::Pair<QueryResults, size_t> handle_worker_response(const ServerConfig& server_config, const std::string& query);
 
     // TODO: Add caching for frequently executed queries
     // TODO: Add query suggestion/autocomplete functionality

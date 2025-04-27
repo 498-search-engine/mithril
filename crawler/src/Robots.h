@@ -17,6 +17,7 @@
 #include <string_view>
 #include <unordered_set>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 
 namespace mithril {
@@ -38,7 +39,7 @@ private:
     enum class NodeType : uint8_t { NonTerminal = 0, Disallow = 1, Allow = 2 };
 
     struct Node {
-        std::vector<std::pair<std::string, Node>> fixedSegments;
+        std::vector<core::Pair<std::string, Node>> fixedSegments;
         std::unique_ptr<Node> wildcardMatch;  // corresponds to a *
         std::unique_ptr<Node> emptyMatch;     // corresponds to a / with nothing before it
         bool trailingWildcard{false};

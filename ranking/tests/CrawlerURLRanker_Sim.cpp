@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <set>
+#include "core/pair.h"
 
 using namespace mithril;
 
@@ -12,7 +13,7 @@ int main() {
     std::string inFilePath = std::string(config.GetString("crawler_ranker_in_file").Cstr());
     std::ifstream inFile(inFilePath);
 
-    std::set<std::pair<int, std::string>> urlRankingSet;
+    std::set<core::Pair<int, std::string>> urlRankingSet;
 
     for (std::string line; std::getline(inFile, line);) {
         // Empty line

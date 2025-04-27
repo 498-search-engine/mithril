@@ -15,6 +15,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 
 namespace mithril::html {

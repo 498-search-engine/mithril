@@ -18,13 +18,14 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 #include <spdlog/spdlog.h>
 
 using namespace std::chrono_literals;
 using namespace std::string_view_literals;
 
-const std::vector<std::pair<std::string, std::string>> SearchPlugin::MOCK_RESULTS = {
+const std::vector<core::Pair<std::string, std::string>> SearchPlugin::MOCK_RESULTS = {
     {       "https://example.com/search-intro",   "Introduction to Search Engines"},
     {   "https://example.com/cpp-optimization",     "C++ Performance Optimization"},
     {"https://example.com/distributed-systems", "Distributed Systems Architecture"}
@@ -412,7 +413,7 @@ std::string SearchPlugin::ExecuteQuery(const std::string& query_text, int max_re
     }
 }
 
-std::string SearchPlugin::GenerateJsonResults(const std::vector<std::pair<uint32_t, uint32_t>>& doc_ids,
+std::string SearchPlugin::GenerateJsonResults(const std::vector<core::Pair<uint32_t, uint32_t>>& doc_ids,
                                               size_t num_results,
                                               bool demo_mode,
                                               const std::string& error) {
@@ -523,7 +524,7 @@ std::string SearchPlugin::GenerateJsonResults(const std::vector<uint32_t>& doc_i
                                               size_t num_results,
                                               bool demo_mode,
                                               const std::string& error) {
-    std::vector<std::pair<uint32_t, uint32_t>> doc_id_pairs;
+    std::vector<core::Pair<uint32_t, uint32_t>> doc_id_pairs;
     for (size_t i = 0; i < num_results; ++i) {
         doc_id_pairs.push_back({doc_ids[i], 0});
     }

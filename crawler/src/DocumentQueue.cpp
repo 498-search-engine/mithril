@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 #include <spdlog/spdlog.h>
 

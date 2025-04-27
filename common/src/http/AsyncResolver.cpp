@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include "core/pair.h"
 #include <netinet/in.h>
 #include <sys/socket.h>
 

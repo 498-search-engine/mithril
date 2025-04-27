@@ -54,7 +54,7 @@ private:
     std::mutex cache_mutex_;
 
     std::string ExecuteQuery(const std::string& query_text, int max_results = 50);
-    std::string GenerateJsonResults(const std::vector<std::pair<uint32_t, uint32_t>>& doc_ids,
+    std::string GenerateJsonResults(const std::vector<core::Pair<uint32_t, uint32_t>>& doc_ids,
                                     size_t num_results,
                                     bool demo_mode,
                                     const std::string& error = "");
@@ -71,7 +71,7 @@ private:
     bool TryInitializeCoordinator();
     void CleanExpiredCache();
 
-    static const std::vector<std::pair<std::string, std::string>> MOCK_RESULTS;
+    static const std::vector<core::Pair<std::string, std::string>> MOCK_RESULTS;
 
     // snippets
     std::string docs_path_;

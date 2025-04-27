@@ -23,6 +23,7 @@
 #include <string_view>
 #include <unistd.h>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 #include <netinet/in.h>
 #include <openssl/err.h>

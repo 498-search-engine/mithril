@@ -5,6 +5,7 @@
 #include <iostream>
 #include <set>
 #include <spdlog/spdlog.h>
+#include "core/pair.h"
 
 using namespace mithril;
 
@@ -15,7 +16,7 @@ int main() {
     std::string inFilePath = std::string(config.GetString("static_ranker_in_file").Cstr());
     std::ifstream inFile(inFilePath);
 
-    std::set<std::pair<double, std::string>> urlRankingSet;
+    std::set<core::Pair<double, std::string>> urlRankingSet;
 
     for (std::string line; std::getline(inFile, line);) {
         // Empty line

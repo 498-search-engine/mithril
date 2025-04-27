@@ -5,6 +5,7 @@
 #include "Utils.h"
 #include "core/mem_map_file.h"
 #include "data/Writer.h"
+#include "core/pair.h"
 
 #include <array>
 #include <fstream>
@@ -15,7 +16,7 @@
 
 namespace mithril {
 
-using TermPositions = std::vector<std::pair<uint32_t, std::pair<uint8_t, std::vector<uint16_t>>>>;
+using TermPositions = std::vector<core::Pair<uint32_t, core::Pair<uint8_t, std::vector<uint16_t>>>>;
 
 struct PositionMetadata {
     uint64_t data_offset;
@@ -42,10 +43,10 @@ public:
     PositionIndex(const std::string& index_dir);
     ~PositionIndex();
 
-    std::pair<bool, const char*> hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data) const;
+    core::Pair<bool, const char*> hasPositionsFromByte(const std::string& term, uint32_t doc_id, const char* data) const;
     bool hasPositions(const std::string& term, uint32_t doc_id) const;
 
-    std::pair<std::vector<uint16_t>, const char*>
+    core::Pair<std::vector<uint16_t>, const char*>
     getPositionsFromByte(const char* data_ptr, const std::string& term, uint32_t doc_id) const;
 
     std::vector<uint16_t> getPositions(const std::string& term, uint32_t doc_id) const;
@@ -60,7 +61,7 @@ public:
 
     static void addPositionsBatch(const std::string& output_dir,
                                   uint32_t doc_id,
-                                  const std::vector<std::pair<std::string, FieldPositions>>& term_positions);
+                                  const std::vector<core::Pair<std::string, FieldPositions>>& term_positions);
 
     static void finalizeIndex(const std::string& output_dir);
     static bool shouldStorePositions(const std::string& term, uint32_t freq, size_t total_terms);

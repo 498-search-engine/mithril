@@ -5,6 +5,7 @@
 #include <cctype>
 #include <string>
 #include <utility>
+#include "core/pair.h"
 
 namespace mithril::http {
 

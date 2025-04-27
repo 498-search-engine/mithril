@@ -71,7 +71,7 @@ void Log(const RankerFeatures& features, float total, uint32_t normalizedScore) 
 };  // namespace
 
 
-float OrderedMatchScore(const std::vector<std::pair<std::string, int>>& qTokens,
+float OrderedMatchScore(const std::vector<core::Pair<std::string, int>>& qTokens,
                         const std::vector<std::string>& tTokens) {
     auto startsWith = [](const std::string& prefix, const std::string& word) -> bool {
         return word.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), word.begin());

@@ -25,6 +25,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 
 using namespace mithril; // TODO: bad, put everything in a namespace{} instead

@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 #include <spdlog/spdlog.h>
 
@@ -123,7 +124,7 @@ std::string CleanQueryParameters(std::string_view path, const std::set<std::stri
     auto queryPart = path.substr(queryPos + 1);
     size_t startPos = 0;
     size_t ampPos;
-    std::vector<std::pair<std::string_view, std::string_view>> params;
+    std::vector<core::Pair<std::string_view, std::string_view>> params;
 
     while (startPos < queryPart.size()) {
         ampPos = queryPart.find('&', startPos);

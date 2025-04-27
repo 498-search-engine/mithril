@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 
 namespace mithril {
@@ -40,7 +41,7 @@ private:
 
     void SaveDocument(data::DocumentView doc);
 
-    std::pair<data::docid_t, std::string> NextDocument();
+    core::Pair<data::docid_t, std::string> NextDocument();
     std::vector<std::string> GetFollowURLs(const html::ParsedDocument& doc, const http::URL& url) const;
 
     LiveState& state_;

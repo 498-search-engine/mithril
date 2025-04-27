@@ -234,7 +234,7 @@ void QueryManager::WorkerThread(size_t worker_id) {
 
 void QueryManager::SetupPositionIndexPointers(QueryEngine* query_engine,
                                               std::unordered_map<std::string, const char*>& termToPointer,
-                                              const std::vector<std::pair<std::string, int>>& tokens) {
+                                              const std::vector<core::Pair<std::string, int>>& tokens) {
     for (const auto& token : tokens) {
         if (StopwordFilter::isStopword(token.first)) {
             continue;
@@ -268,7 +268,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
     auto& queryEngine = query_engines_[worker_id];
 
-    std::vector<std::pair<std::string, int>> tokens = ranking::TokenifyQuery(query);
+    std::vector<core::Pair<std::string, int>> tokens = ranking::TokenifyQuery(query);
     std::unordered_map<std::string, uint32_t> map = ranking::GetDocumentFrequencies(queryEngine->term_dict_, tokens);
     std::unordered_map<std::string, const char*> termToPointer;
     SetupPositionIndexPointers(queryEngine.get(), termToPointer, tokens);

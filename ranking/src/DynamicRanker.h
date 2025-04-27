@@ -2,6 +2,7 @@
 #define RANKING_RANKER_H
 #include "core/config.h"
 #include <vector>
+#include "core/pair.h"
 namespace mithril::ranking::dynamic {
 static inline core::Config Config = core::Config("dynamicranker.conf");
 
@@ -77,7 +78,7 @@ static inline const float MaxScore =
 static inline const float ScoreRange = MaxScore - MinScore;
 
 uint32_t GetUrlDynamicRank(const RankerFeatures& features);
-float OrderedMatchScore(const std::vector<std::pair<std::string, int>>& qTokens,
+float OrderedMatchScore(const std::vector<core::Pair<std::string, int>>& qTokens,
                         const std::vector<std::string>& tTokens);
 }  // namespace mithril::ranking::dynamic
 #endif

@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <utility>
+#include "core/pair.h"
 #include <vector>
 
 #if defined(USE_EPOLL)

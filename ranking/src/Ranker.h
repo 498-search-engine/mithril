@@ -36,17 +36,17 @@ inline bool IsValidToken(const std::string& token) {
  */
 
 std::unordered_map<std::string, uint32_t> GetDocumentFrequencies(const TermDictionary& term_dict,
-                                                                 const std::vector<std::pair<std::string, int>>& query);
+                                                                 const std::vector<core::Pair<std::string, int>>& query);
 
 uint32_t GetFinalScore(BM25* BM25Lib,
-                       const std::vector<std::pair<std::string, int>>& query,
+                       const std::vector<core::Pair<std::string, int>>& query,
                        const data::Document& doc,
                        const data::DocInfo& info,
                        const PositionIndex& position_index,
                        const std::unordered_map<std::string, uint32_t>& termFreq,
                        std::unordered_map<std::string, const char*>& data);
 
-std::vector<std::pair<std::string, int>> TokenifyQuery(const std::string& query);
+std::vector<core::Pair<std::string, int>> TokenifyQuery(const std::string& query);
 
 inline bool ContainsPornKeywords(const std::string& input) {
     // Precompiled regex pattern (optimized for performance)

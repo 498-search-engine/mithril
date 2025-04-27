@@ -93,7 +93,7 @@ public:
 std::mutex MithrilManager::manager_mutex;
 std::unique_ptr<QueryManager> MithrilManager::manager;
 
-std::pair<int, std::vector<std::string>> parseConfFile(const std::string& conf_file) {
+core::Pair<int, std::vector<std::string>> parseConfFile(const std::string& conf_file) {
     std::vector<std::string> result;
 
     std::string file_contents = ReadFile(conf_file.c_str());
@@ -141,7 +141,9 @@ int main(int argc, char** argv) {
                 indexPaths.push_back(argv[++i]);
             } else if (arg == "--conf" && i + 1 < argc) {
                 conf_file = argv[++i];
-                std::tie(port, indexPaths) = parseConfFile(conf_file);
+                auto temp = parseConfFile(conf_file);
+                port = temp.first;
+                indexPaths = temp.second;
             } else {
                 std::cerr << "Unknown or incomplete argument: " << arg << std::endl;
                 printUsage(argv[0]);
