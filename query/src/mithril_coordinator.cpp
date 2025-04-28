@@ -1,6 +1,6 @@
+#include "network.h"
 #include "NetworkHelper.h"
 #include "QueryCoordinator.h"
-#include "network.h"
 
 #include <iostream>
 #include <string>

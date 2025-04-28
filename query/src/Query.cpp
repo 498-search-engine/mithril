@@ -16,8 +16,8 @@
 #include "TermReader.h"
 #include "TextPreprocessor.h"
 #include "Token.h"
-#include <cstdint>
 
+#include <cstdint>
 #include <memory>
 #include <sstream>
 #include <string>

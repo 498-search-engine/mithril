@@ -1,13 +1,13 @@
 #include "Parser.h"
 
-#include "TextPreprocessor.h"
+#include "core/mem_map_file.h"
 #include "Lexer.h"
 #include "PositionIndex.h"
 #include "Query.h"
 #include "QueryConfig.h"
 #include "TermDictionary.h"
+#include "TextPreprocessor.h"
 #include "Token.h"
-#include "core/mem_map_file.h"
 
 #include <memory>
 #include <stdexcept>

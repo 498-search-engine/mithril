@@ -1,14 +1,13 @@
-#include "QueryManager.cpp"
-#include "Util.h"
 #include "network.h"
+#include "QueryManager.cpp"
 #include "rpc_handler.h"
+#include "Util.h"
 
+#include <chrono>
 #include <iostream>
 #include <memory>
-#include "Util.h"
-#include <chrono>
-#include <string>
 #include <spdlog/spdlog.h>
+#include <string>
 
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " --port PORT --index INDEX_PATH [--index INDEX_PATH ...]" << std::endl;

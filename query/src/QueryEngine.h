@@ -2,19 +2,19 @@
 #define QUERYENGINE_H
 
 #include "BM25.h"
+#include "core/mem_map_file.h"
 #include "DocumentMapReader.h"
 #include "Parser.h"
 #include "PositionIndex.h"
 #include "Query.h"
 #include "QueryConfig.h"
-#include "TermDictionary.h"
-#include "core/mem_map_file.h"
 #include "spdlog/spdlog.h"
+#include "TermDictionary.h"
 
 #include <iostream>
 #include <memory>
-#include <vector>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 using namespace mithril;
 

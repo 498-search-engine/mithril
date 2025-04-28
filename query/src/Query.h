@@ -3,31 +3,30 @@
 #ifndef QUERY_H_
 #define QUERY_H_
 
-#include <cstdint>
-// #include <_types/_uint32_t.h>
+#include "core/mem_map_file.h"
+#include "core/pair.h"
+#include "IdentityISR.h"
+#include "intersect.h"
+#include "ISRFactory.h"
 #include "NotIndexStreamReader.h"
+#include "PositionIndex.h"
 #include "QueryConfig.h"
 #include "TermAND.h"
 #include "TermDictionary.h"
 #include "TermOR.h"
-#include "TermQuote.h"
 #include "TermPhrase.h"
+#include "TermQuote.h"
 #include "TermReader.h"
-#include "Token.h"
-#include "intersect.h"
-#include "PositionIndex.h"
-#include "core/mem_map_file.h"
-#include "ISRFactory.h"
-#include "IdentityISR.h"
 #include "TextPreprocessor.h"
+#include "Token.h"
 
+#include <cstdint>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <utility>
-#include "core/pair.h"
 #include <vector>
-#include <sstream>
 
 using namespace mithril; // TODO: bad, put everything in a namespace{} instead
 

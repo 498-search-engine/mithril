@@ -1,10 +1,10 @@
+#include "network.h"
 #include "NetworkHelper.h"
 #include "QueryEngine.h"
-#include "network.h"
 
 #include <iostream>
-#include <string>
 #include <spdlog/spdlog.h>
+#include <string>
 
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " --index PATH --port PORT" << std::endl;

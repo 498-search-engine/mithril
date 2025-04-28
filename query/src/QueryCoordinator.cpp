@@ -1,16 +1,16 @@
 #include "QueryCoordinator.h"
 
-#include "NetworkHelper.h"
-#include "TextPreprocessor.h"
+#include "core/pair.h"
 #include "network.h"
+#include "NetworkHelper.h"
 #include "rpc_handler.h"
+#include "TextPreprocessor.h"
 
 #include <algorithm>
-#include <stdexcept>
-#include <utility>
-#include "core/pair.h"
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
+#include <stdexcept>
+#include <utility>
 
 #define SOFT_QUERY_TIMEOUT 500
 

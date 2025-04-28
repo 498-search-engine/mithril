@@ -7,8 +7,8 @@
 #include <cctype>
 #include <mutex>
 #include <regex>
-#include <string>
 #include <spdlog/spdlog.h>
+#include <string>
 
 // If after RESULTS_REQUIRED_TO_SHORTCIRCUIT documents, there are >=RESULTS_COLLECTED_AFTER_SHORTCIRCUIT results with
 // score at least SCORE_FOR_SHORTCIRCUIT_REQUIRED, then we will return
