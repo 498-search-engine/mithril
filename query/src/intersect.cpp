@@ -171,9 +171,9 @@ size_t intersect_simd_sse(const u32* a, const u32* b, u32* c, size_t a_size, siz
         u32 min_a = _mm_extract_epi32(v_a, 0);
         u32 max_a = min_a;
         for (int i = 1; i < 4; i++) {
-            u32 val = _mm_extract_epi32(v_a, i);
-            min_a = std::min(min_a, val);
-            max_a = std::max(max_a, val);
+            // u32 val = _mm_extract_epi32(v_a, i);
+            // min_a = std::min(min_a, val);
+            // max_a = std::max(max_a, val);
         }
 
         // Find range in array b that could contain matches
