@@ -26,7 +26,7 @@
 #define RESULTS_HARD_CAP 100000
 
 // Minimum rank before responding to stop ranking flag
-#define MINIMUM_RANKED_RESULTS_REQUIRED 50
+#define MINIMUM_RANKED_RESULTS_REQUIRED 2000
 
 // The number of milliseconds before query manager tells threads to wrap up ranking
 #define SOFT_QUERY_TIMEOUT 250
@@ -172,7 +172,7 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         // Wait for 50 ms to allow threads to wrap up everything.
         // We do not wait more than 50 ms because sometimes a thread might be stuck inside PositionIndex.
         main_cv_.wait_for(
-            lock, std::chrono::milliseconds(50), [this]() { return worker_completion_count_ == threads_.size(); });
+            lock, std::chrono::milliseconds(100), [this]() { return worker_completion_count_ == threads_.size(); });
 
         // Wait for at least one thread to complete in case the query timeout isn't responded to fast enough (we want to
         // return at least some results.)
@@ -278,6 +278,7 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
     uint32_t rankedDocuments = 0;
     uint32_t rankedDocumentsAboveMin = 0;
+
     for (uint32_t match : matches) {
         if (stop_ranking_.test() && rankedDocuments >= MINIMUM_RANKED_RESULTS_REQUIRED) {
             spdlog::info("Stopping ranking early on query engine {} due to ranking timeout. Ranked {}/{} documents.",

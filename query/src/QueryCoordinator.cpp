@@ -11,7 +11,7 @@
 #include <core/thread.h>
 #include <spdlog/spdlog.h>
 
-#define SOFT_QUERY_TIMEOUT 500
+#define SOFT_QUERY_TIMEOUT 1000
 
 using namespace core;
 using namespace mithril;
