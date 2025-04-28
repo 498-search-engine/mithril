@@ -26,7 +26,7 @@
 #define RESULTS_HARD_CAP 100000
 
 // Minimum rank before responding to stop ranking flag
-#define MINIMUM_RANKED_RESULTS_REQUIRED 2000
+#define MINIMUM_RANKED_RESULTS_REQUIRED 100
 
 // The number of milliseconds before query manager tells threads to wrap up ranking
 #define SOFT_QUERY_TIMEOUT 250
