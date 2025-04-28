@@ -6,6 +6,10 @@ There are various `*_driver` executables testing various components of the const
 
 To test the system fully, run `manager_driver`. Again, reference the help message. In general, it takes in index directory source(s) and spawns a worker(s) to serve those queries in an interactive terminal session.
 
+```bash
+$ manager_driver {idx1 path} {idx2 path} ...
+```
+
 You ***must*** run it from the `bin` directory for ranking to work.
 
 Warning: memory-mapping can take a good minute.
@@ -16,7 +20,7 @@ Here is an example:
 ╭─user ~/docs/mithril  ‹main›
 ╰─➤ cd bin/
 ╭─user ~/docs/mithril/bin  ‹main›
-╰─➤ ../build/query/manager_driver {idx path} | ...
+╰─➤ ../build/query/manager_driver path/to/idx
 
 [22:12:48.698] [info] Loading indices
 [22:12:48.700] [info] Making Query Manager
@@ -36,7 +40,7 @@ unable to mlock path/to/idx
 >> 
 ```
 
-You can then enter queries just like in the web page frontend, though you may need to escape some special characters to deal with UNIX terminal shenanigans.
+You can then enter queries just like in the web page frontend, though you may need to escape some special characters to deal with UNIX shell behaviour.
 
 For example:
 
