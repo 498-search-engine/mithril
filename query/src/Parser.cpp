@@ -1,4 +1,6 @@
-#include "../../index/src/TextPreprocessor.h"
+#include "Parser.h"
+
+#include "TextPreprocessor.h"
 #include "Lexer.h"
 #include "PositionIndex.h"
 #include "Query.h"

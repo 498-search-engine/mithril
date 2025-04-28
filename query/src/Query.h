@@ -38,14 +38,6 @@ const int MAX_DOCUMENTS = 1e5;
 
 // namespace mithril {
 
-namespace mithril {
-namespace detail {
-
-inline mithril::FieldType TokenTypeToField(TokenType token_type);
-
-}  // detail
-}  // mithril
-
 class Query {
 public:
     virtual ~Query() {}

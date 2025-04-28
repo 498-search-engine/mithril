@@ -4,6 +4,8 @@ add_library(query STATIC
     src/network.cpp
     src/QueryCoordinator.cpp
     src/QueryManager.cpp
+    src/Parser.cpp
+    src/Query.cpp
 )
 target_include_directories(query PUBLIC 
     src

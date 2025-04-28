@@ -1,21 +1,55 @@
-#include "Query.h" inline mithril::FieldType mithril::detail::TokenTypeToField(TokenType token_type) {
-switch (token_type) {
-case TokenType::WORD:
-    return mithril::FieldType::ALL;
-case TokenType::TITLE:
-    return mithril::FieldType::TITLE;
-case TokenType::URL:
-    return mithril::FieldType::URL;
-case TokenType::ANCHOR:
-    return mithril::FieldType::ANCHOR;
-case TokenType::DESC:
-    return mithril::FieldType::DESC;
-case TokenType::BODY:
-    return mithril::FieldType::BODY;
-default:  // WARNING: this should not happen
-    return mithril::FieldType::ALL;
+#include "Query.h"
+
+#include "core/mem_map_file.h"
+#include "core/pair.h"
+#include "IdentityISR.h"
+#include "intersect.h"
+#include "ISRFactory.h"
+#include "NotIndexStreamReader.h"
+#include "PositionIndex.h"
+#include "QueryConfig.h"
+#include "TermAND.h"
+#include "TermDictionary.h"
+#include "TermOR.h"
+#include "TermPhrase.h"
+#include "TermQuote.h"
+#include "TermReader.h"
+#include "TextPreprocessor.h"
+#include "Token.h"
+#include <cstdint>
+
+#include <memory>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+namespace mithril {
+namespace detail {
+
+inline mithril::FieldType TokenTypeToField(TokenType token_type) {
+    switch (token_type) {
+        case TokenType::WORD:
+            return mithril::FieldType::ALL;
+        case TokenType::TITLE:
+            return mithril::FieldType::TITLE;
+        case TokenType::URL:
+            return mithril::FieldType::URL;
+        case TokenType::ANCHOR:
+            return mithril::FieldType::ANCHOR;
+        case TokenType::DESC:
+            return mithril::FieldType::DESC;
+        case TokenType::BODY:
+            return mithril::FieldType::BODY;
+        default:  // WARNING: this should not happen
+            return mithril::FieldType::ALL;
+        }
 }
-}
+
+}  // detail
+}  // mithril
+
 std::vector<uint32_t> TermQuery::evaluate() const {
     TermReaderFactory term_reader_factory(index_file_, term_dict_, position_index_);
     const auto field = mithril::detail::TokenTypeToField(token_.type);
