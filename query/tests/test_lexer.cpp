@@ -307,6 +307,314 @@ TEST_F(LexerTest, StressTestManyTokens) {
     EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
 }
 
+// Additional test cases for test_lexer.cpp
+
+// Test nested expressions with multiple levels of parentheses
+TEST_F(LexerTest, ComplexNestedExpressions) {
+    Lexer lexer("(TITLE:query AND (TEXT:important OR (URL:example AND NOT DESC:irrelevant)))");
+    
+    std::vector<TokenType> expected_types = {
+        TokenType::LPAREN, TokenType::FIELD, TokenType::COLON, TokenType::WORD, 
+        TokenType::OPERATOR, TokenType::LPAREN, TokenType::FIELD, TokenType::COLON, 
+        TokenType::WORD, TokenType::OPERATOR, TokenType::LPAREN, TokenType::FIELD, 
+        TokenType::COLON, TokenType::WORD, TokenType::OPERATOR, TokenType::OPERATOR, 
+        TokenType::FIELD, TokenType::COLON, TokenType::WORD, TokenType::RPAREN, 
+        TokenType::RPAREN, TokenType::RPAREN, TokenType::EOFTOKEN
+    };
+    
+    std::vector<std::string> expected_values = {
+        "(", "TITLE", ":", "query", "AND", "(", "TEXT", ":", "important", 
+        "OR", "(", "URL", ":", "example", "AND", "NOT", "DESC", ":", 
+        "irrelevant", ")", ")", ")"
+    };
+    
+    for (size_t i = 0; i < expected_types.size(); i++) {
+        Token token = lexer.NextToken();
+        EXPECT_EQ(token.type, expected_types[i]) << "Failed at token " << i;
+        if (i < expected_values.size()) {
+            EXPECT_EQ(token.value, expected_values[i]) << "Failed at token " << i;
+        }
+    }
+}
+
+// Test multiple quoted phrases in a complex query
+TEST_F(LexerTest, MultipleQuotedPhrases) {
+    Lexer lexer("TITLE:\"first phrase\" AND TEXT:\"second phrase\" OR \"standalone phrase\"");
+    
+    // TITLE
+    EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
+    // :
+    EXPECT_EQ(lexer.NextToken().type, TokenType::COLON);
+    // "first phrase"
+    Token quote1 = lexer.NextToken();
+    EXPECT_EQ(quote1.type, TokenType::QUOTE);
+    EXPECT_EQ(quote1.value, "first phrase");
+    // AND
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR);
+    // TEXT
+    EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
+    // :
+    EXPECT_EQ(lexer.NextToken().type, TokenType::COLON);
+    // "second phrase"
+    Token quote2 = lexer.NextToken();
+    EXPECT_EQ(quote2.type, TokenType::QUOTE);
+    EXPECT_EQ(quote2.value, "second phrase");
+    // OR
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR);
+    // "standalone phrase"
+    Token quote3 = lexer.NextToken();
+    EXPECT_EQ(quote3.type, TokenType::QUOTE);
+    EXPECT_EQ(quote3.value, "standalone phrase");
+    // EOF
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test special characters within quoted phrases
+TEST_F(LexerTest, QuotedPhrasesWithSpecialChars) {
+    Lexer lexer("\"phrase with: symbols! and-punctuation?\"");
+    
+    Token token = lexer.NextToken();
+    EXPECT_EQ(token.type, TokenType::QUOTE);
+    EXPECT_EQ(token.value, "phrase with: symbols! and-punctuation?");
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test all field types
+TEST_F(LexerTest, AllFieldTypes) {
+    Lexer lexer("TITLE URL ANCHOR DESC TEXT");
+    
+    EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::FIELD);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test operator precedence scenarios
+TEST_F(LexerTest, OperatorPrecedence) {
+    Lexer lexer("term1 AND term2 OR term3 NOT term4");
+    
+    EXPECT_EQ(lexer.NextToken().type, TokenType::WORD); // term1
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR); // AND
+    EXPECT_EQ(lexer.NextToken().type, TokenType::WORD); // term2
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR); // OR
+    EXPECT_EQ(lexer.NextToken().type, TokenType::WORD); // term3
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR); // NOT
+    EXPECT_EQ(lexer.NextToken().type, TokenType::WORD); // term4
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test mixed case keywords (should be treated as regular words)
+TEST_F(LexerTest, MixedCaseKeywords) {
+    Lexer lexer("Title Url And Or Not");
+    
+    for (int i = 0; i < 5; i++) {
+        Token token = lexer.NextToken();
+        EXPECT_EQ(token.type, TokenType::WORD);
+    }
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test very long words/tokens
+TEST_F(LexerTest, VeryLongTokens) {
+    std::string longWord(1000, 'a');
+    Lexer lexer(longWord);
+    
+    Token token = lexer.NextToken();
+    EXPECT_EQ(token.type, TokenType::WORD);
+    EXPECT_EQ(token.value, longWord);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test numbers and alphanumeric tokens
+TEST_F(LexerTest, NumericAndAlphanumericTokens) {
+    Lexer lexer("123 word123 123word word-123 123-456");
+    
+    std::vector<std::string> expected = {
+        "123", "word123", "123word", "word-123", "123-456"
+    };
+    
+    for (const auto& expected_value : expected) {
+        Token token = lexer.NextToken();
+        EXPECT_EQ(token.type, TokenType::WORD);
+        EXPECT_EQ(token.value, expected_value);
+    }
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test edge cases for quotes and escaping
+TEST_F(LexerTest, QuoteEdgeCases) {
+    // Test empty quotes
+    Lexer lexer1("\"\"");
+    Token empty_quote = lexer1.NextToken();
+    EXPECT_EQ(empty_quote.type, TokenType::QUOTE);
+    EXPECT_EQ(empty_quote.value, "");
+    EXPECT_EQ(lexer1.NextToken().type, TokenType::EOFTOKEN);
+    
+    // Test quotes with only spaces
+    Lexer lexer2("\"   \"");
+    Token space_quote = lexer2.NextToken();
+    EXPECT_EQ(space_quote.type, TokenType::QUOTE);
+    EXPECT_EQ(space_quote.value, "   ");
+    EXPECT_EQ(lexer2.NextToken().type, TokenType::EOFTOKEN);
+    
+    // Test escaped quotes at beginning and end
+    Lexer lexer3("\"\\\"quoted\\\"\"");
+    Token escaped_quote = lexer3.NextToken();
+    EXPECT_EQ(escaped_quote.type, TokenType::QUOTE);
+    // The exact expected value depends on how escaping is handled in your lexer
+    EXPECT_EQ(lexer3.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test consecutive operators (which might be an error in actual parsing)
+TEST_F(LexerTest, ConsecutiveOperators) {
+    Lexer lexer("AND OR NOT");
+    
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR);
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test partial operator names
+TEST_F(LexerTest, PartialOperatorNames) {
+    Lexer lexer("AN AND ORR NOTER NOTAND");
+    
+    // AN
+    Token token1 = lexer.NextToken();
+    EXPECT_EQ(token1.type, TokenType::WORD);
+    EXPECT_EQ(token1.value, "AN");
+    
+    // AND
+    Token token2 = lexer.NextToken();
+    EXPECT_EQ(token2.type, TokenType::OPERATOR);
+    EXPECT_EQ(token2.value, "AND");
+    
+    // ORR
+    Token token3 = lexer.NextToken();
+    EXPECT_EQ(token3.type, TokenType::WORD);
+    EXPECT_EQ(token3.value, "ORR");
+    
+    // NOTER
+    Token token4 = lexer.NextToken();
+    EXPECT_EQ(token4.type, TokenType::WORD);
+    EXPECT_EQ(token4.value, "NOTER");
+    
+    // NOTAND
+    Token token5 = lexer.NextToken();
+    EXPECT_EQ(token5.type, TokenType::WORD);
+    EXPECT_EQ(token5.value, "NOTAND");
+    
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test quoted phrases with field specifiers
+TEST_F(LexerTest, FieldsWithMultipleQuotes) {
+    Lexer lexer("TITLE:\"first\" AND TITLE:\"second\" AND TITLE:\"third\"");
+    
+    std::vector<TokenType> expected_types = {
+        TokenType::FIELD, TokenType::COLON, TokenType::QUOTE,
+        TokenType::OPERATOR, TokenType::FIELD, TokenType::COLON,
+        TokenType::QUOTE, TokenType::OPERATOR, TokenType::FIELD,
+        TokenType::COLON, TokenType::QUOTE, TokenType::EOFTOKEN
+    };
+    
+    std::vector<std::string> expected_values = {
+        "TITLE", ":", "first", "AND", "TITLE", ":", "second", "AND", "TITLE", ":", "third"
+    };
+    
+    for (size_t i = 0; i < expected_types.size(); i++) {
+        Token token = lexer.NextToken();
+        EXPECT_EQ(token.type, expected_types[i]) << "Failed at token " << i;
+        if (i < expected_values.size()) {
+            EXPECT_EQ(token.value, expected_values[i]) << "Failed at token " << i;
+        }
+    }
+}
+
+// Test handling of punctuation in words
+TEST_F(LexerTest, PunctuationInWords) {
+    Lexer lexer("word. word, word; word's word-dash word_underscore");
+    
+    std::vector<std::string> expected = {
+        "word", "word", "word", "word's", "word-dash", "word_underscore"
+    };
+    
+    for (const auto& expected_value : expected) {
+        Token token = lexer.NextToken();
+        EXPECT_EQ(token.type, TokenType::WORD);
+        EXPECT_EQ(token.value, expected_value);
+    }
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test token frequency counting
+TEST_F(LexerTest, TokenFrequencies) {
+    Lexer lexer("word word TITLE:word \"quoted phrase\" \"quoted phrase\"");
+    
+    auto frequencies = lexer.GetTokenFrequencies();
+    
+    EXPECT_EQ(frequencies["word"], 3);
+    EXPECT_EQ(frequencies["quoted phrase"], 2);
+}
+
+// Test single quoted phrases (PHRASE token type)
+TEST_F(LexerTest, SingleQuotedPhrases) {
+    Lexer lexer("'single quoted phrase' AND 'another phrase'");
+    
+    Token token1 = lexer.NextToken();
+    EXPECT_EQ(token1.type, TokenType::PHRASE);
+    EXPECT_EQ(token1.value, "single quoted phrase");
+    
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR); // AND
+    
+    Token token2 = lexer.NextToken();
+    EXPECT_EQ(token2.type, TokenType::PHRASE);
+    EXPECT_EQ(token2.value, "another phrase");
+    
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test for special prefix handling
+TEST_F(LexerTest, SpecialPrefixes) {
+    Lexer lexer("title:word url:example anchor:link desc:description");
+    
+    Token token1 = lexer.NextToken();
+    EXPECT_EQ(token1.type, TokenType::TITLE);
+    EXPECT_EQ(token1.value, "word");
+    
+    Token token2 = lexer.NextToken();
+    EXPECT_EQ(token2.type, TokenType::URL);
+    EXPECT_EQ(token2.value, "example");
+    
+    Token token3 = lexer.NextToken();
+    EXPECT_EQ(token3.type, TokenType::ANCHOR);
+    EXPECT_EQ(token3.value, "link");
+    
+    Token token4 = lexer.NextToken();
+    EXPECT_EQ(token4.type, TokenType::DESC);
+    EXPECT_EQ(token4.value, "description");
+    
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
+
+// Test mixed quoted phrases and special prefixes
+TEST_F(LexerTest, MixedQuotesAndPrefixes) {
+    Lexer lexer("title:\"quoted title\" AND url:'single quoted url'");
+    
+    Token token1 = lexer.NextToken();
+    EXPECT_EQ(token1.type, TokenType::TITLE);
+    EXPECT_EQ(token1.value, "\"quoted title\"");
+    
+    EXPECT_EQ(lexer.NextToken().type, TokenType::OPERATOR); // AND
+    
+    Token token2 = lexer.NextToken();
+    EXPECT_EQ(token2.type, TokenType::URL);
+    EXPECT_EQ(token2.value, "'single quoted url'");
+    
+    EXPECT_EQ(lexer.NextToken().type, TokenType::EOFTOKEN);
+}
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
