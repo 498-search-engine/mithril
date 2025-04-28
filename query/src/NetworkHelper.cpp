@@ -23,3 +23,38 @@ inline void send_message(int fd, const std::string& message) {
         total_bytes_sent += bytes_sent;
     }
 }
+Receive::Receive(int fd) {
+    const int buffer_size = 4096;  // Fixed buffer size of 4096 bytes
+    char buffer[buffer_size + 1];  // Buffer to store the received data
+
+    ssize_t bytesReceived = recv(fd, buffer, buffer_size, 0);
+
+    if (bytesReceived < 0) {
+        throw std::runtime_error("Failed to receive data!");
+    } else if (bytesReceived == 0) {
+        std::cerr << "Connection closed by the peer!" << std::endl;
+        connection_closed = true;
+        return;
+    }
+
+    buffer[bytesReceived] = '\0';
+    data = std::string(buffer, (size_t)bytesReceived);
+}
+Receive::Receive(int fd, int num_bytes) {
+
+    std::vector<char> buffer((size_t)num_bytes + 1, '\0');
+
+    // Receive data with MSG_WAITALL to ensure full num_bytes are received
+    ssize_t bytesReceived = recv(fd, buffer.data(), (size_t)num_bytes, MSG_WAITALL);
+
+    // Error handling
+    if (bytesReceived < 0) {
+        throw std::runtime_error("Failed to receive data!");
+    } else if (bytesReceived == 0) {
+        connection_closed = true;
+        return;
+    }
+
+    buffer[(size_t)bytesReceived] = '\0';
+    data = std::string(buffer.begin(), buffer.begin() + bytesReceived);
+};
