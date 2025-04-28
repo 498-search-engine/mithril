@@ -1,370 +1,62 @@
-query
-NOT query
+# Querying, Ranking, and Constraint Solving
 
-50
-1269
+## Testing End-to-End
 
-30
-1279
+There are various `*_driver` executables testing various components of the constraint solving and query compiling. All of these CLIs have help messages if you run them with no arguments.
 
-38
-1281  
+To test the system fully, run `manager_driver`. Again, reference the help message. In general, it takes in index directory source(s) and spawns a worker(s) to serve those queries in an interactive terminal session.
 
+You ***must*** run it from the `bin` directory for ranking to work.
 
+Warning: memory-mapping can take a good minute.
 
+Here is an example:
 
+```bash
+╭─user ~/docs/mithril  ‹main›
+╰─➤ cd bin/
+╭─user ~/docs/mithril/bin  ‹main›
+╰─➤ ../build/query/manager_driver {idx path} | ...
 
-while (1):
-    socket code
-    get the query 
-        broadcast here
-        keep checking when counter == k for queue[0]
-        aggregate and send bac
+[22:12:48.698] [info] Loading indices
+[22:12:48.700] [info] Making Query Manager
+[22:12:48.700] [info] about to query manager for path/to/idx
+unable to mlock path/to/idx
+[22:13:19.241] [info] loading posDict path/to/idx
+[22:13:46.445] [info] constructing term dictionary for path/to/idx
+[22:13:49.337] [info] Memory mapped term dictionary with 14790776 terms
+[22:13:49.337] [info] loading document map path/to/idx/document_map.data
+[22:14:22.333] [info] about to make query engine for path/to/idx
+[22:14:22.333] [info] about to make bm25 for path/to/idx
+[22:14:22.333] [info] about to load index stats for path/to/idx
+[22:14:22.338] [info] Loaded index stats: 2458028 documents, avg body lengths: 1623.82
+[22:14:22.338] [info] Constructed Query Manager with 1 workers
+[22:14:22.338] [info] Now serving queries. Enter below...
 
-
-k threads (number of indexes)
- - current_query = [ (query, false)   ]
-    - mutex and a cv
-
-    - will broadast to all the threads to wakeup 
-    - the queue has an element
-    - execute query -> query engine logic
-    - then do ranking logic 
-    - put results inot designated vector
-    - then udpate counter by 1
-
-
-
-
-
-
-worker.conf
-    index path 1
-    index path 2
-    ...
-
-
-We should contain a structure to store like index related data
-
-
-read in worker.con 
-
-setup index data
-setup threads 
-
-struct SingleIndexData:
-    std::strign index path
-    QueryEngine class for each of these
-    results []
-
-map: 
-    indexpath -> vector<results>
-
-
-each thread could have an id 
-          t1     t2     t3     t4  ...   tn
-array [   Status     Status    Status     Status        Status  ]
-
-Status:
-    true/false 
-
-
-aggregation: 
-- k sorted arrays and we need to aggregate 
-- O(n log k)
-- We do need all of the 
-
-
-queue: [(query, atomic_counter)]
-
-
-while (1):
-    socket code
-    get the query 
-    update the queue
-    continue its work 
-    
-
-manager thread: 
-
-while(1):
-    check the queue
-    broadcast here
-    keep checking when counter == k for queue[0]
-
-    then we can send back to client 
-
-
-
-while (1):
-    socket code
-    get the query 
-        broadcast here
-        keep checking when counter == k for queue[0]
-        aggregate and send bac
-
-
-k threads (number of indexes)
- - current_query = [ (query, false)   ]
-    - mutex and a cv
-
-    - will broadast to all the threads to wakeup 
-    - the queue has an element
-    - execute query -> query engine logic
-    - then do ranking logic 
-    - put results inot designated vector
-    - then udpate counter by 1
-
-
-
-
-
- 
-
-
-
-
-query 2: 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Setup
-## General
-`mkdir build`
-
-`cmake -DCMAKE_BUILD_TYPE=Release -S . -B build`
-
-`cmake --build build`
-
-`git submodule update --init --recursive`
-
-`cd build`
-
-## Crawl (for a few minutes)
-`mkdir data`
-
-`mkdir data/snapshot`
-
-`mkdir data/docs`
-
-`mkdir data/state`
-
-`./crawler/mithril_crawler ../crawler/crawler.conf`
-
-control-C when you want to stop 
-
-## Build Index
-`./index/mithril_indexer data`
-
-## Run Query Engine
-There are many scripts here, you can find them all in `build/query`, however I will only cover how to set up the general coordinator and workers and other important scripts
-
-`/query/parser-driver`: super helpful for testing single queries
-
-Go to `query/src/servers.conf` where we define the mithril worker server ip and ports
-
-Run: 
-
-`./query/mithril_worker --index index_output --port <some_port>`
-
-make sure the port lines up with what is in `servers.conf`
-In another terminal, do: 
-
-`./query/mithril_coordinator --conf ../query/servers.conf`
-
-Then you can send queries from the coordinator to the worker! 
-
-
-
-
-# Other
-
-
-
-./query/mithril_coordinator --conf ../query/servers.conf 
-
-<!-- Second Pass -->
-
-# Simpler Query Language
-Based on Bleve
-
-## Basic Grammar
-
-
-Title terms get a "#" prefix
-URL terms get a "@" prefix
-Anchor terms get a "$" prefix
-Description terms get a "%" prefix
-Body terms have no special prefix
-
-```cpp
-enum class FieldType {
-    BODY = 0,
-    TITLE = 1,
-    URL = 2,
-    ANCHOR = 3,
-    DESC = 4
-    // Can be extended with HEADING, BOLD, etc.
-};
+>> 
 ```
 
-phrase := term [ operator phrase ]
+You can then enter queries just like in the web page frontend, though you may need to escape some special characters to deal with UNIX terminal shenanigans.
 
-term := field_expr | simple_term | quoted_term | grouped_expr
+For example:
 
-field_expr := field ":" (simple_term | quoted_term)
+```bash
+>> cat AND dog
 
-field := "TITLE" | "TEXT"   // Enum of searchable fields
-
-simple_term := <string of alphanumeric characters>
-
-quoted_term := "\"" <string> "\""   // Exact phrase matching
-
-grouped_expr := "(" phrase ")"   // For logical grouping
-
-operator := "SPACE" | "AND" | "OR" | "NOT"     // Space is the default
-
-
-operators and fields are searchable if they do not fit our grammar
-
-
-
-Wildcards (like * for prefix matching)
-Range queries (for numeric or date fields)
-Proximity operators (NEAR, WITHIN n words)
-Boosting specific terms with ^ or similar notation
-
-
-
---------------------------------
-
-
-
-## Examples
-
-- `database`                      // Search for "database" in all fields
-- `TITLE:database`                // Search for "database" in title field only
-- `"database systems"`            // Exact phrase match in all fields
-- `TITLE:"database systems"`      // Exact phrase match in title field only
-- `database AND systems`          // Both terms must appear
-- `database OR systems`           // Either term can appear
-- `database NOT mysql`            // "database" must appear, "mysql" must not
-- `(database OR systems) AND sql` // Logical grouping with AND/OR
-
-# Potential query language (advanced first pass)
-
-query         ::= clause (WS clause)* ;
-
-clause        ::= modifier? expression boost? ;
-
-modifier      ::= "+" | "-" ;
-
-boost         ::= "^" number ;
-
-expression    ::= scoped_expr | grouped_expr | term_expr ;
-
-scoped_expr   ::= field ":" (regex_expr | phrase_expr | range_expr | term_expr) ;
-
-grouped_expr  ::= "(" query ")" ;
-
-term_expr     ::= word ;
-
-phrase_expr   ::= QUOTE phrase QUOTE ;
-
-regex_expr    ::= "/" regex "/" ;
-
-range_expr    ::= range_operator value ;
-
-range_operator ::= ">" | ">=" | "<" | "<=" ;
-
-field         ::= identifier ;
-
-word          ::= escaped_word ;
-
-phrase        ::= (escaped_word | WS)* ;
-
-regex         ::= (escaped_regex_char | any_char_except_slash)+ ;
-
-value         ::= number | quoted_date ;
-
-quoted_date   ::= QUOTE date_string QUOTE ;
-
-escaped_word         ::= (ESCAPED_CHAR | NON_SPECIAL_CHAR)+ ;
-escaped_regex_char   ::= ESCAPED_CHAR ;
-any_char_except_slash ::= any_char - "/" ;
-
-identifier    ::= (ALPHA | DIGIT | "_")+ ;
-
-number        ::= DIGIT+ ("." DIGIT+)? ;
-
-date_string   ::= DIGIT DIGIT DIGIT DIGIT "-" DIGIT DIGIT "-" DIGIT DIGIT ;
-
-ESCAPED_CHAR        ::= "\\" SPECIAL_CHAR ;
-SPECIAL_CHAR        ::= "+" | "-" | "=" | "&" | "|" | ">" | "<" | "!" | "(" | ")" | "{" | "}" | "[" | "]" | "^" | "\"" | "~" | "*" | "?" | ":" | "\\" | "/" | WS ;
-NON_SPECIAL_CHAR    ::= any_char - SPECIAL_CHAR ;
-QUOTE               ::= "\"" ;
-WS                  ::= " " | "\t" | "\n" | "\r" ;
-ALPHA               ::= "a".."z" | "A".."Z" ;
-DIGIT               ::= "0".."9" ;
-
-
-
-
-uct DocInfo {
-//     uint32_t doc_id;
-//     uint32_t total_frequency;  // Sum of all term frequencies
-//     std::string url;
-//     std::vector<std::string> title;
-//     uint32_t frequency; 
-    
-//     // Store term-specific information
-//     struct TermData {
-//         std::string term;
-//         uint32_t frequency;
-//         std::vector<uint32_t> positions;
-        
-//         TermData(std::string t, uint32_t freq) : term(std::move(t)), frequency(freq) {}
-//     };
-    
-//     std::vector<TermData> term_data;  // Data for each term that matched this document
-
-//     DocInfo(uint32_t id, uint32_t freq) : doc_id(id), total_frequency(freq) {}
-    
-//     // Add information for a new term
-//     void addTerm(const std::string& term, uint32_t freq, const std::vector<uint32_t>& pos = {}) {
-//         TermData data(term, freq);
-//         data.positions = pos;
-//         term_data.push_back(std::move(data));
-//         total_frequency += freq;
-//     }
-    
-//     // Merge another DocInfo into this one
-//     void merge(const DocInfo& other) {
-//         total_frequency += other.total_frequency;
-        
-//         // Merge term data
-//         for (const auto& data : other.term_data) {
-//             term_data.push_back(data);
-//         }
-        
-//         // If the other document has URL/title and this one doesn't, copy it
-//         if (url.empty() && !other.url.empty()) {
-//             url = other.url;
-//         }
-        
-//         if (title.empty() && !other.title.empty()) {
-//             title = other.title;
-//         }
-//     }
-// };
+[22:18:11.641] [info] Serving query cat AND dog...
+[22:18:11.642] [info] 🚀 Evaluating query: cat AND dog
+[22:18:11.642] [info] ⭐ Parsing query: cat AND dog
+[22:18:11.642] [info] ⭐ Query structure: AND(TERM(cat [WORD: cat]), TERM(dog [WORD: dog]))
+Successfully loaded term 'cat' using dictionary lookup
+Successfully loaded term '#cat' using dictionary lookup
+Successfully loaded term '@cat' using dictionary lookup
+Successfully loaded term '%cat' using dictionary lookup
+Successfully loaded term 'dog' using dictionary lookup
+Successfully loaded term '#dog' using dictionary lookup
+Successfully loaded term '@dog' using dictionary lookup
+Successfully loaded term '%dog' using dictionary lookup
+[22:18:11.813] [info] Ranking results of size: 23264
+[22:18:18.382] [info] Returning results of size: 50
+[22:18:18.383] [info] Found 50 matches in 6740.74ms
+Best: doc 1444630 https://www.petage.com/digital_guide/purina-digital-guide-dog-cat-essential-pet-care-needs/
+```
