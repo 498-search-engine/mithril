@@ -210,14 +210,23 @@ uint32_t GetFinalScore(BM25* BM25Lib,
     return ranking::dynamic::GetUrlDynamicRank(features);
 }
 
-std::vector<std::pair<std::string, int>> TokenifyQuery(const std::string& query) {
+std::vector<std::pair<std::string, int>>
+TokenifyQuery(const std::string& query, std::vector<int>& stopwordIdx, std::vector<int>& nonstopwordIdx) {
     std::vector<std::pair<std::string, int>> tokens;
+    int idx = -1;
     std::string current;
     std::cout << "tokens: ";
     for (char c : query) {
         if (c == ' ') {
             if (mithril::ranking::IsValidToken(current)) {
                 std::cout << current << " ";
+
+                idx++;
+                if (StopwordFilter::isStopword(current)) {
+                    stopwordIdx.push_back(idx);
+                } else {
+                    nonstopwordIdx.push_back(idx);
+                }
                 tokens.emplace_back(std::move(current), 1);
             }
             current = "";
@@ -234,6 +243,13 @@ std::vector<std::pair<std::string, int>> TokenifyQuery(const std::string& query)
     if (!current.empty()) {
         if (mithril::ranking::IsValidToken(current)) {
             tokens.emplace_back(std::move(current), 1);
+
+            idx++;
+            if (StopwordFilter::isStopword(current)) {
+                stopwordIdx.push_back(idx);
+            } else {
+                nonstopwordIdx.push_back(idx);
+            }
         }
     }
 
