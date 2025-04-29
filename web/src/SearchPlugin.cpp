@@ -215,7 +215,7 @@ void SearchPlugin::ProcessSearchRequest(const std::string& request, ResponseWrit
     auto end_time = std::chrono::steady_clock::now();
     auto query_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
-    spdlog::info("Took {}ms to collect all results from all workers adn rank them.", query_time_ms);
+    spdlog::info("Took {}ms to collect all results from all workers and rank them.", query_time_ms);
     // Replace time_ms placeholder
     size_t time_pos = json_result.find("\"time_ms\":");
     if (time_pos != std::string::npos) {
