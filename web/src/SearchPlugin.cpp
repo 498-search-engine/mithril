@@ -214,8 +214,8 @@ void SearchPlugin::ProcessSearchRequest(const std::string& request, ResponseWrit
     // Add query time to JSON result
     auto end_time = std::chrono::steady_clock::now();
     auto query_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    
-    spdlog::info("query took {}ms", query_time_ms);
+
+    spdlog::info("Took {}ms to collect all results from all workers adn rank them.", query_time_ms);
     // Replace time_ms placeholder
     size_t time_pos = json_result.find("\"time_ms\":");
     if (time_pos != std::string::npos) {
@@ -245,6 +245,10 @@ void SearchPlugin::ProcessSearchRequest(const std::string& request, ResponseWrit
     }
 
     rw.WriteResponse(http::StatusCode::OK, "application/json"sv, json_result);
+
+    auto end_time2 = std::chrono::steady_clock::now();
+    query_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time2 - start_time).count();
+    spdlog::info("Total query time after sending: {}ms", query_time_ms);
 }
 
 void SearchPlugin::ProcessSnippetRequest(const std::string& request, ResponseWriter& rw) {
