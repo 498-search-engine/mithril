@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultsContainer = document.getElementById('results');
     const exampleLinks = document.querySelectorAll('.example');
 
+    let abortController = null;
+
     function normalizeURL(url) {
         try {
           const parsed = new URL(url);
@@ -185,6 +187,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const startTime = performance.now();
         
+        if (abortController !== null) {
+            try {
+                abortController.abort();
+            } catch (error) {
+                console.log("Failed to cancel abort handler: ", error);
+            }
+            abortController = null;
+        }
+
         // Fetch search results from API
         fetch(`/api/search?q=${encodeURIComponent(query)}&max=50`)
             .then(response => {
@@ -251,8 +262,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const query = document.getElementById('search-input').value;
         const url = `/api/snippets?ids=${visibleDocIds.join(',')}&q=${encodeURIComponent(query)}`;
 
+        if (abortController !== null) {
+            try {
+                abortController.abort();
+            } catch (error) {
+                console.log("Failed to cancel abort handler: ", error);
+            }
+        }
+
+        abortController = new AbortController();
+
         // Create a new fetch request
-        fetch(url)
+        fetch(url, {signal: abortController.signal})
             .then(response => {
                 // Check if response is ok
                 if (!response.ok) {
@@ -268,7 +289,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 function processChunks() {
                     return reader.read().then(({ done, value }) => {
                         // If the stream is done, return
-                        if (done) return;
+                        if (done) {
+                            abortController = null;
+                            return;
+                        }
 
                         // Decode the chunk and add it to our buffer
                         buffer += decoder.decode(value, { stream: true });
