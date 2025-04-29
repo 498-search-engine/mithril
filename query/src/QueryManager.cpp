@@ -303,8 +303,15 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
             continue;
         }
 
-        uint32_t score = ranking::GetFinalScore(
-            queryEngine->BM25Lib_, tokens, doc, docInfo, queryEngine->position_index_, map, termToPointer);
+        uint32_t score = ranking::GetFinalScore(queryEngine->BM25Lib_,
+                                                tokens,
+                                                stopwordIdx,
+                                                nonstopwordIdx,
+                                                doc,
+                                                docInfo,
+                                                queryEngine->position_index_,
+                                                map,
+                                                termToPointer);
 
         rankedMatches.push_back({match, score, doc.url, doc.title, {}});
 
