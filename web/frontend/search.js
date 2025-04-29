@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <h2><a href="${mainResult.url}" target="_blank">${strip(mainResult.title)}</a></h2>
             <div class="result-url">
                 <img src="${faviconUrl}" alt="favicon" class="favicon">
-                <span>${mainResult.url}</span>
+                <span class="result-url-text">${mainResult.url}</span>
             </div>
             <p class="result-snippet">${mainResult.snippet}</p>
         `;

@@ -65,6 +65,8 @@ GetDocumentFrequencies(const TermDictionary& term_dict, const std::vector<std::p
 
 uint32_t GetFinalScore(BM25* BM25Lib,
                        const std::vector<std::pair<std::string, int>>& query,
+                       const std::vector<int>& stopwordIdx,
+                       const std::vector<int>& nonstopwordIdx,
                        const data::Document& doc,
                        const data::DocInfo& info,
                        const PositionIndex& position_index,
@@ -108,71 +110,101 @@ uint32_t GetFinalScore(BM25* BM25Lib,
 
     float weightedBM25 = 0.0F;
 
+    int nonstopwordFound = 0;
+
     std::unordered_map<std::string, const char*> newTermToData = termToData;
+    const auto* vector = &nonstopwordIdx;
 
-    for (const auto& [term, multiplicity] : query) {
-        std::vector<uint16_t> bodyPositions;
-        bool termInDescription = false;
+    while (true) {
+        for (const auto idx : *vector) {
+            bool found = false;
+            const auto& [term, multiplicity] = query[idx];
 
-        // Get body positions
-        if (auto it = termToData.find(term); it != termToData.end()) {
-            auto bodyPositionsIndex = position_index.getPositionsFromByte(it->second, term, doc.id);
-            newTermToData[term] = bodyPositionsIndex.second;
-            bodyPositions = std::move(bodyPositionsIndex.first);
-        }
+            std::vector<uint16_t> bodyPositions;
+            bool termInDescription = false;
 
-        // Check whether term in description
-        std::string descToken = mithril::TokenNormalizer::decorateToken(term, FieldType::DESC);
-        if (auto it = termToData.find(descToken); it != termToData.end()) {
-            auto termInDescriptionIndex = position_index.hasPositionsFromByte(descToken, doc.id, it->second);
-            termInDescription = termInDescriptionIndex.first;
-            newTermToData[descToken] = termInDescriptionIndex.second;
-        }
+            // Get body positions
+            if (auto it = termToData.find(term); it != termToData.end()) {
+                auto bodyPositionsIndex = position_index.getPositionsFromByte(it->second, term, doc.id);
+                newTermToData[term] = bodyPositionsIndex.second;
+                bodyPositions = std::move(bodyPositionsIndex.first);
+            }
 
-        bool termInBody = bodyPositions.size() > 0;
-        bool termInUrl = doc.url.find(term) != std::string::npos;
+            // Check whether term in description
+            std::string descToken = mithril::TokenNormalizer::decorateToken(term, FieldType::DESC);
+            if (auto it = termToData.find(descToken); it != termToData.end()) {
+                auto termInDescriptionIndex = position_index.hasPositionsFromByte(descToken, doc.id, it->second);
+                termInDescription = termInDescriptionIndex.first;
+                newTermToData[descToken] = termInDescriptionIndex.second;
+            }
 
-        size_t pos = title.find(term);
-        bool termInTitle = pos != std::string::npos;
+            bool termInBody = bodyPositions.size() > 0;
+            bool termInUrl = doc.url.find(term) != std::string::npos;
 
-        if (!termInUrl) {
-            isInURL = false;
-        } else {
-            wordsInUrl++;
+            size_t pos = title.find(term);
+            bool termInTitle = pos != std::string::npos;
 
-            size_t urlOccurences = std::min(CountWordOccurrences(doc.url, term) * term.size(), doc.url.size());
-            densityUrl += (static_cast<float>(urlOccurences) / static_cast<float>(doc.url.size())) *
-                          (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
-        }
+            if (!termInUrl) {
+                isInURL = false;
+            } else {
+                wordsInUrl++;
 
-        if (!termInTitle) {
-            isInTitle = false;
-        } else {
-            wordsInTitle++;
-            earliestPosTitle += (1 / static_cast<float>(pos + 1)) *
+                size_t urlOccurences = std::min(CountWordOccurrences(doc.url, term) * term.size(), doc.url.size());
+                densityUrl += (static_cast<float>(urlOccurences) / static_cast<float>(doc.url.size())) *
+                              (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+
+                if (!found) {
+                    found = true;
+                    nonstopwordFound++;
+                }
+            }
+
+            if (!termInTitle) {
+                isInTitle = false;
+            } else {
+                wordsInTitle++;
+                earliestPosTitle += (1 / static_cast<float>(pos + 1)) *
+                                    (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+
+                int titleOccurences = std::min(CountWordOccurrences(title, term), (int)doc.title.size());
+                densityTitle += (static_cast<float>(titleOccurences) / static_cast<float>(doc.title.size())) *
                                 (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
 
-            int titleOccurences = std::min(CountWordOccurrences(title, term), (int)doc.title.size());
-            densityTitle += (static_cast<float>(titleOccurences) / static_cast<float>(doc.title.size())) *
-                            (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+                if (!found) {
+                    found = true;
+                    nonstopwordFound++;
+                }
+            }
+
+            if (!termInDescription) {
+                isInDescription = false;
+            } else {
+                wordsInDesc++;
+                if (!found) {
+                    found = true;
+                    nonstopwordFound++;
+                }
+            }
+
+            if (!termInBody) {
+                isInBody = false;
+            } else {
+                wordsInBody++;
+                earliestPosBody += (1 / static_cast<float>(bodyPositions[0] + 1)) *
+                                   (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+            }
+
+            weightedBM25 +=
+                static_cast<float>(BM25Lib->ScoreTermForDoc(info, termFreq.at(term), bodyPositions.size())) *
+                (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
         }
 
-        if (!termInDescription) {
-            isInDescription = false;
-        } else {
-            wordsInDesc++;
+        if ((((float)nonstopwordFound) / ((float)nonstopwordIdx.size())) >= 0.66F && vector == &nonstopwordIdx) {
+            vector = &stopwordIdx;
+            continue;
         }
 
-        if (!termInBody) {
-            isInBody = false;
-        } else {
-            wordsInBody++;
-            earliestPosBody += (1 / static_cast<float>(bodyPositions[0] + 1)) *
-                               (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
-        }
-
-        weightedBM25 += static_cast<float>(BM25Lib->ScoreTermForDoc(info, termFreq.at(term), bodyPositions.size())) *
-                        (static_cast<float>(multiplicity) / static_cast<float>(query.size()));
+        break;
     }
 
     termToData = std::move(newTermToData);
@@ -210,14 +242,23 @@ uint32_t GetFinalScore(BM25* BM25Lib,
     return ranking::dynamic::GetUrlDynamicRank(features);
 }
 
-std::vector<std::pair<std::string, int>> TokenifyQuery(const std::string& query) {
+std::vector<std::pair<std::string, int>>
+TokenifyQuery(const std::string& query, std::vector<int>& stopwordIdx, std::vector<int>& nonstopwordIdx) {
     std::vector<std::pair<std::string, int>> tokens;
+    int idx = -1;
     std::string current;
     std::cout << "tokens: ";
     for (char c : query) {
         if (c == ' ') {
             if (mithril::ranking::IsValidToken(current)) {
                 std::cout << current << " ";
+
+                idx++;
+                if (StopwordFilter::isStopword(current)) {
+                    stopwordIdx.push_back(idx);
+                } else {
+                    nonstopwordIdx.push_back(idx);
+                }
                 tokens.emplace_back(std::move(current), 1);
             }
             current = "";
@@ -234,6 +275,15 @@ std::vector<std::pair<std::string, int>> TokenifyQuery(const std::string& query)
     if (!current.empty()) {
         if (mithril::ranking::IsValidToken(current)) {
             tokens.emplace_back(std::move(current), 1);
+
+            std::cout << current << " ";
+
+            idx++;
+            if (StopwordFilter::isStopword(current)) {
+                stopwordIdx.push_back(idx);
+            } else {
+                nonstopwordIdx.push_back(idx);
+            }
         }
     }
 

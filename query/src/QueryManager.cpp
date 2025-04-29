@@ -268,7 +268,9 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
 
     auto& queryEngine = query_engines_[worker_id];
 
-    std::vector<std::pair<std::string, int>> tokens = ranking::TokenifyQuery(query);
+    std::vector<int> nonstopwordIdx;
+    std::vector<int> stopwordIdx;
+    std::vector<std::pair<std::string, int>> tokens = ranking::TokenifyQuery(query, stopwordIdx, nonstopwordIdx);
     std::unordered_map<std::string, uint32_t> map = ranking::GetDocumentFrequencies(queryEngine->term_dict_, tokens);
     std::unordered_map<std::string, const char*> termToPointer;
     SetupPositionIndexPointers(queryEngine.get(), termToPointer, tokens);
@@ -301,8 +303,15 @@ QueryResult_t QueryManager::HandleRanking(const std::string& query, size_t worke
             continue;
         }
 
-        uint32_t score = ranking::GetFinalScore(
-            queryEngine->BM25Lib_, tokens, doc, docInfo, queryEngine->position_index_, map, termToPointer);
+        uint32_t score = ranking::GetFinalScore(queryEngine->BM25Lib_,
+                                                tokens,
+                                                stopwordIdx,
+                                                nonstopwordIdx,
+                                                doc,
+                                                docInfo,
+                                                queryEngine->position_index_,
+                                                map,
+                                                termToPointer);
 
         rankedMatches.push_back({match, score, doc.url, doc.title, {}});
 
