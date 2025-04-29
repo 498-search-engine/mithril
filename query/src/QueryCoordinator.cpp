@@ -6,6 +6,7 @@
 #include "rpc_handler.h"
 
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 #include <utility>
 #include <core/thread.h>
@@ -52,6 +53,12 @@ void wait_for_any(std::vector<std::shared_future<T>>& futures) {
     // Then ensure at least one future is done.
     cv.wait(lock, [&readyCount]() { return readyCount > 0; });
 }
+
+static inline constexpr double GetMsBetween(auto t0, auto t1) {
+    std::chrono::duration<double, std::milli> duration = t1 - t0;
+    return duration.count();
+}
+
 }  // namespace
 
 mithril::QueryCoordinator::QueryCoordinator(const std::string& conf_path) {
@@ -97,6 +104,8 @@ void mithril::QueryCoordinator::print_server_configs() const {
 }
 
 std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers(const std::string& query) {
+    const auto t0 = std::chrono::high_resolution_clock::now();
+
     mithril::TokenNormalizer token_normalizer;
     // std::string normalized_query = token_normalizer.normalize(query);
     auto normalized_query = query;
@@ -133,12 +142,17 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers
         }
     }
 
+    const auto t1 = std::chrono::high_resolution_clock::now();
     QueryResults all_results = QueryManager::TopKFromSortedLists(worker_results);
+    const auto t2 = std::chrono::high_resolution_clock::now();
 
-    spdlog::info("Aggregated {} results from {} workers which gave {} total results",
+    spdlog::info("Received results from {} workers in {.3f}ms", worker_results.size(), GetMsBetween(t0,t1));
+
+    spdlog::info("Aggregated {} results from {} workers which gave {} total results in {.3f}ms",
                  all_results.size(),
                  worker_results.size(),
-                 total_results);
+                 total_results,
+                 GetMsBetween(t1,t2));
 
     return {all_results, total_results};
 }
