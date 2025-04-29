@@ -5,10 +5,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <mutex>
 #include <regex>
 #include <string>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 // If after RESULTS_REQUIRED_TO_SHORTCIRCUIT documents, there are >=RESULTS_COLLECTED_AFTER_SHORTCIRCUIT results with
 // score at least SCORE_FOR_SHORTCIRCUIT_REQUIRED, then we will return
@@ -34,8 +36,10 @@
 namespace mithril {
 using QueryResult_t = QueryManager::QueryResult;
 
-#include <algorithm>
-#include <vector>
+static inline constexpr double GetMsBetween(auto t0, auto t1) {
+    std::chrono::duration<double, std::milli> duration = t1 - t0;
+    return duration.count();
+}
 
 QueryResult_t QueryManager::TopKElementsFast(QueryResult_t& results, int k) {
     auto comparator = [](const auto& a, const auto& b) {
@@ -142,6 +146,8 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
     // prepare new query
     stop_ranking_.clear();
 
+    const auto t0 = std::chrono::high_resolution_clock::now();
+
     {
         std::scoped_lock lock{mtx_};
         curr_result_ct_ = 0;
@@ -186,8 +192,10 @@ QueryResult_t QueryManager::AnswerQuery(const std::string& query) {
         // aggregate results and return
         QueryResult_t filteredResults = TopKFromSortedLists(marginal_results_);
 
-        spdlog::info("Returning results of size: {}", filteredResults.size());
+        const auto t1 = std::chrono::high_resolution_clock::now();
+        spdlog::info("Query manager took {:.3f} ms", GetMsBetween(t0, t1));
 
+        spdlog::info("Returning results of size: {}", filteredResults.size());
         return filteredResults;
     }
 }
@@ -207,12 +215,18 @@ void QueryManager::WorkerThread(size_t worker_id) {
         }
 
         // Evaluate query over this thread's index
+        const auto t0 = std::chrono::high_resolution_clock::now();
         auto result = query_engines_[worker_id]->EvaluateQuery(queryToRun);
+        const auto t1 = std::chrono::high_resolution_clock::now();
+        spdlog::info("Query engine {} matched query in {:.3f} ms", worker_id, GetMsBetween(t0,t1));
+
         auto totalSize = result.size();
         QueryResult_t rankedResults = {};
         if (!result.empty()) {
             rankedResults = HandleRanking(queryToRun, worker_id, result);
         }
+        const auto t2 = std::chrono::high_resolution_clock::now();
+        spdlog::info("Query engine {} ranked query in {:.3f} ms", worker_id, GetMsBetween(t1,t2));
 
         // TODO: optimize this to not use mutex
         {
