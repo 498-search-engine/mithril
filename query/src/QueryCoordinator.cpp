@@ -146,9 +146,9 @@ std::pair<QueryResults, size_t> mithril::QueryCoordinator::send_query_to_workers
     QueryResults all_results = QueryManager::TopKFromSortedLists(worker_results);
     const auto t2 = std::chrono::high_resolution_clock::now();
 
-    spdlog::info("Received results from {} workers in {.3f}ms", worker_results.size(), GetMsBetween(t0,t1));
+    spdlog::info("Received results from {} workers in {:.3f}ms", worker_results.size(), GetMsBetween(t0,t1));
 
-    spdlog::info("Aggregated {} results from {} workers which gave {} total results in {.3f}ms",
+    spdlog::info("Aggregated {} results from {} workers which gave {} total results in {:.3f}ms",
                  all_results.size(),
                  worker_results.size(),
                  total_results,
