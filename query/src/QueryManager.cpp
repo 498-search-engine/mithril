@@ -9,8 +9,8 @@
 #include <mutex>
 #include <regex>
 #include <string>
-#include <spdlog/spdlog.h>
 #include <vector>
+#include <spdlog/spdlog.h>
 
 // If after RESULTS_REQUIRED_TO_SHORTCIRCUIT documents, there are >=RESULTS_COLLECTED_AFTER_SHORTCIRCUIT results with
 // score at least SCORE_FOR_SHORTCIRCUIT_REQUIRED, then we will return
@@ -31,7 +31,7 @@
 #define MINIMUM_RANKED_RESULTS_REQUIRED 100
 
 // The number of milliseconds before query manager tells threads to wrap up ranking
-#define SOFT_QUERY_TIMEOUT 250
+#define SOFT_QUERY_TIMEOUT 600
 
 namespace mithril {
 using QueryResult_t = QueryManager::QueryResult;
@@ -218,7 +218,7 @@ void QueryManager::WorkerThread(size_t worker_id) {
         const auto t0 = std::chrono::high_resolution_clock::now();
         auto result = query_engines_[worker_id]->EvaluateQuery(queryToRun);
         const auto t1 = std::chrono::high_resolution_clock::now();
-        spdlog::info("Query engine {} matched query in {:.3f} ms", worker_id, GetMsBetween(t0,t1));
+        spdlog::info("Query engine {} matched query in {:.3f} ms", worker_id, GetMsBetween(t0, t1));
 
         auto totalSize = result.size();
         QueryResult_t rankedResults = {};
@@ -226,7 +226,7 @@ void QueryManager::WorkerThread(size_t worker_id) {
             rankedResults = HandleRanking(queryToRun, worker_id, result);
         }
         const auto t2 = std::chrono::high_resolution_clock::now();
-        spdlog::info("Query engine {} ranked query in {:.3f} ms", worker_id, GetMsBetween(t1,t2));
+        spdlog::info("Query engine {} ranked query in {:.3f} ms", worker_id, GetMsBetween(t1, t2));
 
         // TODO: optimize this to not use mutex
         {
