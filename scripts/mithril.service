@@ -1,0 +1,10 @@
+[Unit]
+Description=mithril service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/search/mithril/bin/
+ExecStart=/home/search//mithril/bin/mithril_server 8000 frontend server.conf index_output
+
+[Install]
+WantedBy=default.target
