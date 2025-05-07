@@ -4,7 +4,7 @@ Description=mithril service
 [Service]
 Type=simple
 WorkingDirectory=/home/search/mithril/bin/
-Environment="MITHRIL_DOCS_PATH='/home/search/mithril/bin/docs/'"
+Environment="MITHRIL_DOCS_PATH=/home/search/mithril/bin/docs/"
 ExecStart=/home/search//mithril/bin/mithril_server 8000 frontend server.conf index_output
 
 [Install]
