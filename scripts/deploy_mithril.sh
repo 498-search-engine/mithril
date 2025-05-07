@@ -1,5 +1,7 @@
 #!/bin/bash
 # Mithril deployment script
+MITHRIL_DOCS_PATH="/home/search/mithril/bin/docs/"
+export MITHRIL_DOCS_PATH
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
